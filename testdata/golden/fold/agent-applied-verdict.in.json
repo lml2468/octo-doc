@@ -1,0 +1,47 @@
+{
+  "list": [
+    {
+      "id": "c1",
+      "author": {
+        "login": "alice"
+      },
+      "created": "2024-01-01T00:00:00.000Z",
+      "created_in": 1,
+      "events": [
+        {
+          "kind": "created",
+          "eid": "e1",
+          "at_version": 1,
+          "at": "2024-01-01T00:00:00.000Z",
+          "anchor": null,
+          "text": "fix this"
+        },
+        {
+          "kind": "reply_added",
+          "eid": "e2",
+          "at_version": 2,
+          "at": "2024-01-01T00:00:00.000Z",
+          "reply": {
+            "id": "r1",
+            "author": {
+              "kind": "agent",
+              "login": "tdoc-agent"
+            },
+            "text": "done",
+            "agent_status": "applied"
+          }
+        },
+        {
+          "kind": "marked_applied",
+          "eid": "e3",
+          "at_version": 2,
+          "at": "2024-01-01T00:00:00.000Z",
+          "applied_in": 2,
+          "by": "tdoc-agent",
+          "agent_status": "applied"
+        }
+      ]
+    }
+  ],
+  "version": 2
+}

@@ -1,0 +1,17 @@
+[
+  {
+    "id": "c1",
+    "author": {
+      "login": "alice"
+    },
+    "created": "2024-01-01T00:00:00.000Z",
+    "created_in": 1,
+    "version": 1,
+    "anchor": null,
+    "text": "p",
+    "status": "open",
+    "replies": [],
+    "reactions": {},
+    "deleted": false
+  }
+]

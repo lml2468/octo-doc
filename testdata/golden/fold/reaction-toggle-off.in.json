@@ -1,0 +1,39 @@
+{
+  "list": [
+    {
+      "id": "c1",
+      "author": {
+        "login": "alice"
+      },
+      "created": "2024-01-01T00:00:00.000Z",
+      "created_in": 1,
+      "events": [
+        {
+          "kind": "created",
+          "eid": "e1",
+          "at_version": 1,
+          "at": "2024-01-01T00:00:00.000Z",
+          "anchor": null,
+          "text": "p"
+        },
+        {
+          "kind": "reaction_added",
+          "eid": "e2",
+          "at_version": 1,
+          "at": "2024-01-01T00:00:00.000Z",
+          "emoji": "🔥",
+          "by": "bob"
+        },
+        {
+          "kind": "reaction_removed",
+          "eid": "e3",
+          "at_version": 1,
+          "at": "2024-01-01T00:00:00.000Z",
+          "emoji": "🔥",
+          "by": "bob"
+        }
+      ]
+    }
+  ],
+  "version": 1
+}

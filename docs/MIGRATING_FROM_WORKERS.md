@@ -73,33 +73,36 @@ cf-dump/
 
 ## Step 2 — import into octo-doc
 
-Point the importer at the dump. It writes into whatever `STORAGE` you've
-configured, so the same command works for sqlite+fs or postgres+s3:
+octo-doc has no bespoke importer binary; you replay the dump through the public
+write API (`POST /api/docs`), which performs the same stamping, versioning, and
+comment merge as a normal publish. Point a running server at your PostgreSQL + S3
+backend, mint a write token, then push each version:
 
 ```bash
-# default (SQLite + FS):
-STORAGE=sqlite+fs DATA_DIR=./data \
-  node migrations/import-from-workers.js --in ./cf-dump
+BASE=http://localhost:8080
+TOKEN=$(curl -s "$BASE/api/admin/bootstrap" | jq -r .token)
 
-# or into Postgres + S3:
-STORAGE=postgres+s3 DATABASE_URL=... S3_ENDPOINT=... S3_BUCKET=octo-doc \
-  S3_ACCESS_KEY_ID=... S3_SECRET_ACCESS_KEY=... S3_FORCE_PATH_STYLE=1 \
-  node migrations/import-from-workers.js --in ./cf-dump
+for slug in $(ls cf-dump/kv/meta | sed 's/\.json$//'); do
+  comments=$(jq -c '.comments // []' "cf-dump/kv/comments/${slug}.json" 2>/dev/null || echo '[]')
+  for n in $(jq -r '.versions[].n' "cf-dump/kv/meta/${slug}.json"); do
+    html=$(cat "cf-dump/r2/docs/${slug}/v${n}/index.html")
+    jq -n --arg slug "$slug" --argjson v "$n" --arg html "$html" --argjson c "$comments" \
+      '{slug:$slug, version:$v, html:$html, comments:$c}' \
+    | curl -s -X POST "$BASE/api/docs" \
+        -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d @-
+    echo "  $slug v$n"
+  done
+done
 ```
 
-Output:
-
-```
-importing ./cf-dump → octo-doc storage (sqlite+fs)
-  plaud-explainer: 3 version(s)
-  q3-strategy: 1 version(s)
-Done — 2 doc(s), 4 version(s), 2 comment set(s), 0 skipped.
-```
+Because the HTML was already `data-tdoc-aid`-stamped on the Worker, re-publishing
+reproduces identical bytes (octo-doc's `StampAids` is a verbatim port — see
+[PORTING.md](./PORTING.md)). Passing an explicit `version` preserves the original
+version numbers; the comment array is merged non-destructively on the first push.
 
 ## Step 3 — verify
 
 ```bash
-node src/index.js &          # or docker compose up -d
 curl -sf localhost:8080/api/docs/plaud-explainer/versions | jq
 curl -sf localhost:8080/d/plaud-explainer/v/1 | grep -c data-tdoc-aid
 curl -sf "localhost:8080/api/comments?slug=plaud-explainer&version=all" | jq length

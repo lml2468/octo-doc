@@ -3,7 +3,7 @@
 **Self-hosted, prompt-native interactive HTML documents** — with text- and
 artifact-anchored inline commenting and immutable versioning. A Cloudflare-free
 reimplementation of [tdoc](https://github.com/serenakeyitan/tdoc): same document
-model, same URLs, same `/tdoc` skill contract — runs anywhere Node 22 runs.
+model, same URLs, same skill contract — now a single static Go binary.
 
 > Credit to Serena Keyitan's **tdoc** and, upstream of that, Jesse Pollak's
 > *bdocs* concept. octo-doc keeps the product identical and removes the vendor
@@ -12,28 +12,25 @@ model, same URLs, same `/tdoc` skill contract — runs anywhere Node 22 runs.
 ## Why
 
 tdoc is great but ties publishing to a Cloudflare account (`wrangler login`, R2,
-KV, a claimed subdomain, a DO migration). octo-doc gives you the same thing as a
-plain HTTP server you own — `docker compose up -d` on a $5 VPS, or `npx octo-doc`
-locally. Storage is a pluggable `{ MetadataStore, BlobStore }`: SQLite + local
-files by default, PostgreSQL + S3/MinIO when you want to scale — **swappable with
-one env var, zero code changes.**
+KV, a claimed subdomain, a DO migration). octo-doc gives you the same product as
+a plain HTTP server you own: one static binary, PostgreSQL for metadata, and any
+S3-compatible store for blobs. `docker compose up -d` and you're live.
 
 ## Quick start
 
 ```bash
-# Docker (app + Caddy auto-TLS):
-git clone https://github.com/lml2468/octo-doc && cd octo-doc
+git clone https://github.com/Mininglamp-OSS/octo-doc && cd octo-doc
+
+# Full stack (app + PostgreSQL + MinIO + Caddy auto-TLS):
 DOMAIN=docs.example.com docker compose -f deploy/docker-compose.yml up -d --wait
 
-# …or zero-Docker, zero-build (Node 22+, built-in SQLite):
-npx octo-doc
-
-# get a write token (one-shot), then publish:
+# Mint a write token (one-shot), then publish:
 TOKEN=$(curl -s http://localhost:8080/api/admin/bootstrap | jq -r .token)
 curl -H "Authorization: Bearer $TOKEN" \
-  -F file=@fixtures/hello.html -F slug=hello \
+  -H "Content-Type: application/json" \
+  -d '{"slug":"hello","html":"<html><body><h1>Hi</h1></body></html>"}' \
   http://localhost:8080/api/docs
-#   → { "url": "/d/hello/v/1", ... }
+#   → { "ok": true, "url": "/d/hello/v/1", ... }
 open http://localhost:8080/d/hello/v/1
 ```
 
@@ -47,27 +44,13 @@ Full guide: **[docs/SELF_HOSTING.md](docs/SELF_HOSTING.md)** ($5 VPS in 15 min).
 | **URL** | `/d/<slug>/v/<version>` (preserved from tdoc) |
 | **Comments** | append-only event log; every version is a snapshot |
 | **Artifacts** | each commentable element is stamped `data-tdoc-aid="<hash>"` so comments anchor by identity, not DOM position — **byte-identical to upstream** |
-| **Auth** | Bearer token for writes; reads public by default (`--private` to lock) |
-| **Storage** | `STORAGE=sqlite+fs` (default) or `postgres+s3` — pluggable adapters |
+| **Auth** | Bearer token for writes; reads public by default (`PRIVATE=1` to lock) |
+| **Storage** | PostgreSQL (metadata) + S3-compatible (blobs) behind two interfaces |
 
 Architecture, data model, and the full API spec:
 **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**. Design rationale, threat model,
-backup/upgrade: **[docs/DESIGN.md](docs/DESIGN.md)**.
-
-## The `/tdoc` skill
-
-The agent skill (`skill/`) keeps tdoc's exact command surface — `/tdoc new`,
-`edit`, `publish`, `pull`, `list`, `fork`, `doctor`, `unpublish` — but targets
-your server via two env vars instead of Cloudflare:
-
-```bash
-export TDOC_BASE_URL="https://docs.example.com"
-export TDOC_TOKEN="<write token>"
-/tdoc publish my-doc        # → https://docs.example.com/d/my-doc/v/1
-```
-
-Coming from Cloudflare? **[docs/MIGRATING_FROM_WORKERS.md](docs/MIGRATING_FROM_WORKERS.md)**
-imports your KV/R2 docs and comments with no data loss.
+backup/upgrade: **[docs/DESIGN.md](docs/DESIGN.md)**. How the Go port preserves
+byte-equivalence with upstream tdoc: **[docs/PORTING.md](docs/PORTING.md)**.
 
 ## Configuration
 
@@ -76,29 +59,48 @@ Highlights:
 
 | Var | Default | Purpose |
 | --- | ------- | ------- |
-| `STORAGE` | `sqlite+fs` | `sqlite\|postgres` × `fs\|s3` |
+| `DATABASE_URL` | _(required)_ | PostgreSQL connection string |
+| `S3_BUCKET` / `S3_ENDPOINT` | `octo-doc` / _(AWS)_ | blob store (MinIO/R2: set endpoint + `S3_FORCE_PATH_STYLE=1`) |
 | `WRITE_TOKEN` | _(bootstrap)_ | static write token; else `/api/admin/bootstrap` |
 | `PRIVATE` | `false` | require the token for reads too |
 | `FRAME_ANCESTORS` | `'none'` | CSP embedding policy for rendered docs |
 | `MAX_HTML_BYTES` | `5242880` | per-document size cap |
 | `GITHUB_CLIENT_ID` | _(off)_ | enable GitHub sign-in for per-user comments |
 
-## Development
+## Commands
 
 ```bash
-pnpm install
-pnpm dev            # hot-reload server (Node --watch)
-pnpm test           # unit tests (node:test)
-pnpm test:e2e       # publish → pull → v2 → list-versions, < 1s
-pnpm bench          # autocannon latency/throughput
-pnpm lint && pnpm typecheck
+octo-doc serve       # run the HTTP server (default)
+octo-doc migrate     # apply the database schema (idempotent)
+octo-doc bootstrap   # mint and print the first write token
+octo-doc health      # local healthcheck (used by the container)
 ```
 
-CI (`.github/workflows/ci.yml`) runs lint, typecheck, unit, E2E on **both**
-storage stacks (sqlite+fs and postgres+s3 via service containers), builds the
-builds the Docker image (slim Alpine multi-stage, no dev/optional deps —
-~55 MB compressed), and pushes to `ghcr.io` on `main`.
+## Development
+
+Go 1.26, [chi](https://github.com/go-chi/chi) router, [pgx](https://github.com/jackc/pgx),
+[aws-sdk-go-v2](https://github.com/aws/aws-sdk-go-v2). Layered
+**transport → service → storage** with a dependency-free `core` kernel.
+
+```bash
+make build        # build bin/octo-doc
+make test         # all tests (pg/s3 suites skip without OCTO_TEST_* env)
+make test-race    # tests under the race detector
+make cover        # coverage summary
+make lint         # golangci-lint
+make check        # fmt + vet + lint + test (the local gate)
+```
+
+To run the storage and e2e suites against real services, start PostgreSQL +
+MinIO and export `OCTO_TEST_DATABASE_URL`, `OCTO_TEST_S3_BUCKET`,
+`OCTO_TEST_S3_ENDPOINT`, `OCTO_TEST_S3_ACCESS_KEY_ID`,
+`OCTO_TEST_S3_SECRET_ACCESS_KEY` (see the `Makefile` defaults).
+
+The comment engine and artifact stamper are ported byte-for-byte from upstream
+tdoc and verified against golden fixtures in `testdata/golden`
+([docs/PORTING.md](docs/PORTING.md)). Contributions: see
+**[CONTRIBUTING.md](CONTRIBUTING.md)**.
 
 ## License
 
-MIT.
+See [LICENSE](LICENSE).

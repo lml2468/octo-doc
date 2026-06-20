@@ -2,8 +2,8 @@
 
 octo-doc is a self-hosted reimplementation of [tdoc](https://github.com/serenakeyitan/tdoc)
 that removes every Cloudflare dependency (Workers, KV, D1, R2, Durable Objects)
-while preserving the document model, URL scheme, comment semantics, and the
-`SKILL.md` tool contract byte-for-byte.
+while preserving the document model, URL scheme, and comment semantics
+byte-for-byte. It is written in Go 1.26 and ships as a single static binary.
 
 ## Before / after
 
@@ -22,50 +22,76 @@ while preserving the document model, URL scheme, comment semantics, and the
 
 ┌──────────────────────── octo-doc (self-hosted) ─────────────────────┐
 │                                                                       │
-│   tdoc-publish ──HTTP──▶  Hono app (Node 22)                          │
+│   tdoc-publish ──HTTP──▶  Go 1.26 app (chi router, static binary)     │
 │   (Bearer token)             │                                         │
-│                              ├── core/  (PORTED VERBATIM, CF-free):    │
-│                              │     stamp.js     — data-tdoc-aid stamper │
-│                              │     comments.js  — event-log fold        │
-│                              │     ops.js       — applyCommentOp        │
-│                              │     render.js    — overlay injection     │
-│                              │     store.js     — serialized writes     │
-│                              │     mutex.js     — per-slug lock (≈ DO)   │
+│                              │  transport/ ─▶ service/ ─▶ storage/     │
+│                              │  (thin httpx) (logic)     (interfaces)  │
 │                              │                                          │
-│                              └── storage/ {MetadataStore, BlobStore}:   │
-│                                    sqlite.js + fs.js   (default)        │
-│                                    postgres.js + s3.js (optional)       │
-│                           overlay.js read at RUNTIME (same bytes)       │
+│                              ├── internal/core/ (PORTED VERBATIM):     │
+│                              │     cyrb53.go         hash primitive      │
+│                              │     stamp.go          data-tdoc-aid       │
+│                              │     fold.go           event-log fold       │
+│                              │     events.go         eid/dedup/migrate    │
+│                              │     ops.go            applyCommentOp        │
+│                              │     reconcile.go      anchor reconcile       │
+│                              │     render.go         overlay injection      │
+│                              │     types.go          shared domain types     │
+│                              │                                          │
+│                              ├── internal/service/ DocService,          │
+│                              │     CommentService, AuthService, github   │
+│                              ├── internal/platform/ sluglock (per-slug  │
+│                              │     lock ≈DO), config, log, apperr        │
+│                              └── internal/storage/ {MetadataStore,      │
+│                                    BlobStore}: postgres/ + s3/          │
+│                                    (memory/ for tests)                  │
+│                           assets/overlay.js embedded via go:embed       │
 └───────────────────────────────────────────────────────────────────────┘
 ```
+
+### Layering
+
+Dependencies flow one way: **transport → service → storage**, with
+`internal/core/` as a dependency-free domain kernel (a leaf) and cross-cutting
+`internal/platform/` (`config`, `log`, `apperr`, `sluglock`). Handlers in
+`internal/transport/httpx/` are thin (validate + shape); all logic lives in
+services; no storage type (a pgx row, an S3 object) ever reaches a handler.
+Module boundaries are ordinary Go packages exporting their public surface; there
+are no import cycles.
 
 ### What maps to what
 
 | Cloudflare primitive            | octo-doc replacement                                  |
 | ------------------------------- | ----------------------------------------------------- |
-| R2 bucket `DOCS`                | `BlobStore` → FS (`./data/blobs`) or S3/MinIO         |
-| KV `META` (meta + comments)     | `MetadataStore` → SQLite (`node:sqlite`) or Postgres  |
+| R2 bucket `DOCS`                | `BlobStore` → S3-compatible (S3 / MinIO)              |
+| KV `META` (meta + comments)     | `MetadataStore` → PostgreSQL (pgx)                    |
 | KV `session:*`                  | `MetadataStore.sessions` table                        |
-| Durable Object `CommentsStore`  | in-process per-slug async mutex (`core/mutex.js`)     |
+| Durable Object `CommentsStore`  | in-process per-slug keyed mutex (`internal/platform/sluglock`) |
 | `wrangler secret TDOC_UPLOAD_TOKEN` | `WRITE_TOKEN` env, or `/api/admin/bootstrap` token |
-| Worker build-time overlay inline | runtime `readFileSync` of `src/overlay.js`           |
+| Worker build-time overlay inline | `assets/overlay.js` embedded via `go:embed`         |
 | `caches.default`, `Request.cf`, `waitUntil` | none — no Cloudflare assumptions leak in |
 
 ## Rendering parity (byte-equivalent output)
 
 The success criterion *"相同输入下渲染字节级等价于上游 Workers"* is met by
-**porting the rendering-critical functions verbatim** into `src/core/` rather
-than rewriting them:
+**porting the rendering-critical functions verbatim** into `internal/core/`
+rather than rewriting them:
 
 - `stampAids()` — stamps `data-tdoc-aid="<cyrb53 hash>"` on every commentable
-  artifact. Copied character-for-character from `worker.js`. Verified against
-  the upstream implementation in `test/unit/core.test.js` ("byte-parity with
-  the upstream Cloudflare worker") across ordinary and adversarial HTML.
+  artifact. Ported character-for-character from upstream worker.js. Verified by
+  `go test ./internal/core/` against the golden fixtures in `testdata/golden`
+  ("byte-parity with the upstream Cloudflare worker") across ordinary and
+  adversarial HTML.
 - The event-log comment model (`snapshotAt`, `dedupEvents`, `reconcileAnchors`,
-  `compactComments`) — copied verbatim.
-- Overlay injection (`injectOverlayCfg`) — copied verbatim; the only change is
-  that `overlay.js` is read at runtime instead of inlined at build time. The
-  bytes reaching the browser are identical.
+  `compactComments`) — ported verbatim.
+- Overlay injection (`injectOverlayCfg`) — ported verbatim; the only change is
+  that `assets/overlay.js` is embedded via `go:embed` instead of inlined at
+  build time. The bytes reaching the browser are identical.
+
+Three porting traps that would silently break byte-equivalence are documented in
+[PORTING.md](./PORTING.md): `Math.imul` 32-bit wraparound (reproduced with
+`uint32` arithmetic), `charCodeAt` operating on UTF-16 code units (not Go runes
+or bytes), and RE2's lack of backreferences (no `\1` in the Go `regexp`
+package).
 
 The single deliberate divergence: `eventEid()` for one-shot events used
 `Math.random()` upstream; octo-doc uses a monotonic counter + high-res time.
@@ -82,7 +108,7 @@ Unchanged from upstream:
 - **URL**: `/d/<slug>/v/<version>` (preserved). Plus `/export` and `/fork`.
 - **Comments**: an append-only **event log** per slug. Each version is a
   snapshot — reading "as of version N" folds events with `at_version <= N`.
-  Mutations append events; they never overwrite. See `src/core/comments.js`.
+  Mutations append events; they never overwrite. See `internal/core/fold.go`.
 
 ### Storage records
 
@@ -140,15 +166,15 @@ new ones (`/api/docs`, `/api/docs/:slug/versions`, `/api/admin/bootstrap`).
 
 ## Concurrency
 
-Per-slug comment writes are serialized by `core/mutex.js` — an in-process async
-mutex that makes `read → applyCommentOp → write` atomic for a given slug,
-exactly the guarantee the Durable Object provided. This is correct for the
-default **single-instance** deployment. The event log additionally converges
-under concurrent writes via `dedupEvents` (stable event ids), so even races
-that the mutex doesn't cover (e.g. future multi-instance) degrade to
-last-write-wins-per-event rather than corruption. Multi-instance horizontal
-scaling would swap the mutex for a Postgres advisory lock (sketched in
-`storage/postgres.js`), documented in [DESIGN.md](./DESIGN.md).
+Per-slug comment writes are serialized by `internal/platform/sluglock` — an
+in-process keyed mutex that makes `read → applyCommentOp → write` atomic for a
+given slug, exactly the guarantee the Durable Object provided. This is correct
+for the default **single-instance** deployment. The event log additionally
+converges under concurrent writes via `dedupEvents` (stable event ids), so even
+races that the mutex doesn't cover (e.g. future multi-instance) degrade to
+last-write-wins-per-event rather than corruption. `sluglock` is an interface, so
+multi-instance horizontal scaling can swap the in-process lock for a Postgres
+advisory-lock implementation, documented in [DESIGN.md](./DESIGN.md).
 
 ## Request lifecycle (publish)
 

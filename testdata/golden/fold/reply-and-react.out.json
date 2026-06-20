@@ -1,0 +1,35 @@
+[
+  {
+    "id": "c1",
+    "author": {
+      "login": "alice"
+    },
+    "created": "2024-01-01T00:00:00.000Z",
+    "created_in": 1,
+    "version": 1,
+    "anchor": null,
+    "text": "parent",
+    "status": "open",
+    "replies": [
+      {
+        "id": "r1",
+        "parent_id": "c1",
+        "author": {
+          "login": "bob"
+        },
+        "text": "a reply",
+        "agent_status": null,
+        "created": "2024-01-01T00:00:00.000Z",
+        "reactions": {},
+        "deleted": false
+      }
+    ],
+    "reactions": {
+      "👍": [
+        "carol",
+        "dave"
+      ]
+    },
+    "deleted": false
+  }
+]

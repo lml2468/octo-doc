@@ -9,33 +9,31 @@ tdoc is excellent but couples you to Cloudflare: publishing requires a
 Cloudflare account, `wrangler login`, an R2 bucket, a KV namespace, a claimed
 `workers.dev` subdomain, and a Durable Object migration. That's a lot of
 vendor-specific surface for "host an HTML file with comments." octo-doc keeps
-the product identical and makes it run anywhere a Node process runs — a $5 VPS,
-a homelab box, a container platform — with `docker compose up -d` or `npx`.
+the product identical and ships it as a single static Go binary that runs
+anywhere — a $5 VPS, a homelab box, a container platform — with
+`docker compose up -d` or a one-file `octo-doc serve`.
 
 ## Runtime & framework selection
 
-**Runtime: Node 22 LTS.** Chosen over Bun for one decisive reason — Node 22+
-ships a built-in SQLite (`node:sqlite`). That removes the only native dependency
-(`better-sqlite3` needs a C++ build that breaks on bleeding-edge Node ABIs), so:
+**Runtime: Go 1.26.** The original prototype was Node/TypeScript; the production
+build is a Go rewrite. The decisive reasons:
 
-- the Docker image needs no build toolchain and ships small — measured **237 MB
-  uncompressed (~75 MB compressed)** on `node:22-alpine` for the default
-  sqlite+fs stack. The Node 22 runtime binary is the size floor; the relevant
-  win is avoiding the dev-dep/toolchain bloat the spec warns about (>500 MB).
-  Measured idle RSS in-container: **~23 MB** (target was ≤ 150 MB);
-- `npx octo-doc` works with zero compilation on any Node 22+ machine;
-- the dependency tree for the default sqlite+fs stack is ~15 MB.
+- **A single static binary.** `go build ./cmd/octo-doc` produces one
+  self-contained executable (~21 MB) with no runtime, no `node_modules`, and no
+  native-module build step. Deploy is `scp` + run, or a tiny container.
+- **A distroless container.** `deploy/Dockerfile` is a multi-stage build that
+  copies the static binary into a `distroless/static` base — a **~25 MB** image
+  with no shell, no package manager, and a minimal CVE surface.
+- **`assets/overlay.js` is embedded with `go:embed`**, so the binary carries the
+  browser overlay with no filesystem dependency at runtime.
 
-Bun's `bun:sqlite` is equally capable, and the code is plain ESM that runs under
-Bun too (`bun start` works) — but pinning Node 22 LTS gives the widest, most
-boring deployment target. The HTTP layer (Hono) is runtime-agnostic, so a
-future Bun-first build is a one-line server-adapter swap.
+The binary exposes subcommands — `octo-doc serve | migrate | bootstrap |
+health` — from a single entrypoint (`cmd/octo-doc/`).
 
-**Framework: Hono.** Express is excluded by the constraints. Hono was picked
-over Fastify/Elysia because its handlers are built on the standard
-`Request`/`Response` web API, which means the entire app is testable via
-`app.fetch(new Request(...))` with no socket (see `test/unit/http.test.js`) and
-trivially portable across Node/Bun/edge runtimes.
+**Framework: chi (`github.com/go-chi/chi/v5`).** A thin, idiomatic router over
+`net/http`'s standard `http.Handler`, so the entire app is testable via
+`httptest` with no real socket and middleware composes as ordinary
+`http.Handler` wrappers. The transport layer lives in `internal/transport/httpx/`.
 
 ## Threat model
 
@@ -52,7 +50,7 @@ purpose. The security posture:
 | **Write flooding** | Fixed-window rate limiter keyed by `token + client IP` on all mutating routes. |
 | **Disk exhaustion** | `MAX_VERSIONS_PER_SLUG` quota knob; immutable blobs are append-only so an operator can prune old versions out of band. |
 | **Server never evals user content** | HTML is stored and served as an opaque blob. The server's own CSP wrapper does not execute it; `stampAids` is pure string rewriting. |
-| **Corrupt stored comments** | `safeParseList` fails soft to `[]` for display; writes go through the mutex so a partial write can't interleave. |
+| **Corrupt stored comments** | `safeParseList` fails soft to `[]` for display; writes go through the per-slug lock (`internal/platform/sluglock`) so a partial write can't interleave. |
 
 What octo-doc does **not** defend against (by design): the *content* of a
 document's own inline JavaScript. That JS runs in the viewer's browser on the
@@ -60,26 +58,30 @@ doc's origin — which is exactly why the separate-subdomain deployment matters.
 
 ## Storage adapter contract
 
-The route layer depends only on two duck-typed interfaces; no SQLite/Postgres/
-S3 type ever reaches a route. Full method signatures live in
-[`src/storage/index.js`](../src/storage/index.js).
+The service layer depends only on two interfaces; no pgx/S3 type ever reaches a
+handler. Both interfaces are defined in
+[`internal/storage/store.go`](../internal/storage/store.go), with one
+implementation package each: `internal/storage/postgres/` and
+`internal/storage/s3/` (plus `internal/storage/memory/` for tests).
 
 ```
 MetadataStore   small structured records (meta, comments, sessions, tokens)
-  getMeta/putMeta/deleteMeta/listMeta
-  getComments/putComments/deleteComments     ← always returns an array
-  getSession/putSession(ttl)/deleteSession   ← honors TTL
-  getToken/putToken/anyToken
-  close()
+  GetMeta/PutMeta/DeleteMeta/ListMeta
+  GetComments/PutComments/DeleteComments      ← always returns a slice
+  GetSession/PutSession(ttl)/DeleteSession    ← honors TTL
+  GetToken/PutToken/AnyToken
+  Close()
 
 BlobStore       immutable HTML keyed by (slug, version)
-  putDoc/getDoc/headDoc/listVersions/deleteDoc
+  PutDoc/GetDoc/HeadDoc/ListVersions/DeleteDoc
 ```
 
-`STORAGE="<meta>+<blob>"` selects the pair at boot (`makeStores`). Swapping
-`sqlite+fs` → `postgres+s3` changes **zero application code** — only the env var
-and the optional-dependency install. The adapter-swap E2E in CI proves this by
-running the identical `test/e2e.test.js` against both stacks.
+octo-doc has exactly **two required backends behind these two interfaces**:
+PostgreSQL for `MetadataStore` and an S3-compatible object store for `BlobStore`.
+There is no single-node fallback — the same split that R2 + KV made on
+Cloudflare is now the supported topology everywhere, which keeps the production
+path and the local-development path (Postgres + MinIO) identical. The in-memory
+store exists only to make `internal/core`/service tests hermetic.
 
 ### Why two stores, not one
 
@@ -90,37 +92,28 @@ the same split R2+KV made on Cloudflare, now pluggable.
 
 ## Concurrency, in depth
 
-The per-slug mutex (`core/mutex.js`) is an in-process promise chain keyed by
-slug. It guarantees the read-modify-write of a slug's comment list is atomic
-within one process — the Durable Object's guarantee, minus the network hop.
+The per-slug lock (`internal/platform/sluglock`) is an in-process keyed mutex.
+It guarantees the read-modify-write of a slug's comment list is atomic within
+one process — the Durable Object's guarantee, minus the network hop.
 
 For **multi-instance** deployments (several app containers behind a load
-balancer sharing one Postgres), the in-process mutex is insufficient. The
-intended upgrade: wrap the comment read-modify-write in
-`SELECT pg_advisory_xact_lock(advisoryKey(slug))` inside a transaction
-(`storage/postgres.js` exposes `advisoryKey`). The event log's `dedupEvents`
-convergence is the safety net in the meantime — concurrent writes converge to
-the same fold rather than corrupting. Single-instance is the documented,
-supported default.
+balancer sharing one Postgres), the in-process lock is insufficient. Because
+`sluglock` is an interface, the intended upgrade is a drop-in implementation
+that wraps the comment read-modify-write in
+`SELECT pg_advisory_xact_lock(advisory_key(slug))` inside a transaction. The
+event log's `dedupEvents` convergence is the safety net in the meantime —
+concurrent writes converge to the same fold rather than corrupting.
+Single-instance is the documented, supported default.
 
 ## Backup & restore
 
-**SQLite + FS (default).** Everything is under `DATA_DIR` (`/data` in Docker):
-
-```bash
-# Online, consistent SQLite snapshot (WAL-safe):
-sqlite3 /data/octo-doc.db ".backup '/backup/octo-doc.db'"
-# Blobs are plain immutable files:
-tar czf /backup/blobs.tgz -C /data blobs
-# Restore: stop the app, drop both back into DATA_DIR, start.
-```
-
-**Postgres + S3.**
+Two backends, two backup streams — metadata in Postgres, blobs in the bucket:
 
 ```bash
 pg_dump "$DATABASE_URL" > octo-doc.sql           # metadata + comments
-# Blobs live in the bucket; use S3 versioning + lifecycle rules for retention,
-# or aws s3 sync s3://octo-doc ./backup/blobs for a cold copy.
+# Blobs live in the S3 bucket; use S3 versioning + lifecycle rules for retention,
+# or `aws s3 sync s3://$S3_BUCKET ./backup/blobs` for a cold copy.
+# Restore: psql < octo-doc.sql, then sync blobs back into the bucket.
 ```
 
 S3 lifecycle policy is the recommended way to cap blob growth: e.g. transition
@@ -129,9 +122,9 @@ if bucket versioning is on.
 
 ## Upgrade procedure
 
-1. Pull the new image / `git pull`.
-2. `npm run migrate` (idempotent — all DDL is `IF NOT EXISTS`; SQLite applies
-   the schema at open automatically).
+1. Pull the new image (`docker pull`) or rebuild the binary (`go build
+   ./cmd/octo-doc`).
+2. `octo-doc migrate` (idempotent — all DDL is `IF NOT EXISTS`).
 3. Restart. Immutable blobs and the append-only comment log mean no data
    transformation is needed across versions — old docs render unchanged.
 
@@ -142,4 +135,4 @@ new version could corrupt.
 ## Migrating from a Cloudflare deployment
 
 See [MIGRATING_FROM_WORKERS.md](./MIGRATING_FROM_WORKERS.md) for the KV/R2 →
-SQLite/FS (or Postgres/S3) import path.
+Postgres/S3 import path.

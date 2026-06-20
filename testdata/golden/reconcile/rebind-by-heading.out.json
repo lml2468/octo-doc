@@ -1,0 +1,29 @@
+{
+  "folded": [
+    {
+      "id": "c1",
+      "author": {
+        "login": "a"
+      },
+      "created": "2024-01-01T00:00:00.000Z",
+      "created_in": 1,
+      "version": 1,
+      "anchor": {
+        "kind": "element",
+        "aid": "newhash",
+        "selector": "[data-tdoc-aid=\"newhash\"]",
+        "label": "svg",
+        "fallback": {
+          "nearestHeading": {
+            "text": "Diagram"
+          }
+        }
+      },
+      "text": "on svg",
+      "status": "open",
+      "replies": [],
+      "reactions": {},
+      "deleted": false
+    }
+  ]
+}

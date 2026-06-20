@@ -1,0 +1,39 @@
+{
+  "list": [
+    {
+      "id": "c1",
+      "author": {
+        "login": "a"
+      },
+      "created": "2024-01-01T00:00:00.000Z",
+      "created_in": 1,
+      "events": [
+        {
+          "kind": "created",
+          "eid": "e1",
+          "at_version": 1,
+          "at": "2024-01-01T00:00:00.000Z",
+          "anchor": {
+            "kind": "element",
+            "aid": "gone",
+            "selector": "[data-tdoc-aid=\"gone\"]",
+            "label": "svg",
+            "fingerprint": {
+              "tag": "svg"
+            }
+          },
+          "text": "orphan"
+        }
+      ]
+    }
+  ],
+  "aids": [
+    {
+      "aid": "h",
+      "tag": "img",
+      "head": "",
+      "heading": "Other"
+    }
+  ],
+  "version": 2
+}

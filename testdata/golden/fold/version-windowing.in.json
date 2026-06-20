@@ -1,0 +1,30 @@
+{
+  "list": [
+    {
+      "id": "c1",
+      "author": {
+        "login": "alice"
+      },
+      "created": "2024-01-01T00:00:00.000Z",
+      "created_in": 1,
+      "events": [
+        {
+          "kind": "created",
+          "eid": "e1",
+          "at_version": 1,
+          "at": "2024-01-01T00:00:00.000Z",
+          "anchor": null,
+          "text": "v1 text"
+        },
+        {
+          "kind": "text_edited",
+          "eid": "e2",
+          "at_version": 2,
+          "at": "2024-01-01T00:00:00.000Z",
+          "text": "v2 text (should not show at v1)"
+        }
+      ]
+    }
+  ],
+  "version": 1
+}

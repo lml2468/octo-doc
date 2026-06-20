@@ -6,10 +6,24 @@
   "license": "MIT",
   "credits": {
     "inspiration": [
-      { "name": "Serena Keyitan", "project": "tdoc", "url": "https://github.com/serenakeyitan/tdoc" },
+      {
+        "name": "Serena Keyitan",
+        "project": "tdoc",
+        "url": "https://github.com/serenakeyitan/tdoc"
+      },
       { "name": "Jesse Pollak", "project": "bdocs (Coinbase)", "note": "Original concept." }
     ]
   },
-  "keywords": ["html","docs","documents","comments","self-hosted","prompt-native","interactive","sqlite","s3"],
+  "keywords": [
+    "html",
+    "docs",
+    "documents",
+    "comments",
+    "self-hosted",
+    "prompt-native",
+    "interactive",
+    "sqlite",
+    "s3"
+  ],
   "repository": { "type": "git", "url": "https://github.com/lml2468/octo-doc" }
 }

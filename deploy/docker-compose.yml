@@ -18,8 +18,8 @@ services:
     image: ghcr.io/lml2468/octo-doc:latest
     restart: unless-stopped
     environment:
-      PORT: "8080"
-      HOST: "0.0.0.0"
+      PORT: '8080'
+      HOST: '0.0.0.0'
       DATA_DIR: /data
       STORAGE: ${STORAGE:-sqlite+fs}
       BASE_URL: ${BASE_URL:-}
@@ -43,9 +43,15 @@ services:
     # Exposed on the host for the short_test (curl localhost:8080). In a pure
     # TLS deployment you can drop this and reach the app only via Caddy.
     ports:
-      - "8080:8080"
+      - '8080:8080'
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8080/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:8080/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
       interval: 10s
       timeout: 3s
       retries: 5
@@ -62,8 +68,8 @@ services:
       # Leave unset to serve plain HTTP on :80 (local testing).
       DOMAIN: ${DOMAIN:-:80}
     ports:
-      - "80:80"
-      - "443:443"
+      - '80:80'
+      - '443:443'
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy-data:/data
@@ -71,7 +77,7 @@ services:
 
   postgres:
     image: postgres:16-alpine
-    profiles: ["postgres"]
+    profiles: ['postgres']
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${PG_USER:-octo}
@@ -80,26 +86,26 @@ services:
     volumes:
       - pg-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${PG_USER:-octo}"]
+      test: ['CMD-SHELL', 'pg_isready -U ${PG_USER:-octo}']
       interval: 5s
       timeout: 3s
       retries: 10
 
   minio:
     image: minio/minio:latest
-    profiles: ["minio"]
+    profiles: ['minio']
     restart: unless-stopped
     command: server /data --console-address ":9001"
     environment:
       MINIO_ROOT_USER: ${S3_ACCESS_KEY_ID:-minioadmin}
       MINIO_ROOT_PASSWORD: ${S3_SECRET_ACCESS_KEY:-minioadmin}
     ports:
-      - "9000:9000"
-      - "9001:9001"
+      - '9000:9000'
+      - '9001:9001'
     volumes:
       - minio-data:/data
     healthcheck:
-      test: ["CMD", "mc", "ready", "local"]
+      test: ['CMD', 'mc', 'ready', 'local']
       interval: 5s
       timeout: 3s
       retries: 10

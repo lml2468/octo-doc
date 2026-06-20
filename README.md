@@ -85,19 +85,30 @@ Highlights:
 
 ## Development
 
+TypeScript (strict), [Hono](https://hono.dev), Node 22 built-in `node:sqlite`.
+
 ```bash
 pnpm install
-pnpm dev            # hot-reload server (Node --watch)
-pnpm test           # unit tests (node:test)
-pnpm test:e2e       # publish → pull → v2 → list-versions, < 1s
+pnpm dev            # hot-reload server (tsx watch + .env)
+pnpm test           # vitest: unit + contract + integration + e2e
+pnpm coverage       # same, with the 85% gate
+pnpm lint           # eslint (type-checked, complexity ≤ 10)
+pnpm typecheck      # tsc --noEmit (strict, no any)
+pnpm build          # tsup → dist
 pnpm bench          # autocannon latency/throughput
-pnpm lint && pnpm typecheck
 ```
 
-CI (`.github/workflows/ci.yml`) runs lint, typecheck, unit, E2E on **both**
-storage stacks (sqlite+fs and postgres+s3 via service containers), builds the
-builds the Docker image (slim Alpine multi-stage, no dev/optional deps —
-~55 MB compressed), and pushes to `ghcr.io` on `main`.
+Architecture is layered **routes → services → adapters** with a typed
+`AppError` hierarchy and pluggable storage. The comment engine and artifact
+stamper are ported byte-for-byte from upstream tdoc (a contract test asserts
+the equivalence). See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md),
+[docs/DESIGN.md](docs/DESIGN.md), and [docs/POLISH.md](docs/POLISH.md).
+
+Pre-commit hooks (husky) run lint-staged + `tsc`; commits follow Conventional
+Commits (commitlint). CI runs format/lint/typecheck/coverage/build, replays the
+contract + E2E suite against **postgres+s3** service containers (proving the
+adapter swap is code-free), builds + smoke-tests the Docker image, and pushes to
+`ghcr.io` on `main`.
 
 ## License
 

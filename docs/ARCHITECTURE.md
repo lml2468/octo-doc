@@ -22,22 +22,36 @@ while preserving the document model, URL scheme, comment semantics, and the
 
 ┌──────────────────────── octo-doc (self-hosted) ─────────────────────┐
 │                                                                       │
-│   tdoc-publish ──HTTP──▶  Hono app (Node 22)                          │
+│   tdoc-publish ──HTTP──▶  Hono app (Node 22, TypeScript strict)       │
 │   (Bearer token)             │                                         │
-│                              ├── core/  (PORTED VERBATIM, CF-free):    │
-│                              │     stamp.js     — data-tdoc-aid stamper │
-│                              │     comments.js  — event-log fold        │
-│                              │     ops.js       — applyCommentOp        │
-│                              │     render.js    — overlay injection     │
-│                              │     store.js     — serialized writes     │
-│                              │     mutex.js     — per-slug lock (≈ DO)   │
+│                              │  routes/ ─▶ services/ ─▶ storage/       │
+│                              │  (thin)     (logic)      (adapters)     │
 │                              │                                          │
+│                              ├── core/  (PORTED VERBATIM, CF-free):    │
+│                              │     stamp.ts          data-tdoc-aid      │
+│                              │     comment-fold.ts   event-log fold     │
+│                              │     comment-events.ts eid/dedup/migrate  │
+│                              │     ops.ts            applyCommentOp      │
+│                              │     reconcile.ts      anchor reconcile    │
+│                              │     render.ts         overlay injection   │
+│                              │     mutex.ts          per-slug lock (≈DO) │
+│                              │                                          │
+│                              ├── services/ DocService, CommentService,  │
+│                              │              AuthService                  │
 │                              └── storage/ {MetadataStore, BlobStore}:   │
-│                                    sqlite.js + fs.js   (default)        │
-│                                    postgres.js + s3.js (optional)       │
+│                                    sqlite.ts + fs.ts   (default)        │
+│                                    postgres.ts + s3.ts (optional)       │
 │                           overlay.js read at RUNTIME (same bytes)       │
 └───────────────────────────────────────────────────────────────────────┘
 ```
+
+### Layering
+
+Dependencies flow one way: **routes → services → adapters**, with `core/` as a
+dependency-free domain kernel and cross-cutting `config` / `logger` / typed
+`errors`. Routes are thin (validate + shape); all logic lives in services; no
+adapter type (SQLite row, S3 object) ever reaches a route. Module boundaries are
+exposed through `index.ts` barrels; there are no circular dependencies.
 
 ### What maps to what
 
@@ -46,7 +60,7 @@ while preserving the document model, URL scheme, comment semantics, and the
 | R2 bucket `DOCS`                | `BlobStore` → FS (`./data/blobs`) or S3/MinIO         |
 | KV `META` (meta + comments)     | `MetadataStore` → SQLite (`node:sqlite`) or Postgres  |
 | KV `session:*`                  | `MetadataStore.sessions` table                        |
-| Durable Object `CommentsStore`  | in-process per-slug async mutex (`core/mutex.js`)     |
+| Durable Object `CommentsStore`  | in-process per-slug async mutex (`core/mutex.ts`)     |
 | `wrangler secret TDOC_UPLOAD_TOKEN` | `WRITE_TOKEN` env, or `/api/admin/bootstrap` token |
 | Worker build-time overlay inline | runtime `readFileSync` of `src/overlay.js`           |
 | `caches.default`, `Request.cf`, `waitUntil` | none — no Cloudflare assumptions leak in |
@@ -58,8 +72,8 @@ The success criterion *"相同输入下渲染字节级等价于上游 Workers"* 
 than rewriting them:
 
 - `stampAids()` — stamps `data-tdoc-aid="<cyrb53 hash>"` on every commentable
-  artifact. Copied character-for-character from `worker.js`. Verified against
-  the upstream implementation in `test/unit/core.test.js` ("byte-parity with
+  artifact. Copied character-for-character from upstream worker.js. Verified against
+  the upstream implementation in `test/unit/stamp.test.ts` ("byte-parity with
   the upstream Cloudflare worker") across ordinary and adversarial HTML.
 - The event-log comment model (`snapshotAt`, `dedupEvents`, `reconcileAnchors`,
   `compactComments`) — copied verbatim.
@@ -82,7 +96,7 @@ Unchanged from upstream:
 - **URL**: `/d/<slug>/v/<version>` (preserved). Plus `/export` and `/fork`.
 - **Comments**: an append-only **event log** per slug. Each version is a
   snapshot — reading "as of version N" folds events with `at_version <= N`.
-  Mutations append events; they never overwrite. See `src/core/comments.js`.
+  Mutations append events; they never overwrite. See `src/core/comment-fold.ts`.
 
 ### Storage records
 
@@ -140,7 +154,7 @@ new ones (`/api/docs`, `/api/docs/:slug/versions`, `/api/admin/bootstrap`).
 
 ## Concurrency
 
-Per-slug comment writes are serialized by `core/mutex.js` — an in-process async
+Per-slug comment writes are serialized by `core/mutex.ts` — an in-process async
 mutex that makes `read → applyCommentOp → write` atomic for a given slug,
 exactly the guarantee the Durable Object provided. This is correct for the
 default **single-instance** deployment. The event log additionally converges

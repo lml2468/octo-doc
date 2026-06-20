@@ -30,7 +30,7 @@
     "format:check": "prettier --check .",
     "typecheck": "tsc --noEmit",
     "bench": "tsx bench/run.ts",
-    "prepare": "husky"
+    "prepare": "husky || true"
   },
   "dependencies": {
     "@hono/node-server": "^1.13.7",

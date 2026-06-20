@@ -1,9 +1,0 @@
-# Prettier — single source of truth for formatting (eslint-config-prettier
-# disables conflicting ESLint stylistic rules).
-semi: true
-singleQuote: true
-trailingComma: all
-printWidth: 100
-tabWidth: 2
-arrowParens: always
-endOfLine: lf

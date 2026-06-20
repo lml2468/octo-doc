@@ -6,3 +6,4 @@ data/
 coverage/
 *.tgz
 .claude/
+dist/

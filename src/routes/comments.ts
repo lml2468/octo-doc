@@ -6,9 +6,10 @@
 import { Hono, type Context } from 'hono';
 import { getCookie } from 'hono/cookie';
 import type { AppEnv } from '../http-context.js';
-import { safeSlug } from '../config.js';
+import { requireSlug } from '../config.js';
 import { ForbiddenError, UnauthorizedError, ValidationError } from '../errors.js';
-import { requireWriteAuth } from '../middleware/auth.js';
+import { requireWriteAuth, bearer } from '../middleware/auth.js';
+import { findHost } from '../core/index.js';
 import type { AgentStatus, Author, Comment, CommentEvent } from '../core/index.js';
 import type { Session } from '../storage/types.js';
 import { rand } from '../services/ids.js';
@@ -19,13 +20,6 @@ function parseVersion(raw: string | undefined): number | 'all' {
   if (raw === 'all') return 'all';
   const n = Number(raw);
   return Number.isFinite(n) && n >= 0 ? n : Infinity;
-}
-
-/** Require a slug from query/body, throwing a typed 400. */
-function requireSlug(value: unknown): string {
-  const slug = safeSlug(value);
-  if (!slug) throw new ValidationError('invalid or missing slug', 'invalid_slug');
-  return slug;
 }
 
 /** Resolve the viewer session, requiring one when GitHub auth is configured. */
@@ -57,15 +51,11 @@ function canMutate(
   return !!(who && session?.login && who === session.login);
 }
 
-/** Find a top-level comment or the parent of a reply by id. */
-function findTarget(list: Comment[], id: string): { author?: Author | null } | null {
-  const top = list.find((c) => c.id === id);
-  if (top) return top;
-  for (const c of list) {
-    const added = (c.events ?? []).find((e) => e.kind === 'reply_added' && e.reply?.id === id);
-    if (added && added.kind === 'reply_added') return added.reply;
-  }
-  return null;
+/** The author record to authorize against for a comment or reply id, or null. */
+function findAuthorRecord(list: Comment[], id: string): { author?: Author | null } | null {
+  const found = findHost(list, id);
+  if (!found) return null;
+  return found.reply ?? found.comment;
 }
 
 /** Build the comment routes. */
@@ -112,7 +102,7 @@ export function commentRoutes(): Hono<AppEnv> {
     if (typeof id !== 'string' || !anchor)
       throw new ValidationError('slug, id, anchor required', 'anchor_required');
     const list = await c.var.comments.read(slug);
-    const target = findTarget(list, id);
+    const target = findAuthorRecord(list, id);
     if (!target) throw new ValidationError('not found', 'not_found');
     if (c.var.config.githubClientId && !canMutate(target, session, c.var.auth.isOwner(session))) {
       throw new ForbiddenError('not the author', 'not_author');
@@ -134,7 +124,7 @@ export function commentRoutes(): Hono<AppEnv> {
     const id = c.req.query('id');
     if (!id) throw new ValidationError('slug and id required', 'id_required');
     const list = await c.var.comments.read(slug);
-    const target = findTarget(list, id);
+    const target = findAuthorRecord(list, id);
     if (!target) throw new ValidationError('not found', 'not_found');
     if (c.var.config.githubClientId && !canMutate(target, session, c.var.auth.isOwner(session))) {
       throw new ForbiddenError('not the author', 'not_author');
@@ -176,13 +166,12 @@ export function commentRoutes(): Hono<AppEnv> {
 
 /** Admin: wipe all comments for a slug (write-token gated). */
 async function wipeComments(c: Context<AppEnv>, slug: string): Promise<Response> {
-  const token = (c.req.header('authorization') ?? '').replace(/^Bearer\s+/, '');
-  if (!(await c.var.auth.isValidWriteToken(token))) throw new UnauthorizedError();
+  const token = bearer(c.req.header('authorization'));
+  if (!token || !(await c.var.auth.isValidWriteToken(token))) throw new UnauthorizedError();
   const res = await c.var.comments.wipe(slug);
   return c.json(res.body, res.status as 200);
 }
 
-/** Agent posts a reply + verdict; optionally re-binds the parent's anchor. */
 /** Build the event list for an agent reply (+ optional verdict state change). */
 function agentReplyEvents(
   replyId: string,

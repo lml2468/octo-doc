@@ -17,7 +17,7 @@ export {
 } from './comment-events.js';
 export { snapshotAt, snapshotList, historyList } from './comment-fold.js';
 export { reconcileAnchors } from './reconcile.js';
-export { applyCommentOp } from './ops.js';
+export { applyCommentOp, findHost } from './ops.js';
 export type { CommentOp, OpResult } from './ops.js';
 export {
   injectOverlayCfg,

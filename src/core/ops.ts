@@ -13,6 +13,7 @@ import type {
   CommentEvent,
   CommentSnapshot,
   Reactions,
+  ReplySeed,
 } from './comment.types.js';
 import {
   appendEvent,
@@ -74,16 +75,20 @@ export interface OpResult {
   wipe?: boolean;
 }
 
-/** Find the host comment for a reaction/target id (top-level or via a reply). */
-function findReactionHost(
+/**
+ * Locate a comment or reply by id. Returns the host comment and, when the id
+ * names a reply, that reply's seed (its author/text). The single traversal used
+ * by reactions, deletes, and route-level authorization.
+ */
+export function findHost(
   list: Comment[],
   id: string,
-): { host: Comment; replyId: string | null } | null {
+): { comment: Comment; reply: ReplySeed | null } | null {
   const top = list.find((c) => c.id === id);
-  if (top) return { host: top, replyId: null };
+  if (top) return { comment: top, reply: null };
   for (const c of list) {
     const added = (c.events ?? []).find((e) => e.kind === 'reply_added' && e.reply?.id === id);
-    if (added) return { host: c, replyId: id };
+    if (added && added.kind === 'reply_added') return { comment: c, reply: added.reply };
   }
   return null;
 }
@@ -172,9 +177,10 @@ function opReact(
   op: Extract<CommentOp, { kind: 'react' }>,
   now: string,
 ): OpResult {
-  const found = findReactionHost(list, op.comment_id);
+  const found = findHost(list, op.comment_id);
   if (!found) return { status: 404, body: { error: 'not_found' } };
-  const { host, replyId } = found;
+  const replyId = found.reply ? op.comment_id : null;
+  const host = found.comment;
   const snap = snapshotAt(host, op.version);
   if (!snap) return { status: 404, body: { error: 'not_visible_at_version' } };
 
@@ -200,26 +206,21 @@ function opDelete(
   op: Extract<CommentOp, { kind: 'delete' }>,
   now: string,
 ): OpResult {
-  const top = list.find((c) => c.id === op.id);
-  if (top) {
-    appendEvent(top, { kind: 'deleted', at_version: op.version, at: now, by: op.actor.login });
-    return { status: 200, body: { ok: true } };
-  }
-  for (const c of list) {
-    ensureEventLog(c);
-    const added = (c.events ?? []).find((e) => e.kind === 'reply_added' && e.reply?.id === op.id);
-    if (added) {
-      appendEvent(c, {
-        kind: 'reply_deleted',
-        at_version: op.version,
-        at: now,
-        reply_id: op.id,
-        by: op.actor.login,
-      });
-      return { status: 200, body: { ok: true } };
-    }
-  }
-  return { status: 404, body: { error: 'not_found' } };
+  const found = findHost(list, op.id);
+  if (!found) return { status: 404, body: { error: 'not_found' } };
+  appendEvent(
+    found.comment,
+    found.reply
+      ? {
+          kind: 'reply_deleted',
+          at_version: op.version,
+          at: now,
+          reply_id: op.id,
+          by: op.actor.login,
+        }
+      : { kind: 'deleted', at_version: op.version, at: now, by: op.actor.login },
+  );
+  return { status: 200, body: { ok: true } };
 }
 
 function opRawEvents(list: Comment[], op: Extract<CommentOp, { kind: 'raw_events' }>): OpResult {

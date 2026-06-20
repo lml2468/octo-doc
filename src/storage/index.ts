@@ -14,12 +14,16 @@ import type { BlobStore, MetadataStore, Stores } from './types.js';
 export type { BlobStore, MetadataStore, DocMeta, Session, TokenRecord, Stores } from './types.js';
 
 /** Wrap each method of `obj` so it runs under timeout + retry. */
+/** Methods that are lifecycle, not I/O — passed through without retry/timeout. */
+const NON_IO_METHODS = new Set(['close']);
+
+/** Wrap each I/O method of `obj` so it runs under timeout + retry. */
 function resilient<T extends object>(obj: T, config: Config): T {
   const wrapped = {} as Record<string, unknown>;
   for (const key of Object.keys(obj) as (keyof T)[]) {
     const fn = obj[key];
-    if (typeof fn !== 'function') {
-      wrapped[key as string] = fn;
+    if (typeof fn !== 'function' || NON_IO_METHODS.has(key as string)) {
+      wrapped[key as string] = typeof fn === 'function' ? (fn as () => unknown).bind(obj) : fn;
       continue;
     }
     wrapped[key as string] = (...args: unknown[]) =>

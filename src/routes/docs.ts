@@ -6,20 +6,13 @@
 import { Hono, type Context } from 'hono';
 import { getCookie } from 'hono/cookie';
 import type { AppEnv } from '../http-context.js';
-import { safeSlug } from '../config.js';
+import { requireSlug } from '../config.js';
 import { NotFoundError, ValidationError } from '../errors.js';
 import { requireWriteAuth, maybeRequireReadAuth } from '../middleware/auth.js';
 import { injectOverlayCfg, toOverlayIdentity } from '../core/render.js';
 import { buildForkExport } from './fork-export.js';
 import type { Comment } from '../core/index.js';
 import type { DocMeta } from '../storage/types.js';
-
-/** Parse + validate the slug, throwing a typed 400 on failure. */
-function requireSlug(value: unknown): string {
-  const slug = safeSlug(value);
-  if (!slug) throw new ValidationError('invalid or missing slug', 'invalid_slug');
-  return slug;
-}
 
 interface PublishBody {
   slug: unknown;

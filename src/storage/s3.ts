@@ -7,13 +7,9 @@
  * unexpected slug can never produce a key outside the `docs/` prefix. S3 PUT is
  * atomic by nature — there is no half-written object.
  */
-import { createHash } from 'node:crypto';
 import type { Config } from '../config.js';
 import type { BlobStore } from './types.js';
-
-function hashSlug(slug: string): string {
-  return createHash('sha256').update(slug).digest('hex').slice(0, 32);
-}
+import { hashSlug } from './keys.js';
 
 /** Narrow structural types for the S3 client surface we use (avoids `any`). */
 interface S3Like {

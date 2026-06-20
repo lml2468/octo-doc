@@ -3,6 +3,7 @@
  * once at boot into a frozen, fully-typed {@link Config}; no other module reads
  * `process.env` for app settings.
  */
+import { ValidationError } from './errors.js';
 
 /** Storage selector: `<metadata>+<blob>`, e.g. `sqlite+fs` or `postgres+s3`. */
 export type StorageSpec = `${'sqlite' | 'postgres'}+${'fs' | 's3'}`;
@@ -83,4 +84,11 @@ export function loadConfig(env: Env = process.env): Config {
 /** Single source of truth for slug validation. */
 export function safeSlug(slug: unknown): string | null {
   return typeof slug === 'string' && /^[a-zA-Z0-9_-]{1,64}$/.test(slug) ? slug : null;
+}
+
+/** Validate a slug, throwing a typed 400 on failure (for route handlers). */
+export function requireSlug(value: unknown): string {
+  const slug = safeSlug(value);
+  if (!slug) throw new ValidationError('invalid or missing slug', 'invalid_slug');
+  return slug;
 }

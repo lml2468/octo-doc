@@ -7,7 +7,7 @@ import { UpstreamError } from '../errors.js';
 
 /** Reject if `promise` does not settle within `ms`. */
 export async function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
-  let timer: NodeJS.Timeout;
+  let timer: NodeJS.Timeout | undefined;
   const timeout = new Promise<never>((_, reject) => {
     timer = setTimeout(
       () => reject(new UpstreamError(`${label} timed out after ${ms}ms`, 'io_timeout')),
@@ -17,7 +17,7 @@ export async function withTimeout<T>(promise: Promise<T>, ms: number, label: str
   try {
     return await Promise.race([promise, timeout]);
   } finally {
-    clearTimeout(timer!);
+    clearTimeout(timer);
   }
 }
 

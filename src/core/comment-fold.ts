@@ -163,12 +163,14 @@ function applyReplyEvent(st: FoldState, e: CommentEvent): void {
   }
 }
 
-/** Order events deterministically: dedup, then stable-sort by `at_version`. */
+/**
+ * Order events deterministically: dedup, then sort by `at_version`. Relies on
+ * `Array.prototype.sort` being stable (ES2019+), so equal-version events keep
+ * their original relative order without an explicit index tiebreak.
+ */
 function orderedEvents(events: CommentEvent[]): CommentEvent[] {
-  return dedupEvents(events)
-    .map((e, i) => ({ e, i }))
-    .sort((a, b) => (a.e.at_version || 0) - (b.e.at_version || 0) || a.i - b.i)
-    .map((x) => x.e);
+  // dedupEvents returns a fresh array, so sorting it in place is safe.
+  return dedupEvents(events).sort((a, b) => (a.at_version || 0) - (b.at_version || 0));
 }
 
 /** Fresh snapshot scaffold for a comment. */

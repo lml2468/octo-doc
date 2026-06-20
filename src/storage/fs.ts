@@ -9,7 +9,7 @@
  * Chaos-safety: writes go to a temp file then `rename` (atomic on POSIX), so a
  * crash mid-publish never leaves a half-written `index.html`.
  */
-import { createHash, randomBytes } from 'node:crypto';
+import { randomBytes } from 'node:crypto';
 import {
   mkdirSync,
   writeFileSync,
@@ -24,10 +24,7 @@ import {
 import { join } from 'node:path';
 import type { Config } from '../config.js';
 import type { BlobStore } from './types.js';
-
-function hashSlug(slug: string): string {
-  return createHash('sha256').update(slug).digest('hex').slice(0, 32);
-}
+import { hashSlug } from './keys.js';
 
 /** Open the filesystem blob store rooted under the configured data directory. */
 export function makeFsBlobStore(config: Pick<Config, 'dataDir'>): BlobStore {

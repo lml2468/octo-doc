@@ -7,7 +7,7 @@ import { NotFoundError, UnauthorizedError } from '../errors.js';
 import type { AppEnv } from '../http-context.js';
 
 /** Extract a Bearer token from the Authorization header, or null. */
-function bearer(header: string | undefined): string | null {
+export function bearer(header: string | undefined): string | null {
   const m = /^Bearer\s+(.+)$/.exec(header ?? '');
   return m ? m[1]! : null;
 }

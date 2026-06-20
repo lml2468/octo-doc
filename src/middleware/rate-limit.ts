@@ -5,6 +5,7 @@
  */
 import { createMiddleware } from 'hono/factory';
 import { RateLimitedError } from '../errors.js';
+import { bearer } from './auth.js';
 import type { AppEnv } from '../http-context.js';
 
 interface Window {
@@ -27,7 +28,7 @@ export function rateLimit(opts: { windowMs: number; max: number }) {
   const hits = new Map<string, Window>();
   return createMiddleware<AppEnv>(async (c, next) => {
     if (opts.max <= 0) return next();
-    const token = (c.req.header('authorization') ?? '').replace(/^Bearer\s+/, '').slice(0, 16);
+    const token = (bearer(c.req.header('authorization')) ?? '').slice(0, 16);
     const key = `${token}|${clientIp(c.req.raw.headers)}`;
     const now = Date.now();
     let w = hits.get(key);

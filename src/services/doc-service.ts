@@ -132,14 +132,15 @@ export class DocService {
    */
   async listAllForOwner(): Promise<{ slug: string; title: string; latest: number }[]> {
     const all = await this.meta.listMeta();
-    const out: { slug: string; title: string; latest: number }[] = [];
-    for (const { slug, meta } of all) {
-      const latest = meta.versions?.[meta.versions.length - 1]?.n ?? 1;
-      if (await this.blobs.headDoc(slug, latest)) {
-        out.push({ slug, title: meta.title ?? slug, latest });
-      }
-    }
-    return out;
+    // Probe each doc's latest blob in parallel — independent existence checks.
+    const checked = await Promise.all(
+      all.map(async ({ slug, meta }) => {
+        const latest = meta.versions?.[meta.versions.length - 1]?.n ?? 1;
+        const exists = await this.blobs.headDoc(slug, latest);
+        return exists ? { slug, title: meta.title ?? slug, latest } : null;
+      }),
+    );
+    return checked.filter((d): d is { slug: string; title: string; latest: number } => d !== null);
   }
 
   /** Next version = max existing + 1, unless an explicit version was given. */

@@ -81,6 +81,10 @@ describe('publish + render', () => {
     );
   });
 
+  it('GET /api/docs (write-only) returns 401 unauthenticated, not 404', async () => {
+    expect((await req('GET', '/api/docs')).status).toBe(401);
+  });
+
   it('publishes v1 then v2 with monotonic versions, both reachable', async () => {
     const r1 = (await (
       await req('POST', '/api/docs', {

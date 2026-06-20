@@ -90,6 +90,9 @@ export function docRoutes(): Hono<AppEnv> {
 
   app.post('/api/docs', requireWriteAuth, publish);
   app.post('/api/upload', requireWriteAuth, publish); // legacy alias
+  // /api/docs is a write-only endpoint: a GET (or any non-POST) still requires
+  // the write token, so an unauthenticated probe gets a clear 401, not a 404.
+  app.all('/api/docs', requireWriteAuth, (c) => c.json({ error: 'method_not_allowed' }, 405));
 
   app.get('/api/docs/:slug/versions', async (c) => {
     const slug = requireSlug(c.req.param('slug'));

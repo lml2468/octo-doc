@@ -1,58 +1,64 @@
 # octo-doc — agent guide
 
 Self-hosted, Cloudflare-free reimplementation of tdoc: prompt-native interactive
-HTML docs with versioning + anchored comments. Node 22, TypeScript strict, Hono.
-Full design in `docs/ARCHITECTURE.md` / `docs/DESIGN.md`.
+HTML docs with versioning + anchored comments. **Go 1.26**, chi router, PostgreSQL
++ S3-compatible storage. Full design in `docs/ARCHITECTURE.md` / `docs/DESIGN.md`;
+the TS→Go port strategy is in `docs/PORTING.md`.
 
-## Commands (pnpm + Node 22)
+## Commands
 
 ```bash
-pnpm install
-pnpm dev          # hot-reload server (tsx watch + .env)
-pnpm test         # vitest: unit + contract + integration + e2e
-pnpm coverage     # tests + 85% gate (CI uses this)
-pnpm lint         # eslint, type-checked, complexity ≤ 10
-pnpm typecheck    # tsc --noEmit, strict, no any
-pnpm build        # tsup → dist
-pnpm bench        # autocannon render-path benchmark
+make build        # build bin/octo-doc
+make run          # run the server (needs DATABASE_URL + S3_*)
+make test         # all tests (pg/s3 suites skip without OCTO_TEST_* env)
+make test-race    # tests under the race detector
+make cover        # coverage summary
+make lint         # golangci-lint (v2)
+make check        # fmt + vet + lint + test — the local gate
 ```
 
-Tests are **vitest**, not node:test. A free port is auto-picked, so e2e/bench
-never collide with a running dev server.
+The storage + e2e suites run against real services when `OCTO_TEST_DATABASE_URL`
+and `OCTO_TEST_S3_BUCKET` (+ endpoint/creds) are set; otherwise they skip. The
+`Makefile` exports sensible localhost defaults (pg on :55432, MinIO on :59000).
 
 ## Architecture
 
-Dependencies flow one way: **routes → services → adapters**.
+Dependencies flow one way: **transport → service → storage**, with `core` a
+dependency-free leaf and `platform` as cross-cutting support.
 
-- `src/core/` — pure domain kernel (no I/O): aid stamping, event-log fold, ops.
-- `src/services/` — DocService, CommentService (per-slug mutex), AuthService.
-- `src/routes/` + `src/middleware/` — thin HTTP; logic lives in services.
-- `src/storage/` — `{ MetadataStore, BlobStore }` adapters (sqlite+fs default,
-  postgres+s3 optional), selected by `STORAGE`. No driver type leaks to routes.
-- Cross-cutting: `config.ts`, `logger.ts`, typed `errors.ts` (one error→HTTP map).
-
-Import across module boundaries through each dir's `index.ts` barrel.
+- `internal/core/` — pure domain kernel (no I/O): aid stamping, event-log fold,
+  ops, reconcile, overlay injection. **Byte-equivalent port of upstream tdoc.**
+- `internal/service/` — DocService, CommentService (per-slug lock), AuthService.
+- `internal/transport/httpx/` — chi router, thin handlers, middleware.
+- `internal/storage/` — `MetadataStore` (postgres) + `BlobStore` (s3) interfaces;
+  `memory/` is a test fake. No driver type leaks past a store package.
+- `internal/platform/` — `config`, `log` (slog), typed `apperr`, `sluglock`.
+- `assets/overlay.js` — browser code, embedded via `go:embed`, served verbatim.
 
 ## Gotchas (these are enforced — don't fight them)
 
-- **`src/core/` is ported verbatim from upstream tdoc and must stay
-  byte-equivalent.** `stampAids` + the comment fold have a contract test
-  (`test/unit/stamp.test.ts`) asserting parity with `worker.js`. Refactor for
-  clarity only if the test still passes.
-- **`node:sqlite` is loaded via `createRequire`** (`src/storage/sqlite.ts`) so
-  tsup/esbuild don't rewrite it to a bare `sqlite` import that fails at runtime.
-  Don't change it to a static `import`.
-- **Quality bar is linted:** files ≤ 300 lines, functions ≤ 50, cyclomatic
-  complexity ≤ 10, no `any`, no `console.*` in `src/`. `pnpm lint` fails on these.
-- **Commits go through commitlint** (husky): Conventional Commits, **lowercase
-  subject** (e.g. `fix: …` not `Fix: …`). Pre-commit also runs lint-staged + tsc.
-- **`overlay.js` is browser code served verbatim** — not transpiled, excluded
-  from eslint/tsc. `core/render.ts` reads it once at module load.
-- Optional adapters (`pg`, `@aws-sdk/client-s3`) are dynamic-imported; the
-  default sqlite+fs stack needs neither installed.
+- **`internal/core/` is a byte-equivalent port and must stay that way.** Every
+  change must keep the golden tests green (`go test ./internal/core/`), which
+  assert parity against fixtures in `testdata/golden`. See `docs/PORTING.md` for
+  the three porting traps (Math.imul 32-bit wrap, charCodeAt UTF-16 code units,
+  RE2's lack of backreferences).
+- **`testdata/golden` is frozen.** It was generated from the original TypeScript
+  before that source was removed. Don't hand-edit fixtures.
+- **`overlay.js` is the single source of truth**, embedded with `go:embed` in
+  `assets/`. It is browser code — never reformat or transpile it.
+- **Storage is PostgreSQL + S3 only.** There is no embedded/sqlite fallback. The
+  two interfaces live in `internal/storage`; keep adapters behind them.
+- **`golangci-lint` must pass with 0 issues** (`make lint`). Exported symbols
+  need doc comments; unchecked errors and unclosed bodies are flagged.
+- Use Conventional Commit subjects (lowercase, e.g. `fix: …`).
 
 ## Config
 
-12-factor via env (`.env.example`). Parsed once in `config.ts`; no other module
-reads `process.env` for app settings. Key vars: `STORAGE`, `WRITE_TOKEN`,
-`PRIVATE`, `GITHUB_CLIENT_ID`, `DATA_DIR`.
+12-factor via env (`.env.example`). Parsed once in `internal/config`; no other
+package reads the environment for app settings. Key vars: `DATABASE_URL`,
+`S3_BUCKET`/`S3_ENDPOINT`/`S3_*`, `WRITE_TOKEN`, `PRIVATE`, `GITHUB_CLIENT_ID`.
+
+## Entrypoint
+
+`cmd/octo-doc` with subcommands: `serve` (default), `migrate`, `bootstrap`,
+`health`.

@@ -5,7 +5,7 @@ From nothing to a live, TLS-secured doc server in ~15 minutes on a $5 VPS.
 ## TL;DR
 
 ```bash
-git clone https://github.com/lml2468/octo-doc && cd octo-doc
+git clone https://github.com/Mininglamp-OSS/octo-doc && cd octo-doc
 DOMAIN=docs.example.com docker compose -f deploy/docker-compose.yml up -d --wait
 TOKEN=$(curl -s http://localhost:8080/api/admin/bootstrap | jq -r .token)
 echo "Publish with:  export TDOC_BASE_URL=https://docs.example.com TDOC_TOKEN=$TOKEN"
@@ -30,15 +30,17 @@ curl -fsSL https://get.docker.com | sh
 ### 3. Clone and launch
 
 ```bash
-git clone https://github.com/lml2468/octo-doc
+git clone https://github.com/Mininglamp-OSS/octo-doc
 cd octo-doc
 # DOMAIN drives Caddy's automatic Let's Encrypt cert.
 DOMAIN=docs.example.com docker compose -f deploy/docker-compose.yml up -d --wait
 ```
 
-That's it — the app + Caddy (auto-TLS) are up. `--wait` blocks until the app
-healthcheck passes (typically a few seconds; the whole `up` is well under 2
-minutes on a clean Ubuntu 24.04 box).
+That's it. One compose file brings up the whole stack: the octo-doc app,
+PostgreSQL, MinIO (S3-compatible blob storage), and Caddy (auto-TLS). `--wait`
+blocks until the app healthcheck passes (typically a few seconds; the whole `up`
+is well under 2 minutes on a clean Ubuntu 24.04 box). Schema migrations run
+automatically on app start (`octo-doc migrate` is also exposed for manual runs).
 
 ### 4. Mint a write token
 
@@ -46,6 +48,10 @@ minutes on a clean Ubuntu 24.04 box).
 TOKEN=$(curl -s http://localhost:8080/api/admin/bootstrap | jq -r .token)
 echo "$TOKEN"          # save this — bootstrap only works once
 ```
+
+(Equivalently, run `octo-doc bootstrap` inside the app container —
+`docker compose -f deploy/docker-compose.yml exec app octo-doc bootstrap` —
+which mints and prints the same first token.)
 
 Prefer a fixed token you control? Set `WRITE_TOKEN=...` in a `.env` file next to
 the compose file before `up` (bootstrap is then disabled).
@@ -68,15 +74,27 @@ curl -sf https://docs.example.com/d/my-doc/v/1 | grep -q '<h1' && echo OK
 
 ---
 
-## Option B — No Docker (`npx` / bare Node)
+## Option B — The binary (no Docker)
 
-For a quick local instance or a tiny box without Docker. Needs **Node 22+**
-(for the built-in SQLite). No build step, no native modules.
+octo-doc compiles to a single static binary with no runtime dependencies. You
+still need a PostgreSQL instance and an S3-compatible bucket reachable from it
+(a managed Postgres + an S3/MinIO/R2-compatible bucket, or self-hosted).
 
 ```bash
-npx octo-doc                  # SQLite + ./data, listens on :8080
-# in another shell:
-curl -s localhost:8080/api/admin/bootstrap | jq -r .token
+make build                    # or: go build -o octo-doc ./cmd/octo-doc
+
+export DATABASE_URL="postgres://octo:octo@localhost:5432/octodoc"
+export S3_BUCKET=octo-doc
+export S3_ENDPOINT=http://localhost:9000     # omit for real AWS S3
+export S3_REGION=us-east-1
+export S3_FORCE_PATH_STYLE=true              # true for MinIO; false for AWS S3
+export S3_ACCESS_KEY_ID=minioadmin
+export S3_SECRET_ACCESS_KEY=minioadmin
+
+./octo-doc migrate            # create schema (idempotent)
+./octo-doc serve              # listens on :8080
+# in another shell — mint the first token:
+./octo-doc bootstrap          # or: curl -s localhost:8080/api/admin/bootstrap | jq -r .token
 ```
 
 Put it behind your own nginx/Caddy/Traefik for TLS — reference configs are in
@@ -88,8 +106,11 @@ Run as a systemd service:
 ```ini
 # /etc/systemd/system/octo-doc.service
 [Service]
-ExecStart=/usr/bin/npx octo-doc
-Environment=PORT=8080 DATA_DIR=/var/lib/octo-doc WRITE_TOKEN=...  COOKIE_SECURE=true
+ExecStart=/usr/local/bin/octo-doc serve
+Environment=PORT=8080 WRITE_TOKEN=... COOKIE_SECURE=true
+Environment=DATABASE_URL=postgres://octo:octo@localhost:5432/octodoc
+Environment=S3_BUCKET=octo-doc S3_ENDPOINT=http://localhost:9000 S3_REGION=us-east-1
+Environment=S3_FORCE_PATH_STYLE=true S3_ACCESS_KEY_ID=... S3_SECRET_ACCESS_KEY=...
 Restart=always
 User=octo
 [Install]
@@ -98,19 +119,26 @@ WantedBy=multi-user.target
 
 ---
 
-## Going bigger: Postgres + S3/MinIO
+## Storage configuration (Postgres + S3)
 
-The default SQLite+FS stack handles a lot. To scale storage independently, flip
-two env vars and bring up the optional services — **no app code changes**:
+octo-doc always stores metadata in PostgreSQL and blobs in an S3-compatible
+bucket — these are the two required backends, configured purely by env. The
+default compose file wires up bundled Postgres + MinIO automatically; point
+these vars at managed services to use your own:
 
 ```bash
-STORAGE=postgres+s3 \
-DATABASE_URL=postgres://octo:octo@postgres:5432/octodoc \
-S3_ENDPOINT=http://minio:9000 S3_BUCKET=octo-doc S3_FORCE_PATH_STYLE=1 \
-S3_ACCESS_KEY_ID=minioadmin S3_SECRET_ACCESS_KEY=minioadmin \
-docker compose -f deploy/docker-compose.yml --profile postgres --profile minio up -d --wait
-docker compose -f deploy/docker-compose.yml exec app node dist/cli.js migrate
+DATABASE_URL=postgres://octo:octo@postgres:5432/octodoc
+
+S3_BUCKET=octo-doc
+S3_ENDPOINT=http://minio:9000      # omit for real AWS S3
+S3_REGION=us-east-1
+S3_FORCE_PATH_STYLE=true           # true for MinIO; false for AWS S3
+S3_ACCESS_KEY_ID=minioadmin
+S3_SECRET_ACCESS_KEY=minioadmin
 ```
+
+Schema creation is idempotent — `octo-doc migrate` (run automatically at app
+start) is safe to re-run.
 
 ---
 
@@ -123,8 +151,8 @@ docker compose -f deploy/docker-compose.yml exec app node dist/cli.js migrate
 - [ ] **`FRAME_ANCESTORS`** — keep `'none'` unless you intentionally embed docs.
 - [ ] **Set `WRITE_TOKEN`** explicitly and `ALLOW_BOOTSTRAP=false` once set up.
 - [ ] **`PRIVATE=1`** if reads should require the token too.
-- [ ] **Backups** — `sqlite3 .backup` + `tar` the blobs, or `pg_dump` + S3
-      lifecycle. See [DESIGN.md](./DESIGN.md#backup--restore).
+- [ ] **Backups** — `pg_dump` the metadata + S3 versioning/lifecycle (or
+      `aws s3 sync`) for the blobs. See [DESIGN.md](./DESIGN.md#backup--restore).
 - [ ] **Rate limits** — tune `RATE_LIMIT_MAX` / `RATE_LIMIT_WINDOW_MS` for your
       audience.
 
@@ -135,7 +163,7 @@ All knobs are documented in [`.env.example`](../.env.example).
 ## Troubleshooting
 
 - **`docker compose up` hangs on `--wait`** → check `docker compose logs app`.
-  Usually a bad `DATABASE_URL` (postgres profile) or a taken port 8080.
+  Usually a bad `DATABASE_URL`, an unreachable `S3_ENDPOINT`, or a taken port 8080.
 - **Caddy can't get a cert** → DNS A record not pointing at the box yet, or
   ports 80/443 blocked. `docker compose logs caddy` shows the ACME error.
 - **`bootstrap` returns 409** → a token already exists (or `WRITE_TOKEN` is

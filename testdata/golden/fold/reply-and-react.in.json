@@ -1,0 +1,53 @@
+{
+  "list": [
+    {
+      "id": "c1",
+      "author": {
+        "login": "alice"
+      },
+      "created": "2024-01-01T00:00:00.000Z",
+      "created_in": 1,
+      "events": [
+        {
+          "kind": "created",
+          "eid": "e1",
+          "at_version": 1,
+          "at": "2024-01-01T00:00:00.000Z",
+          "anchor": null,
+          "text": "parent"
+        },
+        {
+          "kind": "reply_added",
+          "eid": "e2",
+          "at_version": 1,
+          "at": "2024-01-01T00:00:00.000Z",
+          "reply": {
+            "id": "r1",
+            "author": {
+              "login": "bob"
+            },
+            "text": "a reply",
+            "agent_status": null
+          }
+        },
+        {
+          "kind": "reaction_added",
+          "eid": "e3",
+          "at_version": 1,
+          "at": "2024-01-01T00:00:00.000Z",
+          "emoji": "👍",
+          "by": "carol"
+        },
+        {
+          "kind": "reaction_added",
+          "eid": "e4",
+          "at_version": 1,
+          "at": "2024-01-01T00:00:00.000Z",
+          "emoji": "👍",
+          "by": "dave"
+        }
+      ]
+    }
+  ],
+  "version": 2
+}

@@ -1,0 +1,67 @@
+[
+  {
+    "input": "",
+    "seed": 0,
+    "hash": "wvjl67o803"
+  },
+  {
+    "input": "a",
+    "seed": 0,
+    "hash": "262p94epp1d"
+  },
+  {
+    "input": "hello world",
+    "seed": 0,
+    "hash": "w38l36pd04"
+  },
+  {
+    "input": "The quick brown fox jumps over the lazy dog.",
+    "seed": 0,
+    "hash": "qml8mx5qqz"
+  },
+  {
+    "input": "你好，世界",
+    "seed": 0,
+    "hash": "2mzaffzikv"
+  },
+  {
+    "input": "日本語のテキスト",
+    "seed": 0,
+    "hash": "6w9ojiihhp"
+  },
+  {
+    "input": "🚀🔥✅ emoji mix 🎉",
+    "seed": 0,
+    "hash": "1m6zub30lid"
+  },
+  {
+    "input": "𝕌𝕟𝕚𝕔𝕠𝕕𝕖 astral plane",
+    "seed": 0,
+    "hash": "1v994wbmw7m"
+  },
+  {
+    "input": "mixed 中文 and English 123",
+    "seed": 0,
+    "hash": "m9u63s6blh"
+  },
+  {
+    "input": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+    "seed": 0,
+    "hash": "21ded0ooxff"
+  },
+  {
+    "input": "<svg viewBox=\"0 0 24 24\"><path d=\"M3 8.5\"/></svg>",
+    "seed": 0,
+    "hash": "29vp5jpv89k"
+  },
+  {
+    "input": "hello world",
+    "seed": 42,
+    "hash": "2cnqnm2cxdq"
+  },
+  {
+    "input": "你好",
+    "seed": 7,
+    "hash": "1ozg6u5y19y"
+  }
+]

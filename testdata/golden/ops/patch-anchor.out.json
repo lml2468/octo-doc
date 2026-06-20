@@ -1,0 +1,42 @@
+{
+  "status": 200,
+  "body": {
+    "id": "c1",
+    "author": {
+      "login": "alice"
+    },
+    "created": "2024-01-01T00:00:00.000Z",
+    "created_in": 1,
+    "version": 1,
+    "anchor": {
+      "kind": "text",
+      "text": "moved"
+    },
+    "text": "base",
+    "status": "open",
+    "replies": [],
+    "reactions": {},
+    "deleted": false
+  },
+  "wipe": false,
+  "folded": [
+    {
+      "id": "c1",
+      "author": {
+        "login": "alice"
+      },
+      "created": "2024-01-01T00:00:00.000Z",
+      "created_in": 1,
+      "version": 1,
+      "anchor": {
+        "kind": "text",
+        "text": "moved"
+      },
+      "text": "base",
+      "status": "open",
+      "replies": [],
+      "reactions": {},
+      "deleted": false
+    }
+  ]
+}

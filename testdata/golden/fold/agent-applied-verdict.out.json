@@ -1,0 +1,36 @@
+[
+  {
+    "id": "c1",
+    "author": {
+      "login": "alice"
+    },
+    "created": "2024-01-01T00:00:00.000Z",
+    "created_in": 1,
+    "version": 1,
+    "anchor": null,
+    "text": "fix this",
+    "status": "applied",
+    "applied_in": 2,
+    "replies": [
+      {
+        "id": "r1",
+        "parent_id": "c1",
+        "author": {
+          "kind": "agent",
+          "login": "tdoc-agent"
+        },
+        "text": "done",
+        "agent_status": "applied",
+        "created": "2024-01-01T00:00:00.000Z",
+        "reactions": {},
+        "deleted": false
+      }
+    ],
+    "reactions": {
+      "✅": [
+        "tdoc-agent"
+      ]
+    },
+    "deleted": false
+  }
+]

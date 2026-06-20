@@ -1,0 +1,15 @@
+{
+  "name": "octo-doc",
+  "version": "1.0.0",
+  "description": "Self-hosted, prompt-native interactive HTML docs. Generate self-contained HTML from a prompt, comment on text + artifacts, publish to your own octo-doc server (Docker or npx) — no Cloudflare. A vendor-free reimplementation of tdoc.",
+  "homepage": "https://github.com/lml2468/octo-doc",
+  "license": "MIT",
+  "credits": {
+    "inspiration": [
+      { "name": "Serena Keyitan", "project": "tdoc", "url": "https://github.com/serenakeyitan/tdoc" },
+      { "name": "Jesse Pollak", "project": "bdocs (Coinbase)", "note": "Original concept." }
+    ]
+  },
+  "keywords": ["html","docs","documents","comments","self-hosted","prompt-native","interactive","sqlite","s3"],
+  "repository": { "type": "git", "url": "https://github.com/lml2468/octo-doc" }
+}

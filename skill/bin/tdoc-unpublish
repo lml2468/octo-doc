@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+# tdoc-unpublish — delete a published doc (all versions + comments) from the
+# self-hosted octo-doc server.
+#
+# Usage: tdoc-unpublish <slug>
+# Config: $TDOC_BASE_URL + $TDOC_TOKEN (env) or ~/.tdoc/config.json
+set -euo pipefail
+
+SLUG="${1:-}"
+if [ -z "$SLUG" ]; then echo "usage: tdoc-unpublish <slug>" >&2; exit 1; fi
+command -v jq >/dev/null 2>&1 || { echo "needs jq" >&2; exit 1; }
+
+CONFIG_FILE="$HOME/.tdoc/config.json"
+BASE_URL="${TDOC_BASE_URL:-}"
+TOKEN="${TDOC_TOKEN:-}"
+if { [ -z "$BASE_URL" ] || [ -z "$TOKEN" ]; } && [ -f "$CONFIG_FILE" ]; then
+  [ -z "$BASE_URL" ] && BASE_URL="$(jq -r '.base_url // empty' "$CONFIG_FILE")"
+  [ -z "$TOKEN" ] && TOKEN="$(jq -r '.token // empty' "$CONFIG_FILE")"
+fi
+[ -n "$BASE_URL" ] || { echo "[tdoc] set TDOC_BASE_URL." >&2; exit 1; }
+[ -n "$TOKEN" ] || { echo "[tdoc] set TDOC_TOKEN." >&2; exit 1; }
+BASE_URL="${BASE_URL%/}"
+
+curl -sS -X DELETE "$BASE_URL/api/doc?slug=$SLUG" -H "Authorization: Bearer $TOKEN" | jq .
+echo "Unpublished $SLUG."

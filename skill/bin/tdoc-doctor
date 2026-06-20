@@ -1,0 +1,60 @@
+#!/usr/bin/env bash
+# tdoc-doctor — health check for the self-hosted octo-doc setup. Replaces the
+# Cloudflare/wrangler doctor: there is no account, R2, KV, or subdomain to
+# verify. We check local deps, the local preview server, and (if configured)
+# reachability + auth of the remote octo-doc server.
+#
+# Mock env (for tests):
+#   TDOC_MOCK_NO_SERVER=1     # pretend the configured server is unreachable
+set -euo pipefail
+
+CONFIG_FILE="${TDOC_CONFIG_FILE:-$HOME/.tdoc/config.json}"
+TDOC_PORT="${TDOC_PORT:-7878}"
+ok()   { printf '  \033[32m✓\033[0m %s\n' "$1"; }
+warn() { printf '  \033[33m!\033[0m %s\n' "$1"; }
+bad()  { printf '  \033[31m✗\033[0m %s\n' "$1"; }
+
+echo "octo-doc doctor"
+echo
+
+echo "Local dependencies:"
+command -v node >/dev/null 2>&1 && ok "node $(node --version)" || bad "node 22+ not found (https://nodejs.org)"
+command -v jq   >/dev/null 2>&1 && ok "jq present" || warn "jq missing (needed for publish/pull) — brew install jq"
+command -v curl >/dev/null 2>&1 && ok "curl present" || bad "curl missing"
+echo
+
+echo "Local preview server (:$TDOC_PORT):"
+PING="$(curl -sf --max-time 2 "http://localhost:${TDOC_PORT}/api/ping" 2>/dev/null || true)"
+if printf '%s' "$PING" | grep -q '"service":"tdoc"'; then
+  ok "local server up at http://localhost:${TDOC_PORT}"
+else
+  warn "local server not running (start: node \"\$SKILL_DIR/server/server.js\")"
+fi
+echo
+
+echo "Remote octo-doc server:"
+BASE_URL="${TDOC_BASE_URL:-}"
+TOKEN="${TDOC_TOKEN:-}"
+if [ -z "$BASE_URL" ] && [ -f "$CONFIG_FILE" ]; then BASE_URL="$(jq -r '.base_url // empty' "$CONFIG_FILE" 2>/dev/null || true)"; fi
+if [ -z "$TOKEN" ] && [ -f "$CONFIG_FILE" ]; then TOKEN="$(jq -r '.token // empty' "$CONFIG_FILE" 2>/dev/null || true)"; fi
+
+if [ -z "$BASE_URL" ]; then
+  warn "no server configured. Set TDOC_BASE_URL (+ TDOC_TOKEN) or run /tdoc publish <slug>."
+else
+  BASE_URL="${BASE_URL%/}"
+  if [ -n "${TDOC_MOCK_NO_SERVER:-}" ]; then
+    bad "server $BASE_URL unreachable (mock)"
+  else
+    RP="$(curl -sf --max-time 5 "$BASE_URL/api/ping" 2>/dev/null || true)"
+    if printf '%s' "$RP" | grep -q '"service":"tdoc"'; then
+      ok "server reachable: $BASE_URL"
+    else
+      bad "server $BASE_URL did not answer /api/ping — check the URL / that it's running"
+    fi
+    if [ -n "$TOKEN" ]; then ok "write token configured"; else
+      warn "no write token. Get one: curl -s \"$BASE_URL/api/admin/bootstrap\" | jq -r .token"
+    fi
+  fi
+fi
+echo
+echo "Done."

@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+# tdoc-pull — pull comments from a self-hosted octo-doc server to local
+# comments.json. Pulls the FULL cross-version history (?version=all) so comments
+# anchored to older versions are never dropped. Non-destructive: backs up the
+# previous comments.json and merges local-only comments rather than clobbering.
+#
+# Usage: tdoc-pull <slug>
+# Config: $TDOC_BASE_URL (env) or ~/.tdoc/config.json { base_url }
+set -euo pipefail
+
+SLUG="${1:-}"
+if [ -z "$SLUG" ]; then echo "usage: tdoc-pull <slug>" >&2; exit 1; fi
+command -v jq >/dev/null 2>&1 || { echo "needs jq" >&2; exit 1; }
+
+TDOC_DIR="${TDOC_DIR:-$HOME/tdocs}"
+CONFIG_FILE="$HOME/.tdoc/config.json"
+BASE_URL="${TDOC_BASE_URL:-}"
+if [ -z "$BASE_URL" ] && [ -f "$CONFIG_FILE" ]; then BASE_URL="$(jq -r '.base_url // empty' "$CONFIG_FILE")"; fi
+if [ -z "$BASE_URL" ]; then echo "[tdoc] set TDOC_BASE_URL or run /tdoc publish first." >&2; exit 1; fi
+BASE_URL="${BASE_URL%/}"
+
+OUT="$TDOC_DIR/$SLUG/comments.json"
+mkdir -p "$(dirname "$OUT")"
+
+REMOTE="$(curl -sS --connect-timeout 10 --max-time 30 "$BASE_URL/api/comments?slug=$SLUG&version=all")"
+if ! printf '%s' "$REMOTE" | jq -e 'type == "array"' >/dev/null 2>&1; then
+  echo "tdoc-pull: server did not return a comment array (network error or bad slug?). Local file untouched." >&2
+  printf '%s\n' "$REMOTE" | head -c 400 >&2; echo >&2
+  exit 1
+fi
+
+if [ -f "$OUT" ] && jq -e 'type == "array"' "$OUT" >/dev/null 2>&1; then
+  cp "$OUT" "$OUT.bak"
+  MERGED="$(jq -n --argjson remote "$REMOTE" --slurpfile local "$OUT" '
+    ($local[0] // []) as $loc
+    | ($remote | map(.id)) as $remoteIds
+    | ($loc | map(select(.id as $i | ($remoteIds | index($i)) | not))) as $localOnly
+    | $remote + $localOnly')"
+  printf '%s\n' "$MERGED" | jq . > "$OUT"
+  LOCAL_ONLY="$(jq -n --argjson m "$MERGED" --argjson r "$REMOTE" '($m | length) - ($r | length)')"
+  [ "$LOCAL_ONLY" -gt 0 ] 2>/dev/null && echo "Merged $LOCAL_ONLY local-only comment(s) (backup at $OUT.bak)."
+else
+  printf '%s\n' "$REMOTE" | jq . > "$OUT"
+fi
+
+echo "Pulled $(jq 'length' "$OUT") comments for $SLUG -> $OUT"

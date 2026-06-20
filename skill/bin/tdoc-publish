@@ -1,0 +1,124 @@
+#!/usr/bin/env bash
+# tdoc-publish — publish a local doc to a self-hosted octo-doc server.
+#
+# Usage: tdoc-publish <slug>
+#
+# Self-hosted replacement for the Cloudflare-Worker publish flow. There is NO
+# wrangler, R2, KV, or account setup — just an octo-doc server reachable at
+# $TDOC_BASE_URL, authenticated with a Bearer token.
+#
+# Config resolution (first hit wins):
+#   1. $TDOC_BASE_URL  + $TDOC_TOKEN          (env, 12-factor — preferred)
+#   2. ~/.tdoc/config.json { base_url, token } (written on first run)
+#
+# Preserves the CLI command surface (`tdoc publish <slug>`) and the published
+# URL shape (https://<host>/d/<slug>/v/<n>) so the SKILL contract is unchanged.
+set -euo pipefail
+
+SLUG="${1:-}"
+if [ -z "$SLUG" ]; then echo "usage: tdoc-publish <slug>" >&2; exit 1; fi
+
+TDOC_DIR="${TDOC_DIR:-$HOME/tdocs}"
+DOC_DIR="$TDOC_DIR/$SLUG"
+CONFIG_FILE="$HOME/.tdoc/config.json"
+
+command -v jq >/dev/null 2>&1 || { echo "[tdoc] needs jq (brew install jq / apt-get install jq)" >&2; exit 1; }
+command -v curl >/dev/null 2>&1 || { echo "[tdoc] needs curl" >&2; exit 1; }
+
+# --- resolve server config ---
+BASE_URL="${TDOC_BASE_URL:-}"
+TOKEN="${TDOC_TOKEN:-}"
+if { [ -z "$BASE_URL" ] || [ -z "$TOKEN" ]; } && [ -f "$CONFIG_FILE" ]; then
+  [ -z "$BASE_URL" ] && BASE_URL="$(jq -r '.base_url // empty' "$CONFIG_FILE")"
+  [ -z "$TOKEN" ] && TOKEN="$(jq -r '.token // empty' "$CONFIG_FILE")"
+fi
+
+if [ -z "$BASE_URL" ]; then
+  cat >&2 <<EOF
+[tdoc] no octo-doc server configured.
+
+Set the server you want to publish to (self-hosted octo-doc):
+    export TDOC_BASE_URL="https://your-host"     # or http://localhost:8080
+    export TDOC_TOKEN="<write token>"            # from: octo-doc bootstrap
+
+To get a token from a fresh server:
+    curl -s "\$TDOC_BASE_URL/api/admin/bootstrap" | jq -r .token
+
+Then re-run: /tdoc publish $SLUG
+EOF
+  exit 1
+fi
+BASE_URL="${BASE_URL%/}"
+
+if [ -z "$TOKEN" ]; then
+  echo "[tdoc] no write token. Set TDOC_TOKEN or add it to $CONFIG_FILE." >&2
+  echo "       Get one with: curl -s \"$BASE_URL/api/admin/bootstrap\" | jq -r .token" >&2
+  exit 1
+fi
+
+if [ ! -d "$DOC_DIR" ]; then
+  echo "[tdoc] no local doc at $DOC_DIR. Create it with /tdoc new <prompt>." >&2
+  exit 1
+fi
+
+META_FILE="$DOC_DIR/meta.json"
+[ -f "$META_FILE" ] || { echo "no meta.json at $META_FILE" >&2; exit 1; }
+
+VERSION="$(jq -r '.versions | sort_by(.n) | last | .n' "$META_FILE")"
+HTML_FILE="$DOC_DIR/v${VERSION}/index.html"
+[ -f "$HTML_FILE" ] || { echo "no html at $HTML_FILE" >&2; exit 1; }
+
+# Persist config for next time (mode 600 — it holds the token).
+mkdir -p "$(dirname "$CONFIG_FILE")"
+jq -n --arg b "$BASE_URL" --arg t "$TOKEN" '{base_url:$b, token:$t}' > "$CONFIG_FILE"
+chmod 600 "$CONFIG_FILE"
+
+# Upload one version's HTML as JSON (slug + explicit version + html + meta +
+# local comments). The server merges comments non-destructively by id, so
+# re-sending them on every version upload is safe + idempotent.
+upload_version() {
+  local v="$1"
+  local html_path="$DOC_DIR/v${v}/index.html"
+  [ -f "$html_path" ] || { echo "  (v$v missing — skipping)"; return; }
+  local comments_file="$DOC_DIR/comments.json"
+  local payload
+  if [ -f "$comments_file" ] && jq -e 'type == "array" and length > 0' "$comments_file" >/dev/null 2>&1; then
+    payload="$(jq -n --arg slug "$SLUG" --argjson version "$v" \
+      --rawfile html "$html_path" --slurpfile meta "$META_FILE" --slurpfile comments "$comments_file" \
+      '{slug:$slug, version:$version, html:$html, meta: $meta[0], comments: $comments[0]}')"
+  else
+    payload="$(jq -n --arg slug "$SLUG" --argjson version "$v" \
+      --rawfile html "$html_path" --slurpfile meta "$META_FILE" \
+      '{slug:$slug, version:$version, html:$html, meta: $meta[0]}')"
+  fi
+  local payload_file resp ok
+  payload_file="$(mktemp -t tdoc-upload.XXXXXX)"
+  printf '%s' "$payload" > "$payload_file"
+  resp="$(curl -sS --connect-timeout 10 --max-time 120 -X POST "$BASE_URL/api/docs" \
+    -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+    --data-binary @"$payload_file")" || { rm -f "$payload_file"; echo "[tdoc] v$v upload: network error" >&2; return 1; }
+  rm -f "$payload_file"
+  ok="$(echo "$resp" | jq -r '.ok // false')"
+  if [ "$ok" = "true" ]; then
+    local merged; merged="$(echo "$resp" | jq -r '.mergedComments // 0')"
+    if [ "$merged" != "0" ] && [ "$merged" != "null" ]; then
+      echo "[tdoc] v$v uploaded ($(echo "$resp" | jq -r '.size // "?"') bytes, +$merged comment(s) merged)"
+    else
+      echo "[tdoc] v$v uploaded ($(echo "$resp" | jq -r '.size // "?"') bytes)"
+    fi
+  else
+    echo "[tdoc] v$v upload FAILED: $resp" >&2; return 1
+  fi
+}
+
+LOCAL_VERSIONS="$(jq -r '.versions | sort_by(.n) | .[].n' "$META_FILE")"
+echo "[tdoc] publishing $SLUG to $BASE_URL — versions: $(echo "$LOCAL_VERSIONS" | tr '\n' ' ')"
+OLDER_FAILED=""
+for v in $LOCAL_VERSIONS; do
+  if [ "$v" != "$VERSION" ]; then upload_version "$v" || OLDER_FAILED="$OLDER_FAILED $v"; fi
+done
+upload_version "$VERSION" || { echo "[tdoc] FATAL: latest v$VERSION failed — aborting." >&2; exit 1; }
+[ -n "$OLDER_FAILED" ] && echo "[tdoc] WARNING: older version(s) failed:$OLDER_FAILED — re-run to retry." >&2
+
+echo
+echo "Published: $BASE_URL/d/$SLUG/v/$VERSION"

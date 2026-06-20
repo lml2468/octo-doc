@@ -1,0 +1,14 @@
+{
+  "name": "lml2468-octo-doc",
+  "version": "1.0.0",
+  "description": "Single-plugin marketplace hosting octo-doc.",
+  "plugins": [
+    {
+      "name": "octo-doc",
+      "source": "github:lml2468/octo-doc",
+      "version": "1.0.0",
+      "description": "Self-hosted, prompt-native interactive HTML docs. Vendor-free reimplementation of tdoc.",
+      "homepage": "https://github.com/lml2468/octo-doc"
+    }
+  ]
+}

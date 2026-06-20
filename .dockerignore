@@ -1,0 +1,15 @@
+node_modules
+data
+.env
+.git
+.github
+test
+bench
+docs
+deploy
+fixtures
+*.md
+.eslintrc*
+tsconfig.json
+.DS_Store
+npm-debug.log*

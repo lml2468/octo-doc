@@ -1,0 +1,45 @@
+{
+  "name": "octo-doc",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Self-hosted, prompt-native interactive HTML documents — slug + monotonic version + immutable HTML, with text/artifact-anchored commenting. A Cloudflare-free reimplementation of tdoc.",
+  "license": "MIT",
+  "homepage": "https://github.com/lml2468/octo-doc",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/lml2468/octo-doc"
+  },
+  "bin": {
+    "octo-doc": "./bin/octo-doc.js"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "node --watch --env-file=.env src/index.js",
+    "start": "node src/index.js",
+    "migrate": "node migrations/migrate.js",
+    "test": "node --test test/unit/*.test.js",
+    "test:e2e": "node test/e2e.test.js",
+    "test:all": "node --test test/unit/*.test.js && node test/e2e.test.js",
+    "lint": "eslint src test",
+    "typecheck": "tsc --noEmit",
+    "bench": "node bench/run.js"
+  },
+  "dependencies": {
+    "@hono/node-server": "^1.13.7",
+    "hono": "^4.6.14",
+    "pino": "^9.5.0"
+  },
+  "optionalDependencies": {
+    "@aws-sdk/client-s3": "^3.700.0",
+    "pg": "^8.13.1"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^25.9.3",
+    "autocannon": "^8.0.0",
+    "eslint": "^9.17.0",
+    "typescript": "^5.7.2"
+  }
+}

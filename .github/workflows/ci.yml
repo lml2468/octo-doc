@@ -22,7 +22,7 @@ jobs:
       - name: Vet
         run: go vet ./...
       - name: Lint
-        uses: golangci/golangci-lint-action@v6
+        uses: golangci/golangci-lint-action@v7
         with:
           version: v2.6.0
       - name: Build
@@ -33,8 +33,10 @@ jobs:
         run: go tool cover -func=coverage.out | tail -1
 
   integration:
-    # Run the storage contract + e2e suites against real PostgreSQL + MinIO
-    # service containers — proves the pg+s3 stack works end to end.
+    # Run the storage contract + e2e suites against real PostgreSQL + MinIO —
+    # proves the pg+s3 stack works end to end. PostgreSQL is a service container;
+    # MinIO is started as a step (the official image needs a `server` command,
+    # which service containers can't override).
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -47,16 +49,6 @@ jobs:
         options: >-
           --health-cmd "pg_isready -U octo" --health-interval 5s
           --health-timeout 5s --health-retries 10
-      minio:
-        image: bitnami/minio:latest
-        env:
-          MINIO_ROOT_USER: minioadmin
-          MINIO_ROOT_PASSWORD: minioadmin
-          MINIO_DEFAULT_BUCKETS: octo-test
-        ports: ["9000:9000"]
-        options: >-
-          --health-cmd "curl -f http://localhost:9000/minio/health/live || exit 1"
-          --health-interval 5s --health-timeout 5s --health-retries 20
     env:
       OCTO_TEST_DATABASE_URL: postgres://octo:octo@localhost:5432/octodoc
       OCTO_TEST_S3_BUCKET: octo-test
@@ -69,6 +61,20 @@ jobs:
         with:
           go-version: "1.26"
           cache: true
+      - name: Start MinIO + create bucket
+        run: |
+          docker run -d --name minio -p 9000:9000 \
+            -e MINIO_ROOT_USER=minioadmin -e MINIO_ROOT_PASSWORD=minioadmin \
+            minio/minio server /data
+          # Wait for readiness.
+          for i in $(seq 1 30); do
+            if curl -fs http://localhost:9000/minio/health/live >/dev/null; then break; fi
+            sleep 1
+          done
+          # Create the test bucket via the MinIO client.
+          docker run --rm --network host --entrypoint sh minio/mc -c '
+            mc alias set local http://localhost:9000 minioadmin minioadmin &&
+            mc mb --ignore-existing local/octo-test'
       - name: Integration + e2e (pg + s3)
         run: go test ./internal/storage/... ./test/e2e/...
 

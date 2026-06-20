@@ -11,7 +11,7 @@ async function main() {
       await import("./index.js");
       break;
     case "migrate":
-      await import("./migrate-WDRCO3E4.js");
+      await import("./migrate-YKYJJSBF.js");
       break;
     case "bootstrap": {
       const config = loadConfig(process.env);

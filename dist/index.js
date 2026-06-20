@@ -1,10 +1,10 @@
 import {
   makeSqliteMetadataStore
-} from "./chunk-MC5VWS5B.js";
+} from "./chunk-LNRSVFP7.js";
 import {
   initLogger,
   logger
-} from "./chunk-D5FVZ23H.js";
+} from "./chunk-TEU6VA76.js";
 import {
   loadConfig,
   safeSlug
@@ -1305,7 +1305,9 @@ var AuthService = class {
   }
   /** Start the GitHub Device Flow. @throws {ValidationError} if auth is unconfigured. */
   startDeviceFlow() {
-    this.requireGithub();
+    if (!this.config.githubClientId) {
+      return Promise.reject(new ValidationError("auth not configured", "auth_not_configured"));
+    }
     return ghStartDeviceFlow(this.config.githubClientId);
   }
   /**
@@ -2002,6 +2004,7 @@ ${rows.length === 0 ? '<p class="empty">No published docs yet.</p>' : `<table><t
 // src/app.ts
 async function createApp(env = process.env, deps = {}) {
   const config2 = loadConfig(env);
+  initLogger(config2.logLevel);
   const stores2 = deps.stores ?? await makeStores(config2);
   const comments = new CommentService(stores2.metaStore);
   const docs = new DocService(stores2.blobStore, stores2.metaStore, comments, {

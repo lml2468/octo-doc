@@ -40,6 +40,29 @@ describe('stampAids', () => {
     expect(aids[0]!.tag).toBe('section');
   });
 
+  it('stamps void elements (img/iframe)', () => {
+    const { html, aids } = stampAids('<img src="a.png"><iframe src="b"></iframe>');
+    expect(aids.map((a) => a.tag).sort()).toStrictEqual(['iframe', 'img']);
+    expect(html).toMatch(/<img src="a.png" data-tdoc-aid="[\w]+">/);
+  });
+
+  it('stamps opt-in markers via class', () => {
+    const { aids } = stampAids('<div class="card tdoc-artifact"><p>x</p></div>');
+    expect(aids).toHaveLength(1);
+    expect(aids[0]!.tag).toBe('div');
+  });
+
+  it('records the nearest heading for each artifact', () => {
+    const { aids } = stampAids('<h2>Section A</h2><figure><svg></svg></figure>');
+    expect(aids.every((a) => a.heading === 'Section A')).toBe(true);
+  });
+
+  it('re-stamping is idempotent', () => {
+    const once = stampAids('<section><p>x</p></section>').html;
+    const twice = stampAids(once).html;
+    expect(twice).toBe(once);
+  });
+
   // The byte-equivalence guarantee: same input → same output as the upstream Worker.
   it.runIf(existsSync(UPSTREAM))(
     'is byte-equivalent to the upstream Cloudflare worker',

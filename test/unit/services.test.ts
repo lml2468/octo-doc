@@ -84,3 +84,14 @@ describe('CommentService serialization', () => {
     expect(list[0]?.replies[0]?.text).toBe('yo');
   });
 });
+
+describe('DocService.listAllForOwner', () => {
+  it('returns docs with a reachable latest version, skipping ghosts', async () => {
+    await docs.publish({ slug: 'real', html: '<h1>r</h1>' });
+    // A meta entry whose blob never landed must not appear in the catalog.
+    await meta.putMeta('ghost', { slug: 'ghost', title: 'Ghost', versions: [{ n: 1 }] });
+    const all = await docs.listAllForOwner();
+    expect(all.map((d) => d.slug)).toContain('real');
+    expect(all.map((d) => d.slug)).not.toContain('ghost');
+  });
+});

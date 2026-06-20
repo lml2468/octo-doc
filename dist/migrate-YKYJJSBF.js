@@ -1,6 +1,6 @@
 import {
   logger
-} from "./chunk-D5FVZ23H.js";
+} from "./chunk-TEU6VA76.js";
 import {
   loadConfig
 } from "./chunk-4DEK7H4H.js";
@@ -32,7 +32,7 @@ async function run() {
     await pool.end();
     log.info({ count: files.length }, "postgres migrated");
   } else {
-    const { makeSqliteMetadataStore } = await import("./sqlite-TC5QIMKA.js");
+    const { makeSqliteMetadataStore } = await import("./sqlite-R6A6VDI5.js");
     const store = makeSqliteMetadataStore(config);
     await store.anyToken();
     await store.close();
@@ -40,4 +40,4 @@ async function run() {
   }
 }
 void run();
-//# sourceMappingURL=migrate-WDRCO3E4.js.map
+//# sourceMappingURL=migrate-YKYJJSBF.js.map

@@ -69,7 +69,9 @@ export class AuthService {
 
   /** Start the GitHub Device Flow. @throws {ValidationError} if auth is unconfigured. */
   startDeviceFlow(): Promise<DeviceStart> {
-    this.requireGithub();
+    if (!this.config.githubClientId) {
+      return Promise.reject(new ValidationError('auth not configured', 'auth_not_configured'));
+    }
     return ghStartDeviceFlow(this.config.githubClientId);
   }
 

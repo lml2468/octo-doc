@@ -7,6 +7,7 @@ import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import type { Config } from './config.js';
 import { loadConfig } from './config.js';
+import { initLogger } from './logger.js';
 import type { AppEnv } from './http-context.js';
 import { makeStores, type Stores } from './storage/index.js';
 import { AuthService, CommentService, DocService } from './services/index.js';
@@ -32,6 +33,7 @@ export async function createApp(
   deps: { stores?: Stores } = {},
 ): Promise<BuiltApp> {
   const config = loadConfig(env);
+  initLogger(config.logLevel);
   const stores = deps.stores ?? (await makeStores(config));
   const comments = new CommentService(stores.metaStore);
   const docs = new DocService(stores.blobStore, stores.metaStore, comments, {

@@ -2,7 +2,8 @@
 import { pino } from "pino";
 var instance = null;
 function initLogger(level) {
-  instance ??= pino({ level });
+  if (instance) instance.level = level;
+  else instance = pino({ level });
   return instance;
 }
 function logger() {
@@ -14,4 +15,4 @@ export {
   initLogger,
   logger
 };
-//# sourceMappingURL=chunk-D5FVZ23H.js.map
+//# sourceMappingURL=chunk-TEU6VA76.js.map

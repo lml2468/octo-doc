@@ -3,7 +3,8 @@
 **Self-hosted, prompt-native interactive HTML documents** — with text- and
 artifact-anchored inline commenting and immutable versioning. A Cloudflare-free
 reimplementation of [tdoc](https://github.com/serenakeyitan/tdoc): same document
-model, same URLs, same skill contract — now a single static Go binary.
+model, same URLs, same [agent skill](https://github.com/lml2468/octo-doc-skill)
+contract — now a single static Go binary.
 
 > Credit to Serena Keyitan's **tdoc** and, upstream of that, Jesse Pollak's
 > *bdocs* concept. octo-doc keeps the product identical and removes the vendor
@@ -51,6 +52,21 @@ Architecture, data model, and the full API spec:
 **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**. Design rationale, threat model,
 backup/upgrade: **[docs/DESIGN.md](docs/DESIGN.md)**. How the Go port preserves
 byte-equivalence with upstream tdoc: **[docs/PORTING.md](docs/PORTING.md)**.
+
+## Agent skill
+
+The companion **[octo-doc-skill](https://github.com/lml2468/octo-doc-skill)** repo
+holds the Claude Code / Codex skill that turns a prompt into a self-contained
+interactive HTML doc and publishes it here:
+
+```bash
+export TDOC_BASE_URL="https://docs.example.com"
+export TDOC_TOKEN="$(octo-doc bootstrap)"   # or GET /api/admin/bootstrap
+/tdoc new "an interactive explainer of compound interest"
+/tdoc publish my-explainer                   # → https://docs.example.com/d/my-explainer/v/1
+```
+
+The skill is agent-side tooling and ships separately from this server.
 
 ## Configuration
 

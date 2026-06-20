@@ -1,4 +1,5 @@
 node_modules
+dist
 data
 .env
 .git
@@ -8,8 +9,10 @@ bench
 docs
 deploy
 fixtures
+skill
+coverage
 *.md
 .eslintrc*
-tsconfig.json
+.husky
 .DS_Store
 npm-debug.log*

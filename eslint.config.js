@@ -25,7 +25,7 @@ export default tseslint.config(
     ],
   },
   {
-    files: ['src/**/*.ts', 'test/**/*.ts', 'bench/**/*.ts'],
+    files: ['src/**/*.ts', 'test/**/*.ts', 'bench/**/*.ts', 'scripts/**/*.ts'],
     extends: [js.configs.recommended, ...tseslint.configs.recommendedTypeChecked],
     languageOptions: {
       parserOptions: {
@@ -47,8 +47,8 @@ export default tseslint.config(
     },
   },
   {
-    // Tests, benches, and process entrypoints may log and skip the complexity cap.
-    files: ['test/**/*.ts', 'bench/**/*.ts', 'src/cli.ts', 'src/index.ts'],
+    // Tests, benches, scripts, and process entrypoints may log and skip the cap.
+    files: ['test/**/*.ts', 'bench/**/*.ts', 'scripts/**/*.ts', 'src/cli.ts', 'src/index.ts'],
     rules: {
       'no-console': 'off',
       complexity: 'off',

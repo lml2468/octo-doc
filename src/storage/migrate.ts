@@ -3,14 +3,20 @@
  * it); Postgres runs the SQL files in order against `DATABASE_URL` (idempotent —
  * all DDL uses `IF NOT EXISTS`).
  */
-import { readFileSync, readdirSync } from 'node:fs';
+import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { loadConfig } from '../config.js';
 import { logger } from '../logger.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
-const migrationsDir = join(here, '..', '..', 'migrations');
+// In dev `here` is src/storage (→ ../../migrations); in the built image the
+// compiled file sits in dist/ alongside a sibling migrations/ at the app root.
+// Try both so the runner works in either layout.
+const migrationsDir =
+  [join(here, '..', '..', 'migrations'), join(process.cwd(), 'migrations')].find((d) =>
+    existsSync(d),
+  ) ?? join(process.cwd(), 'migrations');
 const log = logger();
 
 async function run(): Promise<void> {

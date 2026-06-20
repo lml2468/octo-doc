@@ -109,7 +109,7 @@ DATABASE_URL=postgres://octo:octo@postgres:5432/octodoc \
 S3_ENDPOINT=http://minio:9000 S3_BUCKET=octo-doc S3_FORCE_PATH_STYLE=1 \
 S3_ACCESS_KEY_ID=minioadmin S3_SECRET_ACCESS_KEY=minioadmin \
 docker compose -f deploy/docker-compose.yml --profile postgres --profile minio up -d --wait
-docker compose -f deploy/docker-compose.yml exec app node migrations/migrate.js
+docker compose -f deploy/docker-compose.yml exec app node dist/cli.js migrate
 ```
 
 ---

@@ -27,6 +27,6 @@
     "isolatedModules": true,
     "noEmit": true
   },
-  "include": ["src/**/*.ts", "test/**/*.ts", "bench/**/*.ts"],
+  "include": ["src/**/*.ts", "test/**/*.ts", "bench/**/*.ts", "scripts/**/*.ts"],
   "exclude": ["node_modules", "dist", "src/overlay.js"]
 }

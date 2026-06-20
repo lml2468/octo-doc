@@ -79,12 +79,12 @@ configured, so the same command works for sqlite+fs or postgres+s3:
 ```bash
 # default (SQLite + FS):
 STORAGE=sqlite+fs DATA_DIR=./data \
-  node migrations/import-from-workers.js --in ./cf-dump
+  pnpm tsx scripts/import-from-workers.ts --in ./cf-dump
 
 # or into Postgres + S3:
 STORAGE=postgres+s3 DATABASE_URL=... S3_ENDPOINT=... S3_BUCKET=octo-doc \
   S3_ACCESS_KEY_ID=... S3_SECRET_ACCESS_KEY=... S3_FORCE_PATH_STYLE=1 \
-  node migrations/import-from-workers.js --in ./cf-dump
+  pnpm tsx scripts/import-from-workers.ts --in ./cf-dump
 ```
 
 Output:

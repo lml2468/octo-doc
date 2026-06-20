@@ -6,11 +6,13 @@ import {
 } from "./chunk-4DEK7H4H.js";
 
 // src/storage/migrate.ts
-import { readFileSync, readdirSync } from "fs";
+import { readFileSync, readdirSync, existsSync } from "fs";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
 var here = dirname(fileURLToPath(import.meta.url));
-var migrationsDir = join(here, "..", "..", "migrations");
+var migrationsDir = [join(here, "..", "..", "migrations"), join(process.cwd(), "migrations")].find(
+  (d) => existsSync(d)
+) ?? join(process.cwd(), "migrations");
 var log = logger();
 async function run() {
   const config = loadConfig(process.env);
@@ -40,4 +42,4 @@ async function run() {
   }
 }
 void run();
-//# sourceMappingURL=migrate-YKYJJSBF.js.map
+//# sourceMappingURL=migrate-PNFCYTAZ.js.map

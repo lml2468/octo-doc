@@ -14,15 +14,17 @@ k6 run -e BASE=http://localhost:8080 -e SLUG=bench bench/k6.js
 
 ## Results
 
-Measured on an Apple M-series dev box. octo-doc figures are via `tsx` (TS
-transform in-process); the compiled `dist` build is marginally faster.
+Measured on an Apple M-series dev box against the compiled `dist` build
+(`node dist/index.js`), autocannon 50 connections × 8s on `GET /d/<slug>/v/1`.
+Idle memory measured in a `--memory=1g --cpus=1` container via `docker stats`
+(the deployment target; host `ps rss` over-counts Node's mapped runtime).
 
-| Metric            | Target (1 vCPU/1GB) | octo-doc (dev box) |
-| ----------------- | ------------------- | ------------------ |
-| p50 latency       | ≤ 50 ms             | **8 ms**           |
-| p99 latency       | ≤ 200 ms            | **18 ms**          |
-| Throughput        | —                   | ~5,600 req/s       |
-| Idle RSS          | ≤ 150 MB            | ~25 MB (container) |
+| Metric      | Target (1 vCPU/1GB) | octo-doc (measured) |
+| ----------- | ------------------- | ------------------- |
+| p50 latency | ≤ 50 ms             | **7 ms**            |
+| p99 latency | ≤ 200 ms            | **15 ms**           |
+| Throughput  | —                   | ~6,300 req/s        |
+| Idle memory | ≤ 150 MB            | **21 MB** (1g/1cpu container) |
 
 Latency is dominated by a single blob read + string concatenation + overlay
 injection. The overlay JS is read once at module init (not per request), so the

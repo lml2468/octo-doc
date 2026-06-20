@@ -24,7 +24,7 @@ func (s *Server) handleBootstrap(w http.ResponseWriter, r *http.Request) error {
 }
 
 func (s *Server) handleAuthMe(w http.ResponseWriter, r *http.Request) error {
-	session, err := s.auth.GetSession(r.Context(), cookie(r, "tdoc_sid"))
+	session, err := s.auth.GetSession(r.Context(), sessionCookie(r))
 	if err != nil {
 		return err
 	}
@@ -67,16 +67,16 @@ func (s *Server) handleDevicePoll(w http.ResponseWriter, r *http.Request) error 
 		writeJSON(w, 200, map[string]any{"pending": true})
 		return nil
 	}
-	setSessionCookie(w, "tdoc_sid", res.SID, s.auth.SessionTTLSeconds(), s.cfg.CookieSecure)
+	setSessionCookie(w, sessionCookieName, res.SID, s.auth.SessionTTLSeconds(), s.cfg.CookieSecure)
 	writeJSON(w, 200, map[string]any{"ok": true, "identity": res.Identity})
 	return nil
 }
 
 func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) error {
-	if err := s.auth.Logout(r.Context(), cookie(r, "tdoc_sid")); err != nil {
+	if err := s.auth.Logout(r.Context(), sessionCookie(r)); err != nil {
 		return err
 	}
-	clearCookie(w, "tdoc_sid", s.cfg.CookieSecure)
+	clearCookie(w, sessionCookieName, s.cfg.CookieSecure)
 	writeJSON(w, 200, map[string]any{"ok": true})
 	return nil
 }

@@ -16,7 +16,7 @@ type mutationLike service.MutationResult
 
 // viewer resolves the viewer session, requiring one when GitHub auth is configured.
 func (s *Server) viewer(r *http.Request) (*storage.Session, error) {
-	session, err := s.auth.GetSession(r.Context(), cookie(r, "tdoc_sid"))
+	session, err := s.auth.GetSession(r.Context(), sessionCookie(r))
 	if err != nil {
 		return nil, err
 	}

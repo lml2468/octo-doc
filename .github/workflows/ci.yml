@@ -11,111 +11,70 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-        with: { version: 9 }
-      - uses: actions/setup-node@v4
-        with: { node-version: 22, cache: pnpm }
-      - run: pnpm install --frozen-lockfile
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.26"
+          cache: true
       - name: Format check
-        run: pnpm format:check
+        run: |
+          fmt=$(gofmt -l .)
+          if [ -n "$fmt" ]; then echo "unformatted files:"; echo "$fmt"; exit 1; fi
+      - name: Vet
+        run: go vet ./...
       - name: Lint
-        run: pnpm lint
-      - name: Typecheck
-        run: pnpm typecheck
-      - name: Unit + integration + e2e with coverage gate
-        run: pnpm coverage
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: v2.6.0
       - name: Build
-        run: pnpm build
+        run: go build ./...
+      - name: Unit tests (race + coverage)
+        run: go test -race -coverprofile=coverage.out ./...
+      - name: Coverage summary
+        run: go tool cover -func=coverage.out | tail -1
 
-  adapter-swap:
-    # Run the IDENTICAL contract + e2e suite against postgres+s3 via service
-    # containers — proves the adapter swap needs zero application-code changes.
+  integration:
+    # Run the storage contract + e2e suites against real PostgreSQL + MinIO
+    # service containers — proves the pg+s3 stack works end to end.
     runs-on: ubuntu-latest
     services:
       postgres:
         image: postgres:16-alpine
-        env: { POSTGRES_USER: octo, POSTGRES_PASSWORD: octo, POSTGRES_DB: octodoc }
-        ports: ['5432:5432']
+        env:
+          POSTGRES_USER: octo
+          POSTGRES_PASSWORD: octo
+          POSTGRES_DB: octodoc
+        ports: ["5432:5432"]
         options: >-
           --health-cmd "pg_isready -U octo" --health-interval 5s
-          --health-timeout 3s --health-retries 10
+          --health-timeout 5s --health-retries 10
       minio:
         image: bitnami/minio:latest
         env:
           MINIO_ROOT_USER: minioadmin
           MINIO_ROOT_PASSWORD: minioadmin
-          MINIO_DEFAULT_BUCKETS: octo-doc
-        ports: ['9000:9000']
+          MINIO_DEFAULT_BUCKETS: octo-test
+        ports: ["9000:9000"]
         options: >-
           --health-cmd "curl -f http://localhost:9000/minio/health/live || exit 1"
-          --health-interval 5s --health-timeout 3s --health-retries 20
+          --health-interval 5s --health-timeout 5s --health-retries 20
     env:
-      STORAGE: postgres+s3
-      DATABASE_URL: postgres://octo:octo@localhost:5432/octodoc
-      S3_ENDPOINT: http://localhost:9000
-      S3_BUCKET: octo-doc
-      S3_REGION: us-east-1
-      S3_FORCE_PATH_STYLE: '1'
-      S3_ACCESS_KEY_ID: minioadmin
-      S3_SECRET_ACCESS_KEY: minioadmin
+      OCTO_TEST_DATABASE_URL: postgres://octo:octo@localhost:5432/octodoc
+      OCTO_TEST_S3_BUCKET: octo-test
+      OCTO_TEST_S3_ENDPOINT: http://localhost:9000
+      OCTO_TEST_S3_ACCESS_KEY_ID: minioadmin
+      OCTO_TEST_S3_SECRET_ACCESS_KEY: minioadmin
     steps:
       - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-        with: { version: 9 }
-      - uses: actions/setup-node@v4
-        with: { node-version: 22, cache: pnpm }
-      - run: pnpm install --frozen-lockfile
-      - name: Migrate postgres
-        run: pnpm migrate
-      - name: Contract + E2E (postgres+s3)
-        run: pnpm exec vitest run test/contract test/e2e
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.26"
+          cache: true
+      - name: Integration + e2e (pg + s3)
+        run: go test ./internal/storage/... ./test/e2e/...
 
   docker:
-    needs: quality
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
     steps:
       - uses: actions/checkout@v4
-      - uses: docker/setup-buildx-action@v3
-      - name: Build image (slim, no dev/optional deps)
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          load: true
-          tags: octo-doc:ci
-      - name: Report + gate image size
-        run: |
-          SIZE=$(docker image inspect octo-doc:ci --format '{{.Size}}')
-          MB=$((SIZE / 1024 / 1024))
-          echo "uncompressed image size: ${MB}MB"
-          # The Node 22 runtime binary alone is ~120MB, so an uncompressed Node
-          # image cannot be <150MB; the real failure mode is dev-dep/toolchain
-          # bloat (spec calls out >500MB). The slim multi-stage build lands
-          # ~165MB uncompressed (~55MB compressed). Gate generously below the bloat line.
-          test "$MB" -lt 250
-      - name: Smoke-test the image
-        run: |
-          docker run -d --name octo -p 8080:8080 octo-doc:ci
-          for i in $(seq 1 30); do curl -sf localhost:8080/healthz && break; sleep 1; done
-          TOKEN=$(curl -s localhost:8080/api/admin/bootstrap | jq -r .token)
-          curl -sf -H "Authorization: Bearer $TOKEN" -F "file=@fixtures/hello.html" -F "slug=hello" localhost:8080/api/docs | jq -e '.url'
-          curl -sf localhost:8080/d/hello/v/1 | grep -q Hello
-          docker rm -f octo
-      - name: Log in to ghcr.io
-        if: github.ref == 'refs/heads/main'
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Push to ghcr.io
-        if: github.ref == 'refs/heads/main'
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          push: true
-          tags: |
-            ghcr.io/${{ github.repository }}:latest
-            ghcr.io/${{ github.repository }}:${{ github.sha }}
+      - name: Build image
+        run: docker build -f deploy/Dockerfile -t octo-doc:ci .

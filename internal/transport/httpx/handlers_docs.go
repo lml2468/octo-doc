@@ -42,7 +42,7 @@ func (s *Server) readMultipart(r *http.Request) (publishBody, error) {
 		b.Version, _ = strconv.Atoi(v)
 	}
 	if file, _, err := r.FormFile("file"); err == nil {
-		defer file.Close()
+		defer func() { _ = file.Close() }()
 		data, rerr := io.ReadAll(file)
 		if rerr != nil {
 			return publishBody{}, apperr.Validation("could not read file", "file_read_failed")
@@ -135,7 +135,7 @@ func (s *Server) handleRender(w http.ResponseWriter, r *http.Request) error {
 		return apperr.NotFound("Not found: " + slug + " v" + chi.URLParam(r, "version"))
 	}
 
-	session, err := s.auth.GetSession(r.Context(), cookie(r, "tdoc_sid"))
+	session, err := s.auth.GetSession(r.Context(), sessionCookie(r))
 	if err != nil {
 		return err
 	}

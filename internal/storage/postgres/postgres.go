@@ -74,6 +74,7 @@ func nowMillis() int64 { return time.Now().UnixMilli() }
 
 // --- meta ---
 
+// GetMeta implements storage.MetadataStore.
 func (s *Store) GetMeta(ctx context.Context, slug string) (*storage.DocMeta, error) {
 	var raw []byte
 	err := s.pool.QueryRow(ctx, "SELECT json FROM meta WHERE slug=$1", slug).Scan(&raw)
@@ -90,6 +91,7 @@ func (s *Store) GetMeta(ctx context.Context, slug string) (*storage.DocMeta, err
 	return &m, nil
 }
 
+// PutMeta implements storage.MetadataStore.
 func (s *Store) PutMeta(ctx context.Context, slug string, meta storage.DocMeta) error {
 	raw, err := json.Marshal(meta)
 	if err != nil {
@@ -101,11 +103,13 @@ func (s *Store) PutMeta(ctx context.Context, slug string, meta storage.DocMeta) 
 	return err
 }
 
+// DeleteMeta implements storage.MetadataStore.
 func (s *Store) DeleteMeta(ctx context.Context, slug string) error {
 	_, err := s.pool.Exec(ctx, "DELETE FROM meta WHERE slug=$1", slug)
 	return err
 }
 
+// ListMeta implements storage.MetadataStore.
 func (s *Store) ListMeta(ctx context.Context) ([]storage.MetaEntry, error) {
 	rows, err := s.pool.Query(ctx, "SELECT slug, json FROM meta ORDER BY slug")
 	if err != nil {
@@ -130,6 +134,7 @@ func (s *Store) ListMeta(ctx context.Context) ([]storage.MetaEntry, error) {
 
 // --- comments ---
 
+// GetComments implements storage.MetadataStore.
 func (s *Store) GetComments(ctx context.Context, slug string) ([]core.Comment, error) {
 	var raw []byte
 	err := s.pool.QueryRow(ctx, "SELECT json FROM comments WHERE slug=$1", slug).Scan(&raw)
@@ -149,6 +154,7 @@ func (s *Store) GetComments(ctx context.Context, slug string) ([]core.Comment, e
 	return list, nil
 }
 
+// PutComments implements storage.MetadataStore.
 func (s *Store) PutComments(ctx context.Context, slug string, list []core.Comment) error {
 	raw, err := json.Marshal(list)
 	if err != nil {
@@ -160,6 +166,7 @@ func (s *Store) PutComments(ctx context.Context, slug string, list []core.Commen
 	return err
 }
 
+// DeleteComments implements storage.MetadataStore.
 func (s *Store) DeleteComments(ctx context.Context, slug string) error {
 	_, err := s.pool.Exec(ctx, "DELETE FROM comments WHERE slug=$1", slug)
 	return err
@@ -167,6 +174,7 @@ func (s *Store) DeleteComments(ctx context.Context, slug string) error {
 
 // --- sessions ---
 
+// GetSession implements storage.MetadataStore.
 func (s *Store) GetSession(ctx context.Context, sid string) (*storage.Session, error) {
 	var raw []byte
 	var expiresAt int64
@@ -188,6 +196,7 @@ func (s *Store) GetSession(ctx context.Context, sid string) (*storage.Session, e
 	return &sess, nil
 }
 
+// PutSession implements storage.MetadataStore.
 func (s *Store) PutSession(ctx context.Context, sid string, data storage.Session, ttlSeconds int) error {
 	raw, err := json.Marshal(data)
 	if err != nil {
@@ -203,6 +212,7 @@ func (s *Store) PutSession(ctx context.Context, sid string, data storage.Session
 	return nil
 }
 
+// DeleteSession implements storage.MetadataStore.
 func (s *Store) DeleteSession(ctx context.Context, sid string) error {
 	_, err := s.pool.Exec(ctx, "DELETE FROM sessions WHERE sid=$1", sid)
 	return err
@@ -210,6 +220,7 @@ func (s *Store) DeleteSession(ctx context.Context, sid string) error {
 
 // --- tokens ---
 
+// GetToken implements storage.MetadataStore.
 func (s *Store) GetToken(ctx context.Context, token string) (*storage.TokenRecord, error) {
 	var raw []byte
 	err := s.pool.QueryRow(ctx, "SELECT json FROM tokens WHERE token=$1", token).Scan(&raw)
@@ -226,6 +237,7 @@ func (s *Store) GetToken(ctx context.Context, token string) (*storage.TokenRecor
 	return &rec, nil
 }
 
+// PutToken implements storage.MetadataStore.
 func (s *Store) PutToken(ctx context.Context, token string, rec storage.TokenRecord) error {
 	raw, err := json.Marshal(rec)
 	if err != nil {
@@ -237,6 +249,7 @@ func (s *Store) PutToken(ctx context.Context, token string, rec storage.TokenRec
 	return err
 }
 
+// AnyToken implements storage.MetadataStore.
 func (s *Store) AnyToken(ctx context.Context) (bool, error) {
 	var n int
 	if err := s.pool.QueryRow(ctx, "SELECT COUNT(*) FROM tokens").Scan(&n); err != nil {

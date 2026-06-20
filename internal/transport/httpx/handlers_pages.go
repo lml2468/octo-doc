@@ -16,7 +16,7 @@ func (s *Server) handleLanding(w http.ResponseWriter, _ *http.Request) {
 }
 
 func (s *Server) handleCatalog(w http.ResponseWriter, r *http.Request) error {
-	session, err := s.auth.GetSession(r.Context(), cookie(r, "tdoc_sid"))
+	session, err := s.auth.GetSession(r.Context(), sessionCookie(r))
 	if err != nil {
 		return err
 	}

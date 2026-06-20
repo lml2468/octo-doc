@@ -115,7 +115,7 @@ func (s *Store) GetDoc(ctx context.Context, slug string, version int) (string, b
 		}
 		return "", false, err
 	}
-	defer out.Body.Close()
+	defer func() { _ = out.Body.Close() }()
 	data, err := io.ReadAll(out.Body)
 	if err != nil {
 		return "", false, err

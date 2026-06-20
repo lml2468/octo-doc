@@ -56,7 +56,7 @@ func (g *githubClient) postForm(ctx context.Context, path string, form url.Value
 	if err != nil {
 		return nil, apperr.Upstream("github unreachable", "github_unreachable", err)
 	}
-	defer res.Body.Close()
+	defer func() { _ = res.Body.Close() }()
 	raw, _ := io.ReadAll(res.Body)
 	ct := res.Header.Get("Content-Type")
 	if strings.Contains(ct, "application/json") {
@@ -158,7 +158,7 @@ func (g *githubClient) fetchUser(ctx context.Context, token string) (*GhUser, er
 	if err != nil {
 		return nil, apperr.Upstream("github unreachable", "github_unreachable", err)
 	}
-	defer res.Body.Close()
+	defer func() { _ = res.Body.Close() }()
 	var u GhUser
 	if err := json.NewDecoder(res.Body).Decode(&u); err != nil {
 		return nil, apperr.Upstream("github returned unparseable user", "gh_parse", err)

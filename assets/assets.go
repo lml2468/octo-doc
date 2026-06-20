@@ -6,5 +6,7 @@ package assets
 
 import _ "embed"
 
+// OverlayJS is the browser overlay source, injected verbatim into rendered docs.
+//
 //go:embed overlay.js
 var OverlayJS string

@@ -40,6 +40,7 @@ func New() *Store {
 
 // --- MetadataStore ---
 
+// GetMeta implements storage.MetadataStore.
 func (s *Store) GetMeta(_ context.Context, slug string) (*storage.DocMeta, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -50,6 +51,7 @@ func (s *Store) GetMeta(_ context.Context, slug string) (*storage.DocMeta, error
 	return &m, nil
 }
 
+// PutMeta implements storage.MetadataStore.
 func (s *Store) PutMeta(_ context.Context, slug string, meta storage.DocMeta) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -57,6 +59,7 @@ func (s *Store) PutMeta(_ context.Context, slug string, meta storage.DocMeta) er
 	return nil
 }
 
+// DeleteMeta implements storage.MetadataStore.
 func (s *Store) DeleteMeta(_ context.Context, slug string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -64,6 +67,7 @@ func (s *Store) DeleteMeta(_ context.Context, slug string) error {
 	return nil
 }
 
+// ListMeta implements storage.MetadataStore.
 func (s *Store) ListMeta(_ context.Context) ([]storage.MetaEntry, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -75,6 +79,7 @@ func (s *Store) ListMeta(_ context.Context) ([]storage.MetaEntry, error) {
 	return out, nil
 }
 
+// GetComments implements storage.MetadataStore.
 func (s *Store) GetComments(_ context.Context, slug string) ([]core.Comment, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -85,6 +90,7 @@ func (s *Store) GetComments(_ context.Context, slug string) ([]core.Comment, err
 	return list, nil
 }
 
+// PutComments implements storage.MetadataStore.
 func (s *Store) PutComments(_ context.Context, slug string, list []core.Comment) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -92,6 +98,7 @@ func (s *Store) PutComments(_ context.Context, slug string, list []core.Comment)
 	return nil
 }
 
+// DeleteComments implements storage.MetadataStore.
 func (s *Store) DeleteComments(_ context.Context, slug string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -99,6 +106,7 @@ func (s *Store) DeleteComments(_ context.Context, slug string) error {
 	return nil
 }
 
+// GetSession implements storage.MetadataStore.
 func (s *Store) GetSession(_ context.Context, sid string) (*storage.Session, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -114,6 +122,7 @@ func (s *Store) GetSession(_ context.Context, sid string) (*storage.Session, err
 	return &d, nil
 }
 
+// PutSession implements storage.MetadataStore.
 func (s *Store) PutSession(_ context.Context, sid string, data storage.Session, ttlSeconds int) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -121,6 +130,7 @@ func (s *Store) PutSession(_ context.Context, sid string, data storage.Session, 
 	return nil
 }
 
+// DeleteSession implements storage.MetadataStore.
 func (s *Store) DeleteSession(_ context.Context, sid string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -128,6 +138,7 @@ func (s *Store) DeleteSession(_ context.Context, sid string) error {
 	return nil
 }
 
+// GetToken implements storage.MetadataStore.
 func (s *Store) GetToken(_ context.Context, token string) (*storage.TokenRecord, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -138,6 +149,7 @@ func (s *Store) GetToken(_ context.Context, token string) (*storage.TokenRecord,
 	return &t, nil
 }
 
+// PutToken implements storage.MetadataStore.
 func (s *Store) PutToken(_ context.Context, token string, rec storage.TokenRecord) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -148,12 +160,14 @@ func (s *Store) PutToken(_ context.Context, token string, rec storage.TokenRecor
 	return nil
 }
 
+// AnyToken implements storage.MetadataStore.
 func (s *Store) AnyToken(_ context.Context) (bool, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return len(s.tokens) > 0, nil
 }
 
+// Close implements storage.MetadataStore.
 func (s *Store) Close() error { return nil }
 
 // --- BlobStore ---
@@ -162,6 +176,7 @@ func blobKey(slug string, version int) string {
 	return slug + "\x00" + itoa(version)
 }
 
+// PutDoc implements storage.BlobStore.
 func (s *Store) PutDoc(_ context.Context, slug string, version int, html string) (int64, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -169,6 +184,7 @@ func (s *Store) PutDoc(_ context.Context, slug string, version int, html string)
 	return int64(len(html)), nil
 }
 
+// GetDoc implements storage.BlobStore.
 func (s *Store) GetDoc(_ context.Context, slug string, version int) (string, bool, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -176,6 +192,7 @@ func (s *Store) GetDoc(_ context.Context, slug string, version int) (string, boo
 	return h, ok, nil
 }
 
+// HeadDoc implements storage.BlobStore.
 func (s *Store) HeadDoc(_ context.Context, slug string, version int) (int64, bool, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -186,6 +203,7 @@ func (s *Store) HeadDoc(_ context.Context, slug string, version int) (int64, boo
 	return int64(len(h)), true, nil
 }
 
+// ListVersions implements storage.BlobStore.
 func (s *Store) ListVersions(_ context.Context, slug string) ([]int, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -202,6 +220,7 @@ func (s *Store) ListVersions(_ context.Context, slug string) ([]int, error) {
 	return out, nil
 }
 
+// DeleteDoc implements storage.BlobStore.
 func (s *Store) DeleteDoc(_ context.Context, slug string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()

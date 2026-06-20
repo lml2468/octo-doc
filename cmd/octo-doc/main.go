@@ -26,6 +26,12 @@ func main() {
 }
 
 func run(cmd string) error {
+	// health is a dependency-free check usable as a container healthcheck; it
+	// does not load the full config (only PORT).
+	if cmd == "health" {
+		return healthCheck()
+	}
+
 	cfg, err := config.Load()
 	if err != nil {
 		return err
@@ -40,6 +46,6 @@ func run(cmd string) error {
 	case "bootstrap":
 		return bootstrap(cfg)
 	default:
-		return fmt.Errorf("unknown command %q\nusage: octo-doc [serve|migrate|bootstrap]", cmd)
+		return fmt.Errorf("unknown command %q\nusage: octo-doc [serve|migrate|bootstrap|health]", cmd)
 	}
 }

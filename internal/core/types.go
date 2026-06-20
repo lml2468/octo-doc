@@ -11,6 +11,7 @@ import "encoding/json"
 // AgentStatus is the agent's verdict on a comment, rendered as an emoji at fold time.
 type AgentStatus string
 
+// Agent verdict values.
 const (
 	StatusApplied  AgentStatus = "applied"
 	StatusPartial  AgentStatus = "partial"

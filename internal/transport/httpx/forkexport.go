@@ -113,7 +113,7 @@ func buildBanner(in forkExportInput, open []core.CommentSnapshot) string {
 		if c.Author != nil && c.Author.Login != "" {
 			who = "@" + core.ForHTMLComment(c.Author.Login)
 		}
-		b.WriteString(fmt.Sprintf("\n  [%d] %s %s\n", i+1, who, describeAnchor(c)))
+		fmt.Fprintf(&b, "\n  [%d] %s %s\n", i+1, who, describeAnchor(c))
 		b.WriteString(`    "` + core.ForHTMLComment(strings.ReplaceAll(c.Text, "\n", " ")) + "\"\n")
 		b.WriteString(reactionsText(c.Reactions))
 		for _, r := range c.Replies {

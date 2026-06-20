@@ -1,9 +1,15 @@
-node_modules/
-data/
+# Build artifacts
+/bin/
+
+# Test / coverage
+coverage.out
+*.test
+
+# Local env + data
 .env
+data/
 *.log
+
+# OS / editor
 .DS_Store
-coverage/
-*.tgz
 .claude/
-dist/

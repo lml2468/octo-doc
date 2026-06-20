@@ -19,9 +19,12 @@ func decodeJSON(r *http.Request, v any) error {
 	return json.NewDecoder(r.Body).Decode(v)
 }
 
-// cookie reads a cookie value, or "".
-func cookie(r *http.Request, name string) string {
-	c, err := r.Cookie(name)
+// sessionCookieName is the cookie that carries the viewer session id.
+const sessionCookieName = "tdoc_sid"
+
+// sessionCookie reads the session cookie value, or "".
+func sessionCookie(r *http.Request) string {
+	c, err := r.Cookie(sessionCookieName)
 	if err != nil {
 		return ""
 	}

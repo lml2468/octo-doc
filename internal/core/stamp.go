@@ -92,9 +92,10 @@ func attrAwareOpenTagEnd(html string, lt int) int {
 			}
 			continue
 		}
-		if ch == '"' || ch == '\'' {
+		switch ch {
+		case '"', '\'':
 			quote = ch
-		} else if ch == '>' {
+		case '>':
 			return i + 1
 		}
 	}

@@ -1,28 +1,59 @@
-// Flat ESLint config (ESLint 9). Lightweight: catch real errors, stay out of
-// the way of the ported-verbatim core (which deliberately mirrors upstream).
 import js from '@eslint/js';
+import tseslint from 'typescript-eslint';
+import prettier from 'eslint-config-prettier';
 
-export default [
-  // overlay.js is browser code served verbatim to clients — not server code.
-  { ignores: ['src/overlay.js', 'node_modules/**', 'data/**'] },
-  js.configs.recommended,
+/**
+ * Flat ESLint config. Type-checked rules apply only to the TypeScript sources
+ * under src/test/bench; everything else (browser overlay, skill shell scripts,
+ * config files) is ignored so type-aware linting never runs on non-project files.
+ */
+export default tseslint.config(
   {
-    files: ['src/**/*.js', 'test/**/*.js', 'bench/**/*.js', 'migrations/**/*.js', 'bin/**/*.js'],
+    ignores: [
+      'dist/**',
+      'node_modules/**',
+      'data/**',
+      'coverage/**',
+      'src/overlay.js',
+      'skill/**',
+      'migrations/*.js',
+      'bin/**',
+      'bench/*.js',
+      '*.config.ts',
+      '*.config.js',
+      'eslint.config.js',
+    ],
+  },
+  {
+    files: ['src/**/*.ts', 'test/**/*.ts', 'bench/**/*.ts'],
+    extends: [js.configs.recommended, ...tseslint.configs.recommendedTypeChecked],
     languageOptions: {
-      ecmaVersion: 2023,
-      sourceType: 'module',
-      globals: {
-        process: 'readonly', console: 'readonly', fetch: 'readonly',
-        Request: 'readonly', Response: 'readonly', Blob: 'readonly',
-        FormData: 'readonly', URL: 'readonly', URLSearchParams: 'readonly',
-        Buffer: 'readonly', setTimeout: 'readonly', clearTimeout: 'readonly',
-        performance: 'readonly', crypto: 'readonly', structuredClone: 'readonly',
+      parserOptions: {
+        projectService: true,
+        tsconfigRootDir: import.meta.dirname,
       },
     },
     rules: {
-      'no-unused-vars': ['warn', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
-      'no-empty': ['warn', { allowEmptyCatch: true }],
-      'no-control-regex': 'off',
+      // Quality bar: no any unless explicitly justified with a disable comment.
+      '@typescript-eslint/no-explicit-any': 'error',
+      '@typescript-eslint/explicit-function-return-type': 'off',
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        { argsIgnorePattern: '^_', varsIgnorePattern: '^_' },
+      ],
+      complexity: ['error', 10],
+      'max-depth': ['error', 4],
+      'no-console': 'error',
     },
   },
-];
+  {
+    // Tests, benches, and process entrypoints may log and skip the complexity cap.
+    files: ['test/**/*.ts', 'bench/**/*.ts', 'src/cli.ts', 'src/index.ts'],
+    rules: {
+      'no-console': 'off',
+      complexity: 'off',
+      '@typescript-eslint/no-non-null-assertion': 'off',
+    },
+  },
+  prettier,
+);

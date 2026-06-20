@@ -1,0 +1,8 @@
+dist
+coverage
+node_modules
+data
+pnpm-lock.yaml
+src/overlay.js
+skill/server/overlay.js
+*.md

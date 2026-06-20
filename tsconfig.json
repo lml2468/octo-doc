@@ -4,14 +4,29 @@
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
     "lib": ["ES2023"],
-    "allowJs": true,
-    "checkJs": false,
-    "noEmit": true,
-    "strict": false,
+    "types": ["node"],
+    "outDir": "dist",
+    "rootDir": ".",
+
+    "strict": true,
+    "noImplicitAny": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "noImplicitOverride": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "forceConsistentCasingInFileNames": true,
+
+    "declaration": false,
+    "sourceMap": true,
+    "esModuleInterop": true,
     "skipLibCheck": true,
     "resolveJsonModule": true,
-    "types": ["node"]
+    "verbatimModuleSyntax": true,
+    "isolatedModules": true,
+    "noEmit": true
   },
-  "include": ["src/**/*.js"],
-  "exclude": ["node_modules", "src/overlay.js"]
+  "include": ["src/**/*.ts", "test/**/*.ts", "bench/**/*.ts"],
+  "exclude": ["node_modules", "dist", "src/overlay.js"]
 }

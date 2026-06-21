@@ -14,16 +14,11 @@ import (
 // be assigned to one variable.
 type mutationLike service.MutationResult
 
-// viewer resolves the viewer session, requiring one when GitHub auth is configured.
+// viewer resolves the viewer session if one exists. Comments are anonymous: a
+// missing session is fine (a future Octo login will populate it). It never
+// rejects for being unauthenticated.
 func (s *Server) viewer(r *http.Request) (*storage.Session, error) {
-	session, err := s.auth.GetSession(r.Context(), sessionCookie(r))
-	if err != nil {
-		return nil, err
-	}
-	if s.cfg.GitHubClientID != "" && session == nil {
-		return nil, apperr.Unauthorized("sign_in_required", "sign_in_required")
-	}
-	return session, nil
+	return s.auth.GetSession(r.Context(), sessionCookie(r))
 }
 
 // parseVersionQuery parses the version query param: a number, "all", or latest.
@@ -205,11 +200,17 @@ func (s *Server) wipeComments(w http.ResponseWriter, r *http.Request, slug strin
 	return nil
 }
 
-// authorizeMutation enforces that the viewer is the author or owner (only when
-// GitHub auth is configured; local mode is unauthenticated).
+// authorizeMutation enforces author/owner permission on a comment mutation.
+//
+// In anonymous mode (no login provider, no session) comments are unowned, so
+// there is nothing to enforce and the mutation is allowed — this matches the
+// upstream "local mode is unauthenticated" behavior. Once a future login
+// provider populates sessions, an authenticated viewer may only mutate their own
+// comments (or anything, if they are the owner). The seam is ready: it activates
+// the moment sessions start carrying a real identity.
 func (s *Server) authorizeMutation(r *http.Request, slug, id string, session *storage.Session) error {
-	if s.cfg.GitHubClientID == "" {
-		return nil
+	if session == nil {
+		return nil // anonymous: unowned comments, nothing to authorize against
 	}
 	list, err := s.comments.Read(r.Context(), slug)
 	if err != nil {
@@ -222,7 +223,7 @@ func (s *Server) authorizeMutation(r *http.Request, slug, id string, session *st
 	if s.auth.IsOwner(session) {
 		return nil
 	}
-	if author.Login != "" && session != nil && author.Login == session.Login {
+	if author.Login != "" && author.Login == session.Login {
 		return nil
 	}
 	return apperr.Forbidden("not the author", "not_author")

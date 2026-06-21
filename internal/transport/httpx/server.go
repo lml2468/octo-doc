@@ -53,11 +53,10 @@ func (s *Server) Handler() http.Handler {
 	r.Get("/api/ping", s.handlePing)
 	r.Get("/healthz", s.handleHealthz)
 
-	// Admin / auth.
+	// Admin / auth. Viewer identity is anonymous for now (no built-in login
+	// provider); /api/auth/me reports it and logout clears any future session.
 	r.Get("/api/admin/bootstrap", s.wrap(s.handleBootstrap))
 	r.Get("/api/auth/me", s.wrap(s.handleAuthMe))
-	r.Post("/api/auth/device/start", s.cors(s.wrap(s.handleDeviceStart)))
-	r.Post("/api/auth/device/poll", s.cors(s.wrap(s.handleDevicePoll)))
 	r.Post("/api/auth/logout", s.cors(s.wrap(s.handleLogout)))
 
 	// Documents.

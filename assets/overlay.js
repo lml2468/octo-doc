@@ -4,8 +4,8 @@
 // the ones above it (and on `state`). No section reaches sideways.
 //
 // External contract preserved verbatim:
-//   - Endpoints: /api/comments, /api/reactions, /api/auth/device/start,
-//     /api/auth/device/poll, /api/auth/logout, /d/<slug>/v/<n>/export
+//   - Endpoints: /api/comments, /api/reactions, /api/auth/logout,
+//     /d/<slug>/v/<n>/export
 //   - Globals: window.__tdocCopyDocMd(includeComments), window.__tdocCopyCommentMd(id, btn)
 //   - Body classes: tdoc-has-comments, tdoc-narrow
 //   - Keyboard: ⌘/Ctrl-Enter submits, Esc cancels.
@@ -30,6 +30,10 @@
   // The original published slug is in cfg.originalSlug so we can label it.
   let identity = cfg.identity || null;
   let isOwner = !!cfg.isOwner; // true only for the configured TDOC_OWNER
+  // Whether a login provider is configured server-side. When false, commenting is
+  // anonymous (no sign-in UI, no gating). A future Octo unified login flips this
+  // on and the existing identity/session paths light up unchanged.
+  const authConfigured = !!cfg.authConfigured;
   if (!slug) return;
 
   const HIGHLIGHT_API = typeof CSS !== 'undefined' && CSS.highlights && typeof Highlight === 'function';
@@ -809,9 +813,12 @@
         renderIdentity();
         refreshComments();
       };
+    } else if (authConfigured) {
+      slot.innerHTML = `<button class="tdoc-chip signin" id="tdoc-signin">Sign in</button>`;
+      document.getElementById('tdoc-signin').onclick = startLogin;
     } else {
-      slot.innerHTML = `<button class="tdoc-chip signin" id="tdoc-signin">Sign in with GitHub</button>`;
-      document.getElementById('tdoc-signin').onclick = startDeviceFlow;
+      // No login provider configured — commenting is anonymous, no sign-in UI.
+      slot.innerHTML = '';
     }
   }
   renderIdentity();
@@ -1287,7 +1294,7 @@
     if (replyToggle && replyForm) {
       replyToggle.onclick = (e) => {
         e.stopPropagation();
-        if (isPublished && !identity) { startDeviceFlow(); return; }
+        if (authConfigured && !identity) { startLogin(); return; }
         replyForm.classList.toggle('open');
         if (replyForm.classList.contains('open')) {
           replyForm.querySelector('textarea').focus();
@@ -1303,7 +1310,7 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ slug, parent_id: comment.id, text, version })
         });
-        if (r.status === 401) { startDeviceFlow(); return; }
+        if (r.status === 401) { startLogin(); return; }
         replyTa.value = '';
         replyForm.classList.remove('open');
         await refreshComments();
@@ -1319,7 +1326,7 @@
       chip.onclick = async (e) => {
         e.stopPropagation();
         if (isFork) return; // read-only mode
-        if (isPublished && !identity) { startDeviceFlow(); return; }
+        if (authConfigured && !identity) { startLogin(); return; }
         await fetch('/api/reactions', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ slug, comment_id: chip.dataset.targetId, emoji: chip.dataset.emoji, version })
@@ -1330,7 +1337,7 @@
     card.querySelectorAll('.tdoc-react-add').forEach(addBtn => {
       addBtn.onclick = (e) => {
         e.stopPropagation();
-        if (isPublished && !identity) { startDeviceFlow(); return; }
+        if (authConfigured && !identity) { startLogin(); return; }
         openEmojiPicker(addBtn, addBtn.dataset.targetId);
       };
     });
@@ -1680,47 +1687,15 @@
   window.addEventListener('scroll', () => requestAnimationFrame(repositionCards), { passive: true });
   if (window.ResizeObserver) new ResizeObserver(() => repositionCards()).observe(document.body);
 
-  // ========== Auth (Device Flow) ==========
-  // GitHub returns "slow_down" if we poll faster than its current interval —
-  // and once it does, we must bump our interval by ≥5s or it will keep
-  // refusing forever. Use a chained setTimeout so each tick can adjust the
-  // delay before scheduling the next.
-  let pollTimer = null;
-  let pollInterval = 5;
-  async function startDeviceFlow() {
-    if (!isPublished) return;
-    const r = await fetch('/api/auth/device/start', { method: 'POST' });
-    const data = await r.json();
-    if (data.error) { alert('Sign-in error: ' + (data.message || data.error)); return; }
-    showDeviceModal(data);
-    window.open(data.verification_uri, '_blank');
-    pollInterval = Math.max(5, data.interval || 5);
-    schedulePoll(data.device_code);
-  }
-  function schedulePoll(device_code) {
-    pollTimer = setTimeout(() => pollDevice(device_code), pollInterval * 1000);
-  }
-  function showDeviceModal(data) {
-    const bg = document.createElement('div');
-    bg.className = 'tdoc-modal-bg';
-    bg.id = 'tdoc-device-modal';
-    bg.innerHTML = `
-      <div class="tdoc-modal">
-        <h3>Sign in with GitHub</h3>
-        <div class="step"><span class="n">1</span><span>Copy this code:</span></div>
-        <div class="code" id="tdoc-user-code">${data.user_code}</div>
-        <div class="step"><span class="n">2</span><span>Paste it at <b>${data.verification_uri}</b> (opened in a new tab) and approve.</span></div>
-        <div class="step"><span class="n">3</span><span class="status" id="tdoc-poll-status">Waiting for you to approve…</span></div>
-        <div class="actions"><button id="tdoc-modal-cancel">Cancel</button></div>
-      </div>`;
-    document.body.appendChild(bg);
-    document.getElementById('tdoc-user-code').onclick = () => navigator.clipboard?.writeText(data.user_code);
-    document.getElementById('tdoc-modal-cancel').onclick = closeDeviceModal;
-  }
-  function closeDeviceModal() {
-    const m = document.getElementById('tdoc-device-modal');
-    if (m) m.remove();
-    if (pollTimer) { clearTimeout(pollTimer); pollTimer = null; }
+  // ========== Auth (login seam) ==========
+  // Login seam. There is no built-in login provider yet (commenting is
+  // anonymous), so this is only reachable when the server reports
+  // authConfigured=true — the hook a future Octo unified login plugs into. It
+  // should redirect to / open the provider, then on return the session cookie is
+  // set and renderIdentity()/refreshComments() pick up the new identity.
+  function startLogin() {
+    if (!authConfigured) return;
+    alert('Sign-in is not configured on this server.');
   }
 
   // ========== Publish / Share modals ==========
@@ -1736,7 +1711,7 @@
     bg.innerHTML = `
       <div class="tdoc-modal" data-state="idle">
         <h3>Publish this doc</h3>
-        <p>We'll publish this to your self-hosted octo-doc server so anyone with the link can read it. GitHub sign-in is required for commenting (only if the server has it configured).</p>
+        <p>We'll publish this to your self-hosted octo-doc server so anyone with the link can read and comment.</p>
         <div class="step"><span class="n">·</span><span>Slug: <code id="tdoc-pub-slug">${escapeHtml(slug)}</code></span></div>
         <div class="status" id="tdoc-pub-status" style="margin-top:10px;display:none;"></div>
         <div id="tdoc-pub-result" style="margin-top:10px;display:none;">
@@ -1798,7 +1773,7 @@
         <div class="actions" style="justify-content:flex-start;gap:8px;margin-top:0;margin-bottom:10px;">
           <button class="primary" id="tdoc-share-copy">Copy link</button>
         </div>
-        <p class="muted">Anyone with this link can read. To comment, they sign in with GitHub.</p>
+        <p class="muted">Anyone with this link can read and comment.</p>
         <div class="divider">
           <p class="danger" style="margin:0 0 6px;"><b>Unpublish</b></p>
           <p class="muted" style="margin:0 0 6px;font-size:12px;">Unpublish requires the upload token, which only lives on your laptop. Run this locally:</p>
@@ -1813,51 +1788,6 @@
     document.getElementById('tdoc-share-unpub').onclick = (e) => {
       navigator.clipboard?.writeText(e.currentTarget.textContent);
     };
-  }
-  async function pollDevice(device_code) {
-    const status = document.getElementById('tdoc-poll-status');
-    pollTimer = null;
-    try {
-      const r = await fetch('/api/auth/device/poll', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ device_code })
-      });
-      const data = await r.json();
-      if (data.ok && data.identity) {
-        identity = data.identity;
-        closeDeviceModal();
-        renderIdentity();
-        refreshComments();
-        return;
-      }
-      // slow_down: GitHub explicitly told us to back off. Bump interval by 5s
-      // (per RFC 8628 §3.5) before scheduling the next poll, otherwise GitHub
-      // will keep rejecting at the same cadence forever.
-      if (data.error === 'slow_down') {
-        // GitHub may suggest a new interval; otherwise add 5s.
-        pollInterval = Math.max(pollInterval + 5, Number(data.interval) || 0);
-        schedulePoll(device_code);
-        return;
-      }
-      if (data.error === 'authorization_pending' || (data.pending && !data.error)) {
-        schedulePoll(device_code);
-        return;
-      }
-      if (data.error === 'expired_token' || data.error === 'access_denied') {
-        if (status) status.textContent = 'Code expired or denied. Try again.';
-        return;
-      }
-      // Any other error (no_user, github_unreachable, 500) — show it and stop.
-      if (data.error || !r.ok) {
-        if (status) status.textContent = 'Sign-in failed: ' + (data.message || data.error || `HTTP ${r.status}`) + '. Try again.';
-        return;
-      }
-      // Fallback: unknown shape, keep polling at current interval.
-      schedulePoll(device_code);
-    } catch (e) {
-      if (status) status.textContent = 'Network error: ' + e.message + ' — retrying…';
-      schedulePoll(device_code);
-    }
   }
 
   // ========== Popup (new-comment): text + element anchors ==========
@@ -1894,13 +1824,13 @@
     hideHoverUI();
     popup = document.createElement('div');
     popup.className = 'tdoc-popup';
-    const needsSignIn = isPublished && !identity;
+    const needsSignIn = authConfigured && !identity;
     const preview = anchor.kind === 'text'
       ? `"${escapeHtml(anchor.text.slice(0, 80))}${anchor.text.length > 80 ? '…' : ''}"`
       : `📎 ${escapeHtml(anchor.label)}`;
     popup.innerHTML = `
       <div class="head"><span class="h">${preview}</span><span class="x">×</span></div>
-      ${needsSignIn ? '<div class="signin-needed">Sign in with GitHub to comment.</div>' : ''}
+      ${needsSignIn ? '<div class="signin-needed">Sign in to comment.</div>' : ''}
       <textarea placeholder="What should change?" ${needsSignIn ? 'disabled' : ''}></textarea>
       <div class="foot">
         <span class="hint">${needsSignIn ? '' : '⌘+Enter to submit'}</span>
@@ -1935,7 +1865,7 @@
     popup.querySelector('.x').onclick = closePopup;
 
     const submit = async () => {
-      if (needsSignIn) { closePopup(); startDeviceFlow(); return; }
+      if (needsSignIn) { closePopup(); startLogin(); return; }
       const text = textarea.value.trim();
       if (!text) return;
       // Capture a fallback position so the card can stay roughly in place
@@ -1959,7 +1889,7 @@
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ slug, version, anchor: sendAnchor, text })
       });
-      if (r.status === 401) { closePopup(); startDeviceFlow(); return; }
+      if (r.status === 401) { closePopup(); startLogin(); return; }
       await r.json().catch(() => null);
       closePopup();
       await refreshComments();
@@ -2432,7 +2362,7 @@
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ slug, id, anchor: newAnchor, version }),
       }).then(r => {
-        if (r.status === 401) startDeviceFlow();
+        if (r.status === 401) startLogin();
         return r.ok ? refreshComments() : null;
       });
       return;
@@ -2488,7 +2418,7 @@
       method: 'PATCH', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ slug, id, anchor: { kind: 'none', fallback }, version }),
     });
-    if (r.status === 401) { startDeviceFlow(); return; }
+    if (r.status === 401) { startLogin(); return; }
     if (!r.ok) { const err = await r.json().catch(() => ({})); alert('Could not remove anchor: ' + (err.error || `HTTP ${r.status}`)); return; }
     await refreshComments();
   };

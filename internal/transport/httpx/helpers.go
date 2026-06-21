@@ -31,14 +31,6 @@ func sessionCookie(r *http.Request) string {
 	return c.Value
 }
 
-// setSessionCookie sets the session cookie consistently across login.
-func setSessionCookie(w http.ResponseWriter, name, value string, maxAge int, secure bool) {
-	http.SetCookie(w, &http.Cookie{
-		Name: name, Value: value, Path: "/", HttpOnly: true, Secure: secure,
-		SameSite: http.SameSiteLaxMode, MaxAge: maxAge,
-	})
-}
-
 // clearCookie expires a cookie.
 func clearCookie(w http.ResponseWriter, name string, secure bool) {
 	http.SetCookie(w, &http.Cookie{Name: name, Value: "", Path: "/", MaxAge: 0, Secure: secure})

@@ -595,7 +595,7 @@
          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
          <span>Share</span>
        </button>`
-    : `<button id="tdoc-publish-btn" class="primary" title="Publish to your Worker" aria-label="Publish">
+    : `<button id="tdoc-publish-btn" class="primary" title="Publish to your octo-doc server" aria-label="Publish">
          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5"/><polyline points="5 12 12 5 19 12"/></svg>
          <span>Publish</span>
        </button>`);
@@ -1736,7 +1736,7 @@
     bg.innerHTML = `
       <div class="tdoc-modal" data-state="idle">
         <h3>Publish this doc</h3>
-        <p>We'll deploy this to your Cloudflare Worker so anyone with the link can read it. GitHub sign-in is required for commenting.</p>
+        <p>We'll publish this to your self-hosted octo-doc server so anyone with the link can read it. GitHub sign-in is required for commenting (only if the server has it configured).</p>
         <div class="step"><span class="n">·</span><span>Slug: <code id="tdoc-pub-slug">${escapeHtml(slug)}</code></span></div>
         <div class="status" id="tdoc-pub-status" style="margin-top:10px;display:none;"></div>
         <div id="tdoc-pub-result" style="margin-top:10px;display:none;">

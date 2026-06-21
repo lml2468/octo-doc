@@ -13,3 +13,7 @@ data/
 # OS / editor
 .DS_Store
 .claude/
+deploy/docker-compose.local.yml
+
+# Browser tooling output
+.playwright-mcp/

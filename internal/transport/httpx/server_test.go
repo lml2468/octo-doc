@@ -91,6 +91,31 @@ func TestPublishTitleFromMeta(t *testing.T) {
 	}
 }
 
+func TestRenderAlwaysPublishedMode(t *testing.T) {
+	// A doc served by this server is published — the overlay must run in
+	// "published" mode (Share/Fork), never "local" (which would show a dead
+	// Publish button). This holds whether or not GitHub auth is configured.
+	for _, ghClientID := range []string{"", "gh-client-123"} {
+		cfg := &config.Config{
+			WriteToken: "test-token", MaxHTMLBytes: 5 << 20, RepoURL: "https://x",
+			RateLimitMax: 0, GitHubClientID: ghClientID,
+		}
+		h := newTestServer(t, cfg)
+		auth := map[string]string{"Authorization": "Bearer test-token", "Content-Type": "application/json"}
+		_ = do(t, h, http.MethodPost, "/api/docs", auth,
+			`{"slug":"m","version":1,"html":"<html><body><h1>x</h1></body></html>","meta":{"title":"M"}}`)
+		body := do(t, h, http.MethodGet, "/d/m/v/1", nil, "").Body.String()
+		if !strings.Contains(body, `"mode":"published"`) {
+			t.Errorf("GitHubClientID=%q: expected published mode, got: %s", ghClientID,
+				body[strings.Index(body, "__TDOC__"):min(strings.Index(body, "__TDOC__")+120, len(body))])
+		}
+		wantAuth := ghClientID != ""
+		if strings.Contains(body, `"authConfigured":true`) != wantAuth {
+			t.Errorf("GitHubClientID=%q: authConfigured mismatch", ghClientID)
+		}
+	}
+}
+
 func TestPublishRenderLifecycle(t *testing.T) {
 	h := newTestServer(t, nil)
 	auth := map[string]string{"Authorization": "Bearer test-token", "Content-Type": "application/json"}

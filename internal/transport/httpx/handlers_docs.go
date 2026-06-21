@@ -151,16 +151,16 @@ func (s *Server) handleRender(w http.ResponseWriter, r *http.Request) error {
 	}
 	// A doc rendered by this server is, by definition, published — so the overlay
 	// always runs in "published" mode (Share/Fork, never a Publish button; that
-	// belongs to the local preview server). AuthConfigured is false: there is no
-	// built-in login provider yet, so commenting is anonymous. (A future Octo
-	// unified login will flip this on.)
+	// belongs to the local preview server). AuthConfigured reflects whether a
+	// login provider exists (none yet → anonymous commenting); a future Octo
+	// unified login flips it on via AuthService.LoginEnabled.
 	versions := toVersionRefs(data.Versions, version)
 	html, err := core.InjectOverlayCfg(data.HTML, s.overlayJS, core.OverlayConfig{
 		Slug:           slug,
 		Version:        version,
 		Identity:       identityFromSession(session),
 		IsOwner:        s.auth.IsOwner(session),
-		AuthConfigured: false,
+		AuthConfigured: s.auth.LoginEnabled(),
 		Mode:           "published",
 		Versions:       versions,
 	})

@@ -113,6 +113,12 @@ func (s *AuthService) Logout(ctx context.Context, sid string) error {
 	return s.meta.DeleteSession(ctx, sid)
 }
 
+// LoginEnabled reports whether a login provider is configured. It is the single
+// source of truth for the overlay's authConfigured flag. There is no built-in
+// provider yet, so it is always false (commenting is anonymous); a future Octo
+// unified login flips this on in one place.
+func (s *AuthService) LoginEnabled() bool { return false }
+
 // SessionTTLSeconds exposes the cookie max-age.
 func (s *AuthService) SessionTTLSeconds() int { return sessionTTLSeconds }
 

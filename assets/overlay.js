@@ -878,11 +878,9 @@
   footer.className = 'tdoc-footer';
   footer.innerHTML =
     '<div class="tdoc-footer-row">' +
-      '<a href="https://github.com/serenakeyitan/tdoc" target="_blank" rel="noopener">github.com/serenakeyitan/tdoc</a>' +
+      '<span>Powered by <a href="https://github.com/lml2468/octo-doc" target="_blank" rel="noopener">octo-doc</a></span>' +
       '<span class="sep">·</span>' +
-      '<span>built with <a href="https://github.com/serenakeyitan/tdoc" target="_blank" rel="noopener">tdoc</a></span>' +
-      '<span class="sep">·</span>' +
-      '<span>inspired by <a href="https://x.com/jessepollak/status/2054313757543964857" target="_blank" rel="noopener">bdocs by @jessepollak</a></span>' +
+      '<span>inspired by tdoc &amp; bdocs</span>' +
     '</div>';
   document.body.appendChild(footer);
 

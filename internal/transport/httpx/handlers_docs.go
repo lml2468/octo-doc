@@ -56,15 +56,25 @@ func (s *Server) readMultipart(r *http.Request) (publishBody, error) {
 
 func (s *Server) readJSONPublish(r *http.Request) (publishBody, error) {
 	var raw struct {
-		Slug     string         `json:"slug"`
-		HTML     string         `json:"html"`
-		Version  int            `json:"version"`
-		Title    string         `json:"title"`
+		Slug    string `json:"slug"`
+		HTML    string `json:"html"`
+		Version int    `json:"version"`
+		Title   string `json:"title"`
+		Meta    *struct {
+			Title string `json:"title"`
+		} `json:"meta"`
 		Comments []core.Comment `json:"comments"`
 	}
 	_ = decodeJSON(r, &raw)
+	// The CLI sends the doc's meta.json under `meta` (the documented contract:
+	// {slug, version, html, meta, comments}). Honor meta.title, but let an
+	// explicit top-level `title` win if both are present.
+	title := raw.Title
+	if title == "" && raw.Meta != nil {
+		title = raw.Meta.Title
+	}
 	return publishBody{
-		Slug: raw.Slug, HTML: raw.HTML, Version: raw.Version, Title: raw.Title, LocalComments: raw.Comments,
+		Slug: raw.Slug, HTML: raw.HTML, Version: raw.Version, Title: title, LocalComments: raw.Comments,
 	}, nil
 }
 

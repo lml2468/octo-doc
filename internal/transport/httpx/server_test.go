@@ -75,6 +75,22 @@ func TestPublishRequiresAuth(t *testing.T) {
 	}
 }
 
+func TestPublishTitleFromMeta(t *testing.T) {
+	// The CLI sends the doc's meta.json under `meta` ({slug,version,html,meta,
+	// comments}); the server must read meta.title when no top-level title is given.
+	h := newTestServer(t, nil)
+	auth := map[string]string{"Authorization": "Bearer test-token", "Content-Type": "application/json"}
+	rec := do(t, h, http.MethodPost, "/api/docs", auth,
+		`{"slug":"titled","version":1,"html":"<html><body><h1>x</h1></body></html>","meta":{"title":"From Meta","slug":"titled"}}`)
+	if rec.Code != 200 {
+		t.Fatalf("publish = %d: %s", rec.Code, rec.Body.String())
+	}
+	rec = do(t, h, http.MethodGet, "/api/docs/titled/versions", nil, "")
+	if !strings.Contains(rec.Body.String(), `"title":"From Meta"`) {
+		t.Fatalf("title from meta not applied: %s", rec.Body.String())
+	}
+}
+
 func TestPublishRenderLifecycle(t *testing.T) {
 	h := newTestServer(t, nil)
 	auth := map[string]string{"Authorization": "Bearer test-token", "Content-Type": "application/json"}

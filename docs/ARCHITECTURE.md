@@ -139,14 +139,19 @@ new ones (`/api/docs`, `/api/docs/:slug/versions`, `/api/admin/bootstrap`).
 | `GET`  | `/` | neutral landing page (no catalog) |
 | `GET`  | `/me` | owner-only doc catalog (redirects others) |
 
-### Comment mutations (session if `GITHUB_CLIENT_ID` set, else anonymous)
+### Comment mutations (anonymous)
 
 | Method | Path | Description |
 | ------ | ---- | ----------- |
 | `POST`   | `/api/comments` | create a comment or reply |
-| `PATCH`  | `/api/comments` | re-anchor (author/owner only) |
-| `DELETE` | `/api/comments?slug=&id=&version=` | soft-delete (author/owner only) |
+| `PATCH`  | `/api/comments` | re-anchor (author/owner only once a session exists) |
+| `DELETE` | `/api/comments?slug=&id=&version=` | soft-delete (author/owner only once a session exists) |
 | `POST`   | `/api/reactions` | toggle an emoji reaction |
+
+Comments are anonymous: there is no built-in login provider, so these endpoints
+require no session. The author/owner checks on PATCH/DELETE are a no-op while
+anonymous (unowned comments) and activate automatically once a future Octo
+unified login populates viewer sessions.
 
 ### Write endpoints (Bearer token required)
 
@@ -159,10 +164,12 @@ new ones (`/api/docs`, `/api/docs/:slug/versions`, `/api/admin/bootstrap`).
 | `DELETE` | `/api/comments?slug=&all=1` | wipe all comments for a slug |
 | `GET`    | `/api/admin/bootstrap` | mint the first write token (then 409s) |
 
-### Auth (only active when `GITHUB_CLIENT_ID` is set)
+### Viewer sessions
 
-`GET /api/auth/me`, `POST /api/auth/device/start`, `POST /api/auth/device/poll`,
-`POST /api/auth/logout` — GitHub Device Flow, identical to upstream.
+`GET /api/auth/me` (reports the current viewer; anonymous → `identity: null`) and
+`POST /api/auth/logout` (clears a session). There is no built-in login provider
+yet; the session machinery (`sessions` table, `AuthService.CreateSession`) is the
+seam a future Octo unified login plugs into.
 
 ## Concurrency
 

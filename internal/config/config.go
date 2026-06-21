@@ -34,7 +34,6 @@ type Config struct {
 	Private        bool
 	Owner          string
 	FrameAncestors string
-	GitHubClientID string
 
 	RateLimitWindow time.Duration
 	RateLimitMax    int
@@ -70,7 +69,6 @@ func Load() (*Config, error) {
 		Private:        envBool("PRIVATE", false),
 		Owner:          strings.TrimSpace(env("OWNER", "")),
 		FrameAncestors: strings.TrimSpace(env("FRAME_ANCESTORS", "'none'")),
-		GitHubClientID: env("GITHUB_CLIENT_ID", ""),
 
 		RateLimitWindow: time.Duration(envInt("RATE_LIMIT_WINDOW_MS", 60_000)) * time.Millisecond,
 		RateLimitMax:    envInt("RATE_LIMIT_MAX", 60),

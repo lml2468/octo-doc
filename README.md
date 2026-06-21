@@ -81,7 +81,6 @@ Highlights:
 | `PRIVATE` | `false` | require the token for reads too |
 | `FRAME_ANCESTORS` | `'none'` | CSP embedding policy for rendered docs |
 | `MAX_HTML_BYTES` | `5242880` | per-document size cap |
-| `GITHUB_CLIENT_ID` | _(off)_ | enable GitHub sign-in for per-user comments |
 
 ## Commands
 

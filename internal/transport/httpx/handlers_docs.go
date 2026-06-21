@@ -149,10 +149,10 @@ func (s *Server) handleRender(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
-	mode := "local"
-	if s.cfg.GitHubClientID != "" {
-		mode = "published"
-	}
+	// A doc rendered by this server is, by definition, published — so the overlay
+	// always runs in "published" mode (Share/Fork, never a Publish button; that
+	// belongs to the local preview server). Whether commenting requires GitHub
+	// sign-in is carried separately by AuthConfigured.
 	versions := toVersionRefs(data.Versions, version)
 	html, err := core.InjectOverlayCfg(data.HTML, s.overlayJS, core.OverlayConfig{
 		Slug:           slug,
@@ -160,7 +160,7 @@ func (s *Server) handleRender(w http.ResponseWriter, r *http.Request) error {
 		Identity:       identityFromSession(session),
 		IsOwner:        s.auth.IsOwner(session),
 		AuthConfigured: s.cfg.GitHubClientID != "",
-		Mode:           mode,
+		Mode:           "published",
 		Versions:       versions,
 	})
 	if err != nil {

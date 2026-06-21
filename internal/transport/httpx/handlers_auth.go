@@ -35,7 +35,7 @@ func (s *Server) handleAuthMe(w http.ResponseWriter, r *http.Request) error {
 	writeJSON(w, 200, map[string]any{
 		"identity":       identity,
 		"isOwner":        s.auth.IsOwner(session),
-		"authConfigured": false,
+		"authConfigured": s.auth.LoginEnabled(),
 	})
 	return nil
 }

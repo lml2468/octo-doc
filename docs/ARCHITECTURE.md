@@ -66,7 +66,7 @@ are no import cycles.
 | KV `META` (meta + comments)     | `MetadataStore` → PostgreSQL (pgx)                    |
 | KV `session:*`                  | `MetadataStore.sessions` table                        |
 | Durable Object `CommentsStore`  | in-process per-slug keyed mutex (`internal/platform/sluglock`) |
-| `wrangler secret TDOC_UPLOAD_TOKEN` | `WRITE_TOKEN` env, or `/api/admin/bootstrap` token |
+| `wrangler secret TDOC_UPLOAD_TOKEN` | `WRITE_TOKEN` env, or `/v1/admin/bootstrap` token |
 | Worker build-time overlay inline | `assets/overlay.js` embedded via `go:embed`         |
 | `caches.default`, `Request.cf`, `waitUntil` | none — no Cloudflare assumptions leak in |
 
@@ -122,20 +122,29 @@ Unchanged from upstream:
 
 ## API specification
 
-All endpoints from the upstream Worker are preserved equivalently, plus three
-new ones (`/api/docs`, `/api/docs/:slug/versions`, `/api/admin/bootstrap`).
+All JSON endpoints live under **`/v1`** (the single current API version) and
+speak the OCTO wire contract: a successful response wraps its payload in a
+top-level `data`; a list adds a sibling `pagination`; an error returns a
+top-level `error` object `{ code, message, details?, hint? }` whose `code` is
+one of a fixed enum (`VALIDATION_ERROR`, `AUTH_REQUIRED`, `FORBIDDEN`,
+`NOT_FOUND`, `CONFLICT`, `PAYLOAD_TOO_LARGE`, `UNSUPPORTED_MEDIA_TYPE`,
+`RATE_LIMITED`, `UPSTREAM_UNAVAILABLE`, `INTERNAL_ERROR`). Timestamp fields carry
+the `_at` suffix on the wire (`created_at`); the byte-equivalence-locked `core`
+kernel keeps its `created` field internally and is remapped to `created_at` at
+the transport DTO boundary. The `/d/:slug/v/:version` document URLs are not part
+of `/v1` — they return browser HTML, not the JSON envelope.
 
 ### Public reads (no auth unless `PRIVATE=1`)
 
 | Method | Path | Description |
 | ------ | ---- | ----------- |
-| `GET`  | `/api/ping` | `{ ok, service: "tdoc" }` health/identity marker |
-| `GET`  | `/healthz` | `{ ok }` liveness for orchestrators |
-| `GET\|HEAD` | `/d/:slug/v/:version` | rendered doc with overlay injected |
+| `GET`  | `/v1/ping` | `{ data: { ok, service: "tdoc" } }` health/identity marker |
+| `GET`  | `/healthz` | `{ data: { ok } }` liveness for orchestrators (unversioned) |
+| `GET\|HEAD` | `/d/:slug/v/:version` | rendered doc with overlay injected (HTML) |
 | `GET`  | `/d/:slug/v/:version/export` | doc + comment banner, `Content-Disposition: attachment` |
 | `GET`  | `/d/:slug/v/:version/fork` | doc + comments, overlay in read-only fork mode |
-| `GET`  | `/api/docs/:slug/versions` | `{ slug, title, versions: [{n, created}] }` |
-| `GET`  | `/api/comments?slug=&version=` | folded comment snapshot (`version=all` for full history) |
+| `GET`  | `/v1/docs/:slug/versions` | `{ data: { slug, title, versions: [{n, created_at}] } }` |
+| `GET`  | `/v1/comments?slug=&version=` | `{ data: [...], pagination }` folded snapshot (`version=all` for full history) |
 | `GET`  | `/` | neutral landing page (no catalog) |
 | `GET`  | `/me` | owner-only doc catalog (redirects others) |
 
@@ -143,10 +152,10 @@ new ones (`/api/docs`, `/api/docs/:slug/versions`, `/api/admin/bootstrap`).
 
 | Method | Path | Description |
 | ------ | ---- | ----------- |
-| `POST`   | `/api/comments` | create a comment or reply |
-| `PATCH`  | `/api/comments` | re-anchor (author/owner only once a session exists) |
-| `DELETE` | `/api/comments?slug=&id=&version=` | soft-delete (author/owner only once a session exists) |
-| `POST`   | `/api/reactions` | toggle an emoji reaction |
+| `POST`   | `/v1/comments` | create a comment or reply |
+| `PATCH`  | `/v1/comments` | re-anchor (author/owner only once a session exists) |
+| `DELETE` | `/v1/comments?slug=&id=&version=` | soft-delete (author/owner only once a session exists) |
+| `POST`   | `/v1/reactions` | toggle an emoji reaction |
 
 Comments are anonymous: there is no built-in login provider, so these endpoints
 require no session. The author/owner checks on PATCH/DELETE are a no-op while
@@ -157,17 +166,16 @@ unified login populates viewer sessions.
 
 | Method | Path | Description |
 | ------ | ---- | ----------- |
-| `POST`   | `/api/docs` | publish (multipart `file=@doc.html, slug=` **or** JSON `{slug, version, html, meta, comments}`); auto-increments version when omitted |
-| `POST`   | `/api/upload` | legacy alias of `/api/docs` (JSON) — preserves the existing CLI contract |
-| `POST`   | `/api/agent/reply` | agent posts a reply + verdict (✅/🟡/❓) |
-| `DELETE` | `/api/doc?slug=` | delete all versions + comments |
-| `DELETE` | `/api/comments?slug=&all=1` | wipe all comments for a slug |
-| `GET`    | `/api/admin/bootstrap` | mint the first write token (then 409s) |
+| `POST`   | `/v1/docs` | publish (multipart `file=@doc.html, slug=` **or** JSON `{slug, version, html, meta, comments}`); auto-increments version when omitted |
+| `POST`   | `/v1/agent/replies` | agent posts a reply + verdict (✅/🟡/❓) |
+| `DELETE` | `/v1/docs/:slug` | delete all versions + comments |
+| `DELETE` | `/v1/comments?slug=&all=1` | wipe all comments for a slug |
+| `GET`    | `/v1/admin/bootstrap` | mint the first write token (then 409s) |
 
 ### Viewer sessions
 
-`GET /api/auth/me` (reports the current viewer; anonymous → `identity: null`) and
-`POST /api/auth/logout` (clears a session). There is no built-in login provider
+`GET /v1/auth/me` (reports the current viewer; anonymous → `identity: null`) and
+`POST /v1/auth/logout` (clears a session). There is no built-in login provider
 yet; the session machinery (`sessions` table, `AuthService.CreateSession`) is the
 seam a future Octo unified login plugs into.
 
@@ -187,7 +195,7 @@ advisory-lock implementation, documented in [DESIGN.md](./DESIGN.md).
 
 ```
 tdoc-publish <slug>
-  └─ POST /api/docs  (Authorization: Bearer <token>, multipart or JSON)
+  └─ POST /v1/docs  (Authorization: Bearer <token>, multipart or JSON)
        ├─ requireWriteAuth         constant-time token check
        ├─ size cap check           (MAX_HTML_BYTES, default 5 MiB)
        ├─ next version = max(blobStore.listVersions)+1   (if not explicit)

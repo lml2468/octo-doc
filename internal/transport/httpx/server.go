@@ -49,36 +49,42 @@ func (s *Server) Handler() http.Handler {
 
 	writeLimiter := newRateLimiter(s.cfg.RateLimitWindow, s.cfg.RateLimitMax)
 
-	// Health + identity.
-	r.Get("/api/ping", s.handlePing)
+	// Container liveness probe — not a versioned REST resource, stays at root.
 	r.Get("/healthz", s.handleHealthz)
 
-	// Admin / auth. Viewer identity is anonymous for now (no built-in login
-	// provider); /api/auth/me reports it and logout clears any future session.
-	r.Get("/api/admin/bootstrap", s.wrap(s.handleBootstrap))
-	r.Get("/api/auth/me", s.wrap(s.handleAuthMe))
-	r.Post("/api/auth/logout", s.cors(s.wrap(s.handleLogout)))
+	// All JSON APIs live under /v1 (the single current API version). Handlers
+	// emit the {data}/{error} envelope; the chi mount provides the /v1 prefix.
+	r.Route("/v1", func(r chi.Router) {
+		// Health + identity.
+		r.Get("/ping", s.handlePing)
 
-	// Documents.
-	r.With(s.requireWriteAuth).Method(http.MethodPost, "/api/docs", s.cors(s.limit(writeLimiter, false, s.wrap(s.handlePublish))))
-	r.With(s.requireWriteAuth).Method(http.MethodPost, "/api/upload", s.cors(s.limit(writeLimiter, false, s.wrap(s.handlePublish))))
-	r.Get("/api/docs/{slug}/versions", s.cors(s.wrap(s.handleVersions)))
-	r.With(s.requireWriteAuth).Delete("/api/doc", s.cors(s.wrap(s.handleDeleteDoc)))
+		// Admin / auth. Viewer identity is anonymous for now (no built-in login
+		// provider); /auth/me reports it and logout clears any future session.
+		r.Get("/admin/bootstrap", s.wrap(s.handleBootstrap))
+		r.Get("/auth/me", s.wrap(s.handleAuthMe))
+		r.Post("/auth/logout", s.cors(s.wrap(s.handleLogout)))
 
-	// Rendered docs + export/fork.
+		// Documents.
+		r.With(s.requireWriteAuth).Method(http.MethodPost, "/docs", s.cors(s.limit(writeLimiter, false, s.wrap(s.handlePublish))))
+		r.Get("/docs/{slug}/versions", s.cors(s.wrap(s.handleVersions)))
+		r.With(s.requireWriteAuth).Delete("/docs/{slug}", s.cors(s.wrap(s.handleDeleteDoc)))
+
+		// Comments + reactions.
+		r.Get("/comments", s.cors(s.limit(writeLimiter, true, s.wrap(s.handleListComments))))
+		r.Post("/comments", s.cors(s.limit(writeLimiter, true, s.wrap(s.handleCreateComment))))
+		r.Patch("/comments", s.cors(s.limit(writeLimiter, true, s.wrap(s.handlePatchComment))))
+		r.Delete("/comments", s.cors(s.limit(writeLimiter, true, s.wrap(s.handleDeleteComment))))
+		r.Post("/reactions", s.cors(s.limit(writeLimiter, false, s.wrap(s.handleReact))))
+		r.With(s.requireWriteAuth).Post("/agent/replies", s.cors(s.limit(writeLimiter, false, s.wrap(s.handleAgentReply))))
+	})
+
+	// Rendered docs + export/fork. These return browser HTML (overlay injected),
+	// not the JSON envelope, so they keep the /d/ document-URL scheme.
 	r.Get("/d/{slug}/v/{version}", s.maybeRequireReadAuth(s.secHeaders(s.wrap(s.handleRender))))
 	r.Head("/d/{slug}/v/{version}", s.maybeRequireReadAuth(s.secHeaders(s.wrap(s.handleRender))))
 	r.Get("/d/{slug}/v/{version}/{kind}", s.maybeRequireReadAuth(s.secHeaders(s.wrap(s.handleForkExport))))
 
-	// Comments + reactions.
-	r.Get("/api/comments", s.cors(s.limit(writeLimiter, true, s.wrap(s.handleListComments))))
-	r.Post("/api/comments", s.cors(s.limit(writeLimiter, true, s.wrap(s.handleCreateComment))))
-	r.Patch("/api/comments", s.cors(s.limit(writeLimiter, true, s.wrap(s.handlePatchComment))))
-	r.Delete("/api/comments", s.cors(s.limit(writeLimiter, true, s.wrap(s.handleDeleteComment))))
-	r.Post("/api/reactions", s.cors(s.limit(writeLimiter, false, s.wrap(s.handleReact))))
-	r.With(s.requireWriteAuth).Post("/api/agent/reply", s.cors(s.limit(writeLimiter, false, s.wrap(s.handleAgentReply))))
-
-	// Pages.
+	// Pages (browser HTML).
 	r.Get("/", s.handleLanding)
 	r.Get("/me", s.wrap(s.handleCatalog))
 

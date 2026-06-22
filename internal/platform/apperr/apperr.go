@@ -12,11 +12,28 @@ type Error struct {
 	Msg    string
 	// RetryAfter is set on rate-limit errors (seconds).
 	RetryAfter int
-	Cause      error
+	// Details carries structured, machine-readable sub-classification surfaced to
+	// the client under error.details (R2). Optional.
+	Details map[string]any
+	// Hint is a human-readable fix suggestion surfaced under error.hint. Optional.
+	Hint  string
+	Cause error
 }
 
 func (e *Error) Error() string { return e.Msg }
 func (e *Error) Unwrap() error { return e.Cause }
+
+// WithDetails attaches structured details and returns the error for chaining.
+func (e *Error) WithDetails(details map[string]any) *Error {
+	e.Details = details
+	return e
+}
+
+// WithHint attaches a human-readable hint and returns the error for chaining.
+func (e *Error) WithHint(hint string) *Error {
+	e.Hint = hint
+	return e
+}
 
 func newErr(status int, code, msg string) *Error {
 	return &Error{Status: status, Code: code, Msg: msg}

@@ -44,7 +44,10 @@ func (s *Server) handleListComments(w http.ResponseWriter, r *http.Request) erro
 	if err != nil {
 		return err
 	}
-	writeJSON(w, 200, list)
+	dtos := toCommentDTOs(list)
+	// Comments are returned in full (no server-side paging today); report the
+	// single-page offset pagination shape so the list envelope is R5-compliant.
+	writeList(w, dtos, pagination{Total: len(dtos), Page: 1, PageSize: len(dtos)})
 	return nil
 }
 
@@ -83,7 +86,7 @@ func (s *Server) handleCreateComment(w http.ResponseWriter, r *http.Request) err
 		}
 		res = mutationLike(mr)
 	}
-	writeJSON(w, res.Status, res.Body)
+	writeData(w, res.Status, mutationDTO(res.Body))
 	return nil
 }
 
@@ -114,7 +117,7 @@ func (s *Server) handlePatchComment(w http.ResponseWriter, r *http.Request) erro
 	if err != nil {
 		return err
 	}
-	writeJSON(w, mr.Status, mr.Body)
+	writeData(w, mr.Status, mutationDTO(mr.Body))
 	return nil
 }
 
@@ -145,7 +148,7 @@ func (s *Server) handleDeleteComment(w http.ResponseWriter, r *http.Request) err
 	if err != nil {
 		return err
 	}
-	writeJSON(w, mr.Status, mr.Body)
+	writeData(w, mr.Status, mutationDTO(mr.Body))
 	return nil
 }
 
@@ -179,7 +182,7 @@ func (s *Server) handleReact(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
-	writeJSON(w, mr.Status, mr.Body)
+	writeData(w, mr.Status, mutationDTO(mr.Body))
 	return nil
 }
 
@@ -196,7 +199,7 @@ func (s *Server) wipeComments(w http.ResponseWriter, r *http.Request, slug strin
 	if err != nil {
 		return err
 	}
-	writeJSON(w, mr.Status, mr.Body)
+	writeData(w, mr.Status, mutationDTO(mr.Body))
 	return nil
 }
 

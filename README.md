@@ -26,12 +26,12 @@ git clone https://github.com/Mininglamp-OSS/octo-doc && cd octo-doc
 DOMAIN=docs.example.com docker compose -f deploy/docker-compose.yml up -d --wait
 
 # Mint a write token (one-shot), then publish:
-TOKEN=$(curl -s http://localhost:8080/api/admin/bootstrap | jq -r .token)
+TOKEN=$(curl -s http://localhost:8080/v1/admin/bootstrap | jq -r .data.token)
 curl -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"slug":"hello","html":"<html><body><h1>Hi</h1></body></html>"}' \
-  http://localhost:8080/api/docs
-#   → { "ok": true, "url": "/d/hello/v/1", ... }
+  http://localhost:8080/v1/docs
+#   → { "data": { "url": "/d/hello/v/1", "version": 1, ... } }
 open http://localhost:8080/d/hello/v/1
 ```
 
@@ -61,7 +61,7 @@ interactive HTML doc and publishes it here:
 
 ```bash
 export TDOC_BASE_URL="https://docs.example.com"
-export TDOC_TOKEN="$(octo-doc bootstrap)"   # or GET /api/admin/bootstrap
+export TDOC_TOKEN="$(octo-doc bootstrap)"   # or GET /v1/admin/bootstrap
 /tdoc new "an interactive explainer of compound interest"
 /tdoc publish my-explainer                   # → https://docs.example.com/d/my-explainer/v/1
 ```
@@ -77,7 +77,7 @@ Highlights:
 | --- | ------- | ------- |
 | `DATABASE_URL` | _(required)_ | PostgreSQL connection string |
 | `S3_BUCKET` / `S3_ENDPOINT` | `octo-doc` / _(AWS)_ | blob store (MinIO/R2: set endpoint + `S3_FORCE_PATH_STYLE=1`) |
-| `WRITE_TOKEN` | _(bootstrap)_ | static write token; else `/api/admin/bootstrap` |
+| `WRITE_TOKEN` | _(bootstrap)_ | static write token; else `/v1/admin/bootstrap` |
 | `PRIVATE` | `false` | require the token for reads too |
 | `FRAME_ANCESTORS` | `'none'` | CSP embedding policy for rendered docs |
 | `MAX_HTML_BYTES` | `5242880` | per-document size cap |

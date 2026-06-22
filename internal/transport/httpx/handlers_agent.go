@@ -62,7 +62,7 @@ func (s *Server) handleAgentReply(w http.ResponseWriter, r *http.Request) error 
 	if err != nil {
 		return err
 	}
-	writeJSON(w, mr.Status, mr.Body)
+	writeData(w, mr.Status, mutationDTO(mr.Body))
 	return nil
 }
 

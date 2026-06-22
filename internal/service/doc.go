@@ -43,7 +43,7 @@ type PublishResult struct {
 	URL            string `json:"url"`
 	Size           int64  `json:"size"`
 	AIDs           int    `json:"aids"`
-	MergedComments int    `json:"mergedComments"`
+	MergedComments int    `json:"merged_comments"`
 }
 
 // RenderData is the render payload for a document version.

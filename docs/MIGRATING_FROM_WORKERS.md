@@ -74,13 +74,13 @@ cf-dump/
 ## Step 2 — import into octo-doc
 
 octo-doc has no bespoke importer binary; you replay the dump through the public
-write API (`POST /api/docs`), which performs the same stamping, versioning, and
+write API (`POST /v1/docs`), which performs the same stamping, versioning, and
 comment merge as a normal publish. Point a running server at your PostgreSQL + S3
 backend, mint a write token, then push each version:
 
 ```bash
 BASE=http://localhost:8080
-TOKEN=$(curl -s "$BASE/api/admin/bootstrap" | jq -r .token)
+TOKEN=$(curl -s "$BASE/v1/admin/bootstrap" | jq -r .data.token)
 
 for slug in $(ls cf-dump/kv/meta | sed 's/\.json$//'); do
   comments=$(jq -c '.comments // []' "cf-dump/kv/comments/${slug}.json" 2>/dev/null || echo '[]')
@@ -88,7 +88,7 @@ for slug in $(ls cf-dump/kv/meta | sed 's/\.json$//'); do
     html=$(cat "cf-dump/r2/docs/${slug}/v${n}/index.html")
     jq -n --arg slug "$slug" --argjson v "$n" --arg html "$html" --argjson c "$comments" \
       '{slug:$slug, version:$v, html:$html, comments:$c}' \
-    | curl -s -X POST "$BASE/api/docs" \
+    | curl -s -X POST "$BASE/v1/docs" \
         -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d @-
     echo "  $slug v$n"
   done
@@ -103,14 +103,14 @@ version numbers; the comment array is merged non-destructively on the first push
 ## Step 3 — verify
 
 ```bash
-curl -sf localhost:8080/api/docs/plaud-explainer/versions | jq
+curl -sf localhost:8080/v1/docs/plaud-explainer/versions | jq
 curl -sf localhost:8080/d/plaud-explainer/v/1 | grep -c data-tdoc-aid
-curl -sf "localhost:8080/api/comments?slug=plaud-explainer&version=all" | jq length
+curl -sf "localhost:8080/v1/comments?slug=plaud-explainer&version=all" | jq '.data | length'
 ```
 
 Rendering is byte-identical because the imported HTML was already stamped on the
 Worker and octo-doc's `stampAids` is a verbatim port (re-publishing through
-`/api/docs` would also produce the same bytes — see
+`/v1/docs` would also produce the same bytes — see
 [ARCHITECTURE.md](./ARCHITECTURE.md#rendering-parity-byte-equivalent-output)).
 
 ## Step 4 — point clients at the new server

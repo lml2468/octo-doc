@@ -56,13 +56,13 @@ func (s *Server) handleAgentReply(w http.ResponseWriter, r *http.Request) error 
 	events := agentReplyEvents(replyID, author, body.Text, verdict, version, now)
 	respBody := map[string]any{
 		"id": replyID, "parent_id": body.ParentID, "text": body.Text,
-		"author": author, "agent_status": verdictOrNil(verdict), "created": now, "reactions": map[string]any{},
+		"author": author, "agent_status": verdictOrNil(verdict), "created_at": now, "reactions": map[string]any{},
 	}
 	mr, err := s.comments.AppendRaw(r.Context(), slug, body.ParentID, events, respBody)
 	if err != nil {
 		return err
 	}
-	writeData(w, mr.Status, mutationDTO(mr.Body))
+	writeData(w, mr.Status, mr.Body)
 	return nil
 }
 

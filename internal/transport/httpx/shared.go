@@ -1,22 +1,9 @@
 package httpx
 
 import (
-	"encoding/json"
-
 	"github.com/Mininglamp-OSS/octo-doc/internal/core"
-	"github.com/Mininglamp-OSS/octo-doc/internal/service"
 	"github.com/Mininglamp-OSS/octo-doc/internal/storage"
 )
-
-// mergeOK marshals a publish result with an {ok:true, ...} envelope, matching the
-// upstream response shape ({ ok, slug, version, url, size, aids, mergedComments }).
-func mergeOK(res *service.PublishResult) map[string]any {
-	raw, _ := json.Marshal(res)
-	var m map[string]any
-	_ = json.Unmarshal(raw, &m)
-	m["ok"] = true
-	return m
-}
 
 // identityFromSession builds the overlay identity from a viewer session, or nil.
 func identityFromSession(session *storage.Session) *core.OverlayIdentity {

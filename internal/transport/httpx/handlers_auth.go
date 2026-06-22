@@ -5,11 +5,11 @@ import (
 )
 
 func (s *Server) handlePing(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, 200, map[string]any{"ok": true, "service": "tdoc"})
+	writeData(w, 200, map[string]any{"ok": true, "service": "tdoc"})
 }
 
 func (s *Server) handleHealthz(w http.ResponseWriter, _ *http.Request) {
-	writeJSON(w, 200, map[string]any{"ok": true})
+	writeData(w, 200, map[string]any{"ok": true})
 }
 
 func (s *Server) handleBootstrap(w http.ResponseWriter, r *http.Request) error {
@@ -17,7 +17,7 @@ func (s *Server) handleBootstrap(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
-	writeJSON(w, 200, map[string]any{"ok": true, "token": token})
+	writeData(w, 200, map[string]any{"token": token})
 	return nil
 }
 
@@ -32,7 +32,7 @@ func (s *Server) handleAuthMe(w http.ResponseWriter, r *http.Request) error {
 			"login": session.Login, "avatar_url": session.AvatarURL, "name": session.Name,
 		}
 	}
-	writeJSON(w, 200, map[string]any{
+	writeData(w, 200, map[string]any{
 		"identity":       identity,
 		"isOwner":        s.auth.IsOwner(session),
 		"authConfigured": s.auth.LoginEnabled(),
@@ -45,6 +45,6 @@ func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	clearCookie(w, sessionCookieName, s.cfg.CookieSecure)
-	writeJSON(w, 200, map[string]any{"ok": true})
+	writeData(w, 200, map[string]any{"ok": true})
 	return nil
 }

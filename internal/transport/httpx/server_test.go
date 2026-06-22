@@ -55,20 +55,21 @@ func do(t *testing.T, h http.Handler, method, target string, headers map[string]
 
 func TestPingIdentity(t *testing.T) {
 	h := newTestServer(t, nil)
-	rec := do(t, h, http.MethodGet, "/api/ping", nil, "")
+	rec := do(t, h, http.MethodGet, "/v1/ping", nil, "")
 	if rec.Code != 200 {
 		t.Fatalf("ping status = %d", rec.Code)
 	}
 	var body map[string]any
 	_ = json.Unmarshal(rec.Body.Bytes(), &body)
-	if body["service"] != "tdoc" {
-		t.Fatalf("ping service = %v; want tdoc", body["service"])
+	data, _ := body["data"].(map[string]any)
+	if data == nil || data["service"] != "tdoc" {
+		t.Fatalf("ping data = %v; want data.service=tdoc", body)
 	}
 }
 
 func TestPublishRequiresAuth(t *testing.T) {
 	h := newTestServer(t, nil)
-	rec := do(t, h, http.MethodPost, "/api/docs", map[string]string{"Content-Type": "application/json"},
+	rec := do(t, h, http.MethodPost, "/v1/docs", map[string]string{"Content-Type": "application/json"},
 		`{"slug":"x","html":"<html></html>"}`)
 	if rec.Code != 401 {
 		t.Fatalf("unauthenticated publish = %d; want 401", rec.Code)
@@ -80,12 +81,12 @@ func TestPublishTitleFromMeta(t *testing.T) {
 	// comments}); the server must read meta.title when no top-level title is given.
 	h := newTestServer(t, nil)
 	auth := map[string]string{"Authorization": "Bearer test-token", "Content-Type": "application/json"}
-	rec := do(t, h, http.MethodPost, "/api/docs", auth,
+	rec := do(t, h, http.MethodPost, "/v1/docs", auth,
 		`{"slug":"titled","version":1,"html":"<html><body><h1>x</h1></body></html>","meta":{"title":"From Meta","slug":"titled"}}`)
 	if rec.Code != 200 {
 		t.Fatalf("publish = %d: %s", rec.Code, rec.Body.String())
 	}
-	rec = do(t, h, http.MethodGet, "/api/docs/titled/versions", nil, "")
+	rec = do(t, h, http.MethodGet, "/v1/docs/titled/versions", nil, "")
 	if !strings.Contains(rec.Body.String(), `"title":"From Meta"`) {
 		t.Fatalf("title from meta not applied: %s", rec.Body.String())
 	}
@@ -97,7 +98,7 @@ func TestRenderAlwaysPublishedMode(t *testing.T) {
 	// Publish button). Commenting is anonymous, so authConfigured is false.
 	h := newTestServer(t, nil)
 	auth := map[string]string{"Authorization": "Bearer test-token", "Content-Type": "application/json"}
-	_ = do(t, h, http.MethodPost, "/api/docs", auth,
+	_ = do(t, h, http.MethodPost, "/v1/docs", auth,
 		`{"slug":"m","version":1,"html":"<html><body><h1>x</h1></body></html>","meta":{"title":"M"}}`)
 	body := do(t, h, http.MethodGet, "/d/m/v/1", nil, "").Body.String()
 	if !strings.Contains(body, `"mode":"published"`) {
@@ -109,12 +110,12 @@ func TestRenderAlwaysPublishedMode(t *testing.T) {
 }
 
 func TestAnonymousCommentAllowed(t *testing.T) {
-	// With no login provider, an unauthenticated POST /api/comments must succeed.
+	// With no login provider, an unauthenticated POST /v1/comments must succeed.
 	h := newTestServer(t, nil)
 	auth := map[string]string{"Authorization": "Bearer test-token", "Content-Type": "application/json"}
-	_ = do(t, h, http.MethodPost, "/api/docs", auth,
+	_ = do(t, h, http.MethodPost, "/v1/docs", auth,
 		`{"slug":"anon","version":1,"html":"<html><body><p>hello world</p></body></html>"}`)
-	rec := do(t, h, http.MethodPost, "/api/comments", map[string]string{"Content-Type": "application/json"},
+	rec := do(t, h, http.MethodPost, "/v1/comments", map[string]string{"Content-Type": "application/json"},
 		`{"slug":"anon","text":"nice","version":1,"anchor":{"kind":"text","text":"hello"}}`)
 	if rec.Code != 200 {
 		t.Fatalf("anonymous comment = %d: %s", rec.Code, rec.Body.String())
@@ -126,14 +127,15 @@ func TestPublishRenderLifecycle(t *testing.T) {
 	auth := map[string]string{"Authorization": "Bearer test-token", "Content-Type": "application/json"}
 
 	// Publish v1.
-	rec := do(t, h, http.MethodPost, "/api/docs", auth,
+	rec := do(t, h, http.MethodPost, "/v1/docs", auth,
 		`{"slug":"hello","html":"<html><body><h1>Hi</h1><img src=\"a.png\"></body></html>","title":"Hello"}`)
 	if rec.Code != 200 {
 		t.Fatalf("publish = %d: %s", rec.Code, rec.Body.String())
 	}
 	var pub map[string]any
 	_ = json.Unmarshal(rec.Body.Bytes(), &pub)
-	if pub["ok"] != true || pub["version"].(float64) != 1 {
+	pubData, _ := pub["data"].(map[string]any)
+	if pubData == nil || pubData["version"].(float64) != 1 {
 		t.Fatalf("publish body = %v", pub)
 	}
 
@@ -154,15 +156,16 @@ func TestPublishRenderLifecycle(t *testing.T) {
 	}
 
 	// Publish v2 auto-increments.
-	rec = do(t, h, http.MethodPost, "/api/docs", auth,
+	rec = do(t, h, http.MethodPost, "/v1/docs", auth,
 		`{"slug":"hello","html":"<html><body><h1>Hi v2</h1></body></html>"}`)
 	_ = json.Unmarshal(rec.Body.Bytes(), &pub)
-	if pub["version"].(float64) != 2 {
-		t.Fatalf("v2 version = %v", pub["version"])
+	pubData, _ = pub["data"].(map[string]any)
+	if pubData == nil || pubData["version"].(float64) != 2 {
+		t.Fatalf("v2 version = %v", pub)
 	}
 
 	// Versions endpoint lists both.
-	rec = do(t, h, http.MethodGet, "/api/docs/hello/versions", nil, "")
+	rec = do(t, h, http.MethodGet, "/v1/docs/hello/versions", nil, "")
 	if rec.Code != 200 || !strings.Contains(rec.Body.String(), `"n":2`) {
 		t.Fatalf("versions = %d: %s", rec.Code, rec.Body.String())
 	}
@@ -171,44 +174,48 @@ func TestPublishRenderLifecycle(t *testing.T) {
 func TestCommentLifecycle(t *testing.T) {
 	h := newTestServer(t, nil)
 	auth := map[string]string{"Authorization": "Bearer test-token", "Content-Type": "application/json"}
-	_ = do(t, h, http.MethodPost, "/api/docs", auth,
+	_ = do(t, h, http.MethodPost, "/v1/docs", auth,
 		`{"slug":"doc","html":"<html><body><p>hello world</p></body></html>"}`)
 
 	// Create a comment (anonymous/local mode).
-	rec := do(t, h, http.MethodPost, "/api/comments", map[string]string{"Content-Type": "application/json"},
+	rec := do(t, h, http.MethodPost, "/v1/comments", map[string]string{"Content-Type": "application/json"},
 		`{"slug":"doc","text":"nice","version":1,"anchor":{"kind":"text","text":"hello"}}`)
 	if rec.Code != 200 {
 		t.Fatalf("create comment = %d: %s", rec.Code, rec.Body.String())
 	}
 	var created map[string]any
 	_ = json.Unmarshal(rec.Body.Bytes(), &created)
-	id, _ := created["id"].(string)
+	createdData, _ := created["data"].(map[string]any)
+	id, _ := createdData["id"].(string)
 	if id == "" {
 		t.Fatalf("no comment id in %v", created)
 	}
 
-	// List shows it.
-	rec = do(t, h, http.MethodGet, "/api/comments?slug=doc&version=1", nil, "")
+	// List shows it, wrapped in the data/pagination envelope.
+	rec = do(t, h, http.MethodGet, "/v1/comments?slug=doc&version=1", nil, "")
 	if rec.Code != 200 || !strings.Contains(rec.Body.String(), "nice") {
 		t.Fatalf("list = %d: %s", rec.Code, rec.Body.String())
 	}
+	if !strings.Contains(rec.Body.String(), `"pagination"`) || !strings.Contains(rec.Body.String(), `"created_at"`) {
+		t.Fatalf("list envelope missing pagination/created_at: %s", rec.Body.String())
+	}
 
 	// React.
-	rec = do(t, h, http.MethodPost, "/api/reactions", map[string]string{"Content-Type": "application/json"},
+	rec = do(t, h, http.MethodPost, "/v1/reactions", map[string]string{"Content-Type": "application/json"},
 		`{"slug":"doc","comment_id":"`+id+`","emoji":"👍","version":1}`)
 	if rec.Code != 200 {
 		t.Fatalf("react = %d: %s", rec.Code, rec.Body.String())
 	}
 
 	// Agent reply (write-token gated) flips status.
-	rec = do(t, h, http.MethodPost, "/api/agent/reply", auth,
+	rec = do(t, h, http.MethodPost, "/v1/agent/replies", auth,
 		`{"slug":"doc","parent_id":"`+id+`","text":"done","status":"applied","applied_in":1}`)
 	if rec.Code != 200 {
 		t.Fatalf("agent reply = %d: %s", rec.Code, rec.Body.String())
 	}
 
 	// Delete.
-	rec = do(t, h, http.MethodDelete, "/api/comments?slug=doc&id="+id+"&version=1", nil, "")
+	rec = do(t, h, http.MethodDelete, "/v1/comments?slug=doc&id="+id+"&version=1", nil, "")
 	if rec.Code != 200 {
 		t.Fatalf("delete = %d: %s", rec.Code, rec.Body.String())
 	}
@@ -217,9 +224,9 @@ func TestCommentLifecycle(t *testing.T) {
 func TestForkExport(t *testing.T) {
 	h := newTestServer(t, nil)
 	auth := map[string]string{"Authorization": "Bearer test-token", "Content-Type": "application/json"}
-	_ = do(t, h, http.MethodPost, "/api/docs", auth,
+	_ = do(t, h, http.MethodPost, "/v1/docs", auth,
 		`{"slug":"f","html":"<html><body><p>content here</p></body></html>"}`)
-	_ = do(t, h, http.MethodPost, "/api/comments", map[string]string{"Content-Type": "application/json"},
+	_ = do(t, h, http.MethodPost, "/v1/comments", map[string]string{"Content-Type": "application/json"},
 		`{"slug":"f","text":"note","version":1,"anchor":{"kind":"text","text":"content"}}`)
 
 	rec := do(t, h, http.MethodGet, "/d/f/v/1/export", nil, "")
@@ -242,12 +249,12 @@ func TestForkExport(t *testing.T) {
 func TestBootstrapOnce(t *testing.T) {
 	cfg := &config.Config{AllowBootstrap: true, MaxHTMLBytes: 1 << 20, RepoURL: "https://x", RateLimitMax: 0}
 	h := newTestServer(t, cfg)
-	rec := do(t, h, http.MethodGet, "/api/admin/bootstrap", nil, "")
+	rec := do(t, h, http.MethodGet, "/v1/admin/bootstrap", nil, "")
 	if rec.Code != 200 {
 		t.Fatalf("bootstrap = %d: %s", rec.Code, rec.Body.String())
 	}
 	// Second call conflicts.
-	rec = do(t, h, http.MethodGet, "/api/admin/bootstrap", nil, "")
+	rec = do(t, h, http.MethodGet, "/v1/admin/bootstrap", nil, "")
 	if rec.Code != 409 {
 		t.Fatalf("second bootstrap = %d; want 409", rec.Code)
 	}
@@ -255,7 +262,7 @@ func TestBootstrapOnce(t *testing.T) {
 
 func TestInvalidSlugRejected(t *testing.T) {
 	h := newTestServer(t, nil)
-	rec := do(t, h, http.MethodGet, "/api/comments?slug=../etc", nil, "")
+	rec := do(t, h, http.MethodGet, "/v1/comments?slug=../etc", nil, "")
 	if rec.Code != 400 {
 		t.Fatalf("bad slug = %d; want 400", rec.Code)
 	}

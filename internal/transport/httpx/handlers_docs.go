@@ -96,7 +96,7 @@ func (s *Server) handlePublish(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
-	writeJSON(w, 200, mergeOK(res))
+	writeData(w, 200, res)
 	return nil
 }
 
@@ -112,19 +112,19 @@ func (s *Server) handleVersions(w http.ResponseWriter, r *http.Request) error {
 	if res == nil {
 		return apperr.NotFound("")
 	}
-	writeJSON(w, 200, res)
+	writeData(w, 200, toVersionListDTO(res))
 	return nil
 }
 
 func (s *Server) handleDeleteDoc(w http.ResponseWriter, r *http.Request) error {
-	slug, err := requireSlug(r.URL.Query().Get("slug"))
+	slug, err := requireSlug(chi.URLParam(r, "slug"))
 	if err != nil {
 		return err
 	}
 	if err := s.docs.Remove(r.Context(), slug); err != nil {
 		return err
 	}
-	writeJSON(w, 200, map[string]any{"ok": true})
+	writeData(w, 200, struct{}{})
 	return nil
 }
 

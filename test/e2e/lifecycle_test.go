@@ -64,13 +64,13 @@ func TestFullLifecycle(t *testing.T) {
 	t.Cleanup(srv.Close)
 	slug := "e2e-lifecycle"
 	t.Cleanup(func() {
-		req, _ := http.NewRequest(http.MethodDelete, srv.URL+"/api/doc?slug="+slug, nil)
+		req, _ := http.NewRequest(http.MethodDelete, srv.URL+"/v1/docs/"+slug, nil)
 		req.Header.Set("Authorization", "Bearer e2e")
 		http.DefaultClient.Do(req) //nolint:errcheck
 	})
 
-	// Publish.
-	pub := postJSON(t, srv.URL+"/api/docs", "e2e",
+	// Publish. postJSON returns the unwrapped data object.
+	pub := postJSON(t, srv.URL+"/v1/docs", "e2e",
 		`{"slug":"`+slug+`","html":"<html><body><h1>T</h1><svg viewBox=\"0 0 1 1\"></svg><p>anchor me here</p></body></html>","title":"E2E"}`)
 	if pub["version"].(float64) != 1 || pub["aids"].(float64) != 1 {
 		t.Fatalf("publish result = %v", pub)
@@ -83,15 +83,19 @@ func TestFullLifecycle(t *testing.T) {
 	}
 
 	// Comment + agent reply.
-	c := postJSON(t, srv.URL+"/api/comments", "",
+	c := postJSON(t, srv.URL+"/v1/comments", "",
 		`{"slug":"`+slug+`","text":"q","version":1,"anchor":{"kind":"text","text":"anchor me"}}`)
 	cid := c["id"].(string)
-	_ = postJSON(t, srv.URL+"/api/agent/reply", "e2e",
+	_ = postJSON(t, srv.URL+"/v1/agent/replies", "e2e",
 		`{"slug":"`+slug+`","parent_id":"`+cid+`","text":"done","status":"applied","applied_in":1}`)
 
-	list := getText(t, srv.URL+"/api/comments?slug="+slug+"&version=1")
+	list := getText(t, srv.URL+"/v1/comments?slug="+slug+"&version=1")
 	if !strings.Contains(list, `"status":"applied"`) || !strings.Contains(list, "tdoc-agent") {
 		t.Fatalf("agent reply not reflected: %s", list)
+	}
+	// Envelope compliance: list carries data + pagination + R3 created_at.
+	if !strings.Contains(list, `"pagination"`) || !strings.Contains(list, `"created_at"`) {
+		t.Fatalf("list envelope non-compliant: %s", list)
 	}
 
 	// Export + fork.
@@ -119,11 +123,16 @@ func postJSON(t *testing.T, url, token, body string) map[string]any {
 	if res.StatusCode != 200 {
 		t.Fatalf("POST %s = %d: %s", url, res.StatusCode, raw)
 	}
-	var m map[string]any
-	if err := json.Unmarshal(raw, &m); err != nil {
+	var env map[string]any
+	if err := json.Unmarshal(raw, &env); err != nil {
 		t.Fatalf("decode %s: %v (%s)", url, err, raw)
 	}
-	return m
+	// All /v1 JSON endpoints wrap the payload in {"data": ...}; return data.
+	data, ok := env["data"].(map[string]any)
+	if !ok {
+		t.Fatalf("response missing data envelope: %s", raw)
+	}
+	return data
 }
 
 func getText(t *testing.T, url string) string {

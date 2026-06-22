@@ -40,7 +40,7 @@ func buildForkExport(in forkExportInput) (string, error) {
 		"slug":     in.Slug,
 		"version":  in.Version,
 		"exported": in.Now,
-		"comments": open,
+		"comments": toCommentDTOs(open), // wire DTO (created_at) — consistent with the live API
 	})
 	if err != nil {
 		return "", err

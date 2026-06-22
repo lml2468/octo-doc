@@ -4,7 +4,7 @@
 // the ones above it (and on `state`). No section reaches sideways.
 //
 // External contract preserved verbatim:
-//   - Endpoints: /api/comments, /api/reactions, /api/auth/logout,
+//   - Endpoints: /v1/comments, /v1/reactions, /v1/auth/logout,
 //     /d/<slug>/v/<n>/export
 //   - Globals: window.__tdocCopyDocMd(includeComments), window.__tdocCopyCommentMd(id, btn)
 //   - Body classes: tdoc-has-comments, tdoc-narrow
@@ -557,6 +557,17 @@
     return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   }
 
+  // errMsg extracts a human message from a parsed /v1 error body. The contract
+  // (R2) is a nested object: { error: { code, message, ... } }. We tolerate a
+  // legacy string error and a bare message for resilience.
+  function errMsg(body, status) {
+    const e = body && body.error;
+    if (e && typeof e === 'object' && e.message) return e.message;
+    if (typeof e === 'string' && e) return e;
+    if (body && body.message) return body.message;
+    return `HTTP ${status}`;
+  }
+
   // ========== Top bar (HackMD-style three-group layout) ==========
   const bar = document.createElement('div');
   bar.className = 'tdoc-bar';
@@ -808,7 +819,7 @@
         };
       }
       document.getElementById('tdoc-signout').onclick = async () => {
-        await fetch('/api/auth/logout', { method: 'POST' });
+        await fetch('/v1/auth/logout', { method: 'POST' });
         identity = null;
         isOwner = false;
         renderIdentity();
@@ -1206,7 +1217,7 @@
       <div class="text">${escapeHtml(reply.text)}</div>
       ${hasReactions ? renderReactionsRow(reply) : ''}
       <div class="meta">
-        <span>${new Date(reply.created).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</span>
+        <span>${new Date(reply.created_at || reply.created).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</span>
         <span class="actions">
           ${!hasReactions && !isFork ? renderReactInline(reply) : ''}
           ${canDelete ? `<span class="del" data-id="${escapeHtml(reply.id)}">delete</span>` : ''}
@@ -1229,7 +1240,7 @@
       <div class="text">${escapeHtml(comment.text)}</div>
       ${hasReactions ? renderReactionsRow(comment) : ''}
       <div class="meta">
-        <span>v${comment.version} · ${new Date(comment.created).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</span>
+        <span>v${comment.version} · ${new Date(comment.created_at || comment.created).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</span>
         <span class="actions">
           ${!hasReactions && !isFork ? renderReactInline(comment) : ''}
           ${isFork ? '' : `<span class="tdoc-reply-toggle" data-id="${escapeHtml(comment.id)}">Reply</span>`}
@@ -1273,11 +1284,11 @@
     card.querySelectorAll('.del').forEach(del => {
       del.onclick = async (e) => {
         e.stopPropagation();
-        const r = await fetch(`/api/comments?slug=${encodeURIComponent(slug)}&id=${del.dataset.id}&version=${version}`, { method: 'DELETE' });
+        const r = await fetch(`/v1/comments?slug=${encodeURIComponent(slug)}&id=${del.dataset.id}&version=${version}`, { method: 'DELETE' });
         if (!r.ok) {
           // Surface the failure instead of silently re-rendering the comment.
           const err = await r.json().catch(() => ({}));
-          alert('Could not delete: ' + (err.error || err.message || `HTTP ${r.status}`));
+          alert('Could not delete: ' + errMsg(err, r.status));
           return;
         }
         // Belt + suspenders: drop the active highlight before refresh in case
@@ -1304,7 +1315,7 @@
       const submitReply = async () => {
         const text = replyTa.value.trim();
         if (!text) return;
-        const r = await fetch('/api/comments', {
+        const r = await fetch('/v1/comments', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ slug, parent_id: comment.id, text, version })
@@ -1326,7 +1337,7 @@
         e.stopPropagation();
         if (isFork) return; // read-only mode
         if (authConfigured && !identity) { startLogin(); return; }
-        await fetch('/api/reactions', {
+        await fetch('/v1/reactions', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ slug, comment_id: chip.dataset.targetId, emoji: chip.dataset.emoji, version })
         });
@@ -1373,7 +1384,7 @@
         e.stopPropagation();
         const emoji = b.dataset.emoji;
         closeEmojiPicker();
-        await fetch('/api/reactions', {
+        await fetch('/v1/reactions', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ slug, comment_id: targetId, emoji, version })
         });
@@ -1599,8 +1610,11 @@
       }
     } else {
       try {
-        const r = await fetch(`/api/comments?slug=${encodeURIComponent(slug)}&version=${version}`);
-        list = await r.json();
+        const r = await fetch(`/v1/comments?slug=${encodeURIComponent(slug)}&version=${version}`);
+        const env = await r.json();
+        // /v1 list envelope: { data: [...], pagination: {...} }. Tolerate a bare
+        // array for resilience against older servers.
+        list = Array.isArray(env) ? env : (env && env.data) || [];
       } catch { list = []; }
     }
     state.activeComments = list.filter(c => c.status !== 'resolved');
@@ -1734,17 +1748,17 @@
       status.textContent = 'Publishing — this can take 20–60s on first run…';
       go.disabled = true;
       try {
-        const r = await fetch('/api/publish', {
+        const r = await fetch('/v1/publish', {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ slug })
         });
         const data = await r.json();
         if (!r.ok || data.error) {
-          status.textContent = 'Failed: ' + (data.error || data.message || 'unknown');
+          status.textContent = 'Failed: ' + errMsg(data, r.status);
           go.disabled = false;
           return;
         }
-        const url = data.url;
+        const url = (data && data.data && data.data.url) || data.url;
         status.style.display = 'none';
         const result = document.getElementById('tdoc-pub-result');
         result.style.display = 'block';
@@ -1884,7 +1898,7 @@
             // Fingerprint is the legacy fallback for any pre-aid docs.
             fingerprint: anchor._el ? elementFingerprint(anchor._el) : null,
             fallback };
-      const r = await fetch('/api/comments', {
+      const r = await fetch('/v1/comments', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ slug, version, anchor: sendAnchor, text })
       });
@@ -2357,7 +2371,7 @@
       state.anchorMarks.delete(id);
       rebuildSharedHighlights();
       window.getSelection()?.removeAllRanges();
-      fetch('/api/comments', {
+      fetch('/v1/comments', {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ slug, id, anchor: newAnchor, version }),
       }).then(r => {
@@ -2413,12 +2427,12 @@
     // worse than the pre-click state.
     state.anchorMarks.delete(id);
     rebuildSharedHighlights();
-    const r = await fetch('/api/comments', {
+    const r = await fetch('/v1/comments', {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ slug, id, anchor: { kind: 'none', fallback }, version }),
     });
     if (r.status === 401) { startLogin(); return; }
-    if (!r.ok) { const err = await r.json().catch(() => ({})); alert('Could not remove anchor: ' + (err.error || `HTTP ${r.status}`)); return; }
+    if (!r.ok) { const err = await r.json().catch(() => ({})); alert('Could not remove anchor: ' + errMsg(err, r.status)); return; }
     await refreshComments();
   };
 
@@ -2666,7 +2680,7 @@
   }
   function commentToMd(c) {
     const who = c.author ? `**@${c.author.login}**` : '*anonymous*';
-    const when = new Date(c.created).toLocaleString();
+    const when = new Date(c.created_at || c.created).toLocaleString();
     let anchorLine = '';
     if (c.anchor) {
       if (c.anchor.kind === 'element' || c.anchor.selector) anchorLine = `> _on ${c.anchor.label || c.anchor.selector}_\n`;
@@ -2676,7 +2690,7 @@
     if (Array.isArray(c.replies) && c.replies.length) {
       for (const r of c.replies) {
         const rwho = r.author ? `**@${r.author.login}**` : '*anonymous*';
-        const rwhen = new Date(r.created).toLocaleString();
+        const rwhen = new Date(r.created_at || r.created).toLocaleString();
         md += `  ↳ ${rwho} — _${rwhen}_\n    ${r.text}\n    ${reactionsToMd(r.reactions)}`;
       }
     }

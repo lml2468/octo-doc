@@ -557,15 +557,11 @@
     return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   }
 
-  // errMsg extracts a human message from a parsed /v1 error body. The contract
-  // (R2) is a nested object: { error: { code, message, ... } }. We tolerate a
-  // legacy string error and a bare message for resilience.
+  // errMsg pulls the human message out of a /v1 error body
+  // ({ error: { code, message } }), falling back to the status when the body
+  // failed to parse (callers default it to {}).
   function errMsg(body, status) {
-    const e = body && body.error;
-    if (e && typeof e === 'object' && e.message) return e.message;
-    if (typeof e === 'string' && e) return e;
-    if (body && body.message) return body.message;
-    return `HTTP ${status}`;
+    return (body.error && body.error.message) || `HTTP ${status}`;
   }
 
   // ========== Top bar (HackMD-style three-group layout) ==========
@@ -1217,7 +1213,7 @@
       <div class="text">${escapeHtml(reply.text)}</div>
       ${hasReactions ? renderReactionsRow(reply) : ''}
       <div class="meta">
-        <span>${new Date(reply.created_at || reply.created).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</span>
+        <span>${new Date(reply.created_at).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</span>
         <span class="actions">
           ${!hasReactions && !isFork ? renderReactInline(reply) : ''}
           ${canDelete ? `<span class="del" data-id="${escapeHtml(reply.id)}">delete</span>` : ''}
@@ -1240,7 +1236,7 @@
       <div class="text">${escapeHtml(comment.text)}</div>
       ${hasReactions ? renderReactionsRow(comment) : ''}
       <div class="meta">
-        <span>v${comment.version} · ${new Date(comment.created_at || comment.created).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</span>
+        <span>v${comment.version} · ${new Date(comment.created_at).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</span>
         <span class="actions">
           ${!hasReactions && !isFork ? renderReactInline(comment) : ''}
           ${isFork ? '' : `<span class="tdoc-reply-toggle" data-id="${escapeHtml(comment.id)}">Reply</span>`}
@@ -1611,10 +1607,7 @@
     } else {
       try {
         const r = await fetch(`/v1/comments?slug=${encodeURIComponent(slug)}&version=${version}`);
-        const env = await r.json();
-        // /v1 list envelope: { data: [...], pagination: {...} }. Tolerate a bare
-        // array for resilience against older servers.
-        list = Array.isArray(env) ? env : (env && env.data) || [];
+        list = (await r.json()).data;
       } catch { list = []; }
     }
     state.activeComments = list.filter(c => c.status !== 'resolved');
@@ -1758,7 +1751,7 @@
           go.disabled = false;
           return;
         }
-        const url = (data && data.data && data.data.url) || data.url;
+        const url = data.data.url;
         status.style.display = 'none';
         const result = document.getElementById('tdoc-pub-result');
         result.style.display = 'block';
@@ -2680,7 +2673,7 @@
   }
   function commentToMd(c) {
     const who = c.author ? `**@${c.author.login}**` : '*anonymous*';
-    const when = new Date(c.created_at || c.created).toLocaleString();
+    const when = new Date(c.created_at).toLocaleString();
     let anchorLine = '';
     if (c.anchor) {
       if (c.anchor.kind === 'element' || c.anchor.selector) anchorLine = `> _on ${c.anchor.label || c.anchor.selector}_\n`;
@@ -2690,7 +2683,7 @@
     if (Array.isArray(c.replies) && c.replies.length) {
       for (const r of c.replies) {
         const rwho = r.author ? `**@${r.author.login}**` : '*anonymous*';
-        const rwhen = new Date(r.created_at || r.created).toLocaleString();
+        const rwhen = new Date(r.created_at).toLocaleString();
         md += `  ↳ ${rwho} — _${rwhen}_\n    ${r.text}\n    ${reactionsToMd(r.reactions)}`;
       }
     }

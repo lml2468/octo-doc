@@ -91,11 +91,10 @@ func toVersionListDTO(vl *service.VersionList) versionListDTO {
 	return versionListDTO{Slug: vl.Slug, Title: vl.Title, Versions: refs}
 }
 
-// mutationDTO normalizes a service mutation Body to the wire contract. The body
-// is heterogeneous (core-defined, golden-locked): a *core.CommentSnapshot for
-// create/reanchor, or a map for reply/react/delete. We remap only the snapshot
-// (created → created_at per R3) and the reply map's "created" key; other maps
-// already use compliant keys.
+// mutationDTO normalizes a service mutation Body to the wire contract. Body is
+// always one of two core-defined (golden-locked) shapes: a *core.CommentSnapshot
+// for create/reply/reanchor, which we remap (created → created_at per R3), or a
+// map[string]any for react/delete/wipe, whose keys are already compliant.
 func mutationDTO(body any) any {
 	switch v := body.(type) {
 	case *core.CommentSnapshot:
@@ -103,21 +102,6 @@ func mutationDTO(body any) any {
 			return body
 		}
 		return toCommentDTO(*v)
-	case core.CommentSnapshot:
-		return toCommentDTO(v)
-	case map[string]any:
-		if _, ok := v["created"]; ok {
-			m := make(map[string]any, len(v))
-			for k, val := range v {
-				if k == "created" {
-					m["created_at"] = val
-				} else {
-					m[k] = val
-				}
-			}
-			return m
-		}
-		return v
 	default:
 		return body
 	}

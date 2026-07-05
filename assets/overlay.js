@@ -55,8 +55,18 @@
   //   UI_ALL        — UI_CONTAINERS plus per-element decorations (anchor marks,
   //                   outlines, hover affordances, menus). Use this for event
   //                   delegation guards ("did the user click *our* chrome?").
-  const UI_CONTAINERS = '.tdoc-bar, .tdoc-oldver-strip, .tdoc-popup, .tdoc-margin-comment, .tdoc-modal-bg, #tdoc-comment-layer, .tdoc-footer';
+  const UI_CONTAINERS = '.tdoc-bar, .tdoc-oldver-strip, .tdoc-popup, .tdoc-margin-comment, .tdoc-modal-bg, #tdoc-comment-layer, .tdoc-footer, .tdoc-reanchor-banner';
   const UI_ALL = UI_CONTAINERS + ', .tdoc-anchor-mark, .tdoc-element-outline, .tdoc-hover-outline, .tdoc-comment-pill, .tdoc-emoji-picker, .tdoc-secondary-menu';
+  //   UI_TEXT       — every overlay element that carries its own visible text
+  //                   AND lives outside the article (appended to <body>). Used
+  //                   ONLY to exclude our chrome from the flattened text
+  //                   projection, so saved anchor context never captures UI
+  //                   strings (the FAB's "💬 0", the re-anchor banner, the
+  //                   Comment pill, menus). This is UI_CONTAINERS plus the
+  //                   text-bearing body-level widgets — but NOT .tdoc-anchor-mark,
+  //                   which wraps real document text (surroundContents) and must
+  //                   stay in the projection.
+  const UI_TEXT = UI_CONTAINERS + ', .tdoc-fab, .tdoc-comment-pill, .tdoc-emoji-picker, .tdoc-secondary-menu';
 
   // ========== Geometry helpers ==========
   // Position `box` as an absolutely-positioned overlay around `el`, inflated
@@ -907,7 +917,7 @@
     const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, {
       acceptNode(n) {
         if (!n.parentElement) return NodeFilter.FILTER_REJECT;
-        if (n.parentElement.closest(UI_CONTAINERS)) return NodeFilter.FILTER_REJECT;
+        if (n.parentElement.closest(UI_TEXT)) return NodeFilter.FILTER_REJECT;
         // Skip script/style/template etc — their .textContent is irrelevant.
         const tag = n.parentElement.tagName;
         if (tag === 'SCRIPT' || tag === 'STYLE' || tag === 'TEMPLATE' || tag === 'NOSCRIPT') return NodeFilter.FILTER_REJECT;

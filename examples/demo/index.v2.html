@@ -41,8 +41,11 @@
   .doc pre .tok-str { color: #ffd88a; }
   .doc table { border-collapse: collapse; width: 100%; margin: 8px 0 20px;
     font-size: 15px; }
-  .doc th, .doc td { text-align: left; padding: 10px 14px; border-bottom: 1px solid #ececec; }
-  .doc th { font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; color: #888; }
+  .doc th, .doc td { text-align: left; padding: 11px 14px; border-bottom: 1px solid #e5e5e7; }
+  .doc thead th { font-size: 12px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: 0.04em; color: #888; border-bottom: 1.5px solid #d9d8d3; }
+  .doc tbody tr:last-child td { border-bottom: 0; }
+  .doc tbody tr:hover { background: #f5f6f8; }
   .doc td .yes { color: #1a7340; font-weight: 600; }
   .doc ul.checks { list-style: none; padding: 0; margin: 8px 0 20px; }
   .doc ul.checks li { position: relative; padding-left: 30px; margin: 10px 0; }

@@ -211,10 +211,14 @@
   :where(body pre) { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 14.5px; line-height: 1.6; background: var(--octo-pre-bg); border: 1px solid var(--octo-pre-border); border-radius: var(--octo-radius-lg); padding: 16px 18px; margin: 20px 0; overflow-x: auto; }
   :where(body pre code) { background: transparent; padding: 0; border-radius: 0; }
   :where(body hr) { border: 0; border-top: 1px solid var(--octo-pre-border); margin: 36px 0; }
-  /* Tables: Claude-style rounded cells with white gutters — no rules/borders. */
-  :where(body table) { border-collapse: separate; border-spacing: 3px; margin: 0 0 18px -14px; font-size: 16px; }
-  :where(body th, body td) { padding: 10px 14px; background: var(--octo-code-bg); border-radius: var(--octo-radius-lg); border: 0; text-align: left; }
-  :where(body th) { font-weight: 600; color: var(--octo-ink); }
+  /* Tables: minimal divider style — a hairline under each row, a slightly
+     stronger rule under the header, and a soft hover on body rows. No cell
+     backgrounds or per-cell borders, so it stays clean at any width. */
+  :where(body table) { border-collapse: collapse; width: 100%; margin: 0 0 20px; font-size: 15.5px; }
+  :where(body th, body td) { padding: 11px 14px; text-align: left; border-bottom: 1px solid var(--octo-border); vertical-align: top; }
+  :where(body thead th) { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--octo-muted); border-bottom: 1.5px solid var(--octo-quote-rule); }
+  :where(body tbody tr):last-child :where(td) { border-bottom: 0; }
+  :where(body tbody tr):hover { background: var(--octo-surface-subtle); }
   :where(body figcaption) { font-size: 13px; color: var(--octo-quote-text); margin-top: 6px; text-align: center; }
   /* Task lists: circle checkboxes, Claude Code style. Works for raw
      <input type=checkbox> in lists and markdown-converted .task-list-item. */

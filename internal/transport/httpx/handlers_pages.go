@@ -33,25 +33,60 @@ func (s *Server) handleCatalog(w http.ResponseWriter, r *http.Request) error {
 	return nil
 }
 
+// pageTokens is the shared :root design-token block for the landing and catalog
+// pages. Values mirror DESIGN.md (repo root) and the overlay's own :root block in
+// assets/overlay.js — keep the three in sync. This is what makes the pages read
+// as the same product as the injected doc chrome.
+const pageTokens = `
+  :root {
+    --octo-primary: #1652f0;
+    --octo-primary-hover: #1245d0;
+    --octo-ink: #1a1a1a;
+    --octo-ink-strong: #111;
+    --octo-muted: #888;
+    --octo-surface: #fff;
+    --octo-surface-subtle: #f5f6f8;
+    --octo-border: #e5e5e7;
+    --octo-radius-md: 6px;
+    --octo-radius-lg: 10px;
+  }`
+
+// brandMark is a small CSS-drawn logo tile (rounded blue square with an "o·d"
+// monogram) — token-driven, no raster asset to keep in sync. Shared by the pages.
+const brandMark = `<span class="octo-mark" aria-hidden="true">o<span class="dot">·</span>d</span>`
+
 func landingHTML(repo string) string {
 	repoLabel := strings.TrimPrefix(strings.TrimPrefix(repo, "https://"), "http://")
 	return `<!doctype html><html><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>octo-doc</title>
-<style>
-  body { font: 15px system-ui, -apple-system, sans-serif; min-height: 100vh; margin: 0;
-    display: flex; flex-direction: column; align-items: center; justify-content: center;
-    color: #111; background: #fff; gap: 10px; }
-  h1 { font-size: 30px; margin: 0; color: #1652f0; }
-  p { color: #666; margin: 0; }
-  a { color: #1652f0; text-decoration: none; }
+<style>` + pageTokens + `
+  * { box-sizing: border-box; }
+  body { font: 15px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    min-height: 100vh; margin: 0; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; color: var(--octo-ink);
+    background: var(--octo-surface); padding: 24px; }
+  .card { display: flex; flex-direction: column; align-items: center; gap: 12px;
+    text-align: center; max-width: 420px; }
+  .octo-mark { display: inline-flex; align-items: center; justify-content: center;
+    width: 56px; height: 56px; border-radius: var(--octo-radius-lg);
+    background: var(--octo-primary); color: #fff; font-weight: 700; font-size: 22px;
+    letter-spacing: -0.02em; box-shadow: 0 4px 16px rgba(22,82,240,0.30); }
+  .octo-mark .dot { opacity: 0.7; margin: 0 1px; }
+  h1 { font-size: 30px; font-weight: 700; margin: 4px 0 0; color: var(--octo-ink-strong);
+    letter-spacing: -0.02em; }
+  p { color: var(--octo-muted); margin: 0; font-size: 17px; line-height: 1.5; }
+  .sub { margin-top: 10px; font-size: 13px; color: var(--octo-muted); }
+  a { color: var(--octo-primary); text-decoration: none; font-weight: 500; }
   a:hover { text-decoration: underline; }
-  .sub { margin-top: 14px; font-size: 13px; color: #888; }
 </style></head><body>
-  <h1>octo-doc</h1>
-  <p>Prompt-native, commentable documents. Self-hosted.</p>
-  <p class="sub">Open a document from its shared link &middot;
-    <a href="` + core.EscapeHTML(repo) + `">` + core.EscapeHTML(repoLabel) + `</a></p>
+  <div class="card">
+    ` + brandMark + `
+    <h1>octo-doc</h1>
+    <p>Prompt-native, commentable documents. Self-hosted.</p>
+    <p class="sub">Open a document from its shared link &middot;
+      <a href="` + core.EscapeHTML(repo) + `">` + core.EscapeHTML(repoLabel) + `</a></p>
+  </div>
 </body></html>`
 }
 
@@ -69,20 +104,32 @@ func catalogHTML(session *storage.Session, docs []service.OwnerDoc) string {
 	if len(docs) > 0 {
 		body = `<table><thead><tr><th>Title</th><th>Slug</th><th>Version</th></tr></thead><tbody>` + rows.String() + `</tbody></table>`
 	}
-	return `<!doctype html><html><head><meta charset="utf-8"><title>octo-doc</title>
-<style>
-  body { font: 15px system-ui, -apple-system, sans-serif; max-width: 760px; margin: 60px auto; padding: 0 20px; color: #111; }
-  h1 { font-size: 28px; margin: 0 0 4px; color: #1652f0; }
+	return `<!doctype html><html><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>octo-doc</title>
+<style>` + pageTokens + `
+  * { box-sizing: border-box; }
+  body { font: 15px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    max-width: 760px; margin: 60px auto; padding: 0 20px; color: var(--octo-ink); }
+  .head { display: flex; align-items: center; gap: 12px; margin: 0 0 4px; }
+  .octo-mark { display: inline-flex; align-items: center; justify-content: center;
+    width: 36px; height: 36px; border-radius: var(--octo-radius-md);
+    background: var(--octo-primary); color: #fff; font-weight: 700; font-size: 15px;
+    letter-spacing: -0.02em; flex-shrink: 0; }
+  .octo-mark .dot { opacity: 0.7; margin: 0 1px; }
+  h1 { font-size: 28px; font-weight: 700; margin: 0; color: var(--octo-ink-strong);
+    letter-spacing: -0.02em; }
   table { width: 100%; border-collapse: collapse; }
-  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid #eee; }
-  th { font-size: 12px; text-transform: uppercase; color: #888; letter-spacing: 0.04em; }
-  a { color: #1652f0; text-decoration: none; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--octo-border); }
+  th { font-size: 12px; text-transform: uppercase; color: var(--octo-muted); letter-spacing: 0.04em; }
+  tbody tr:hover { background: var(--octo-surface-subtle); }
+  a { color: var(--octo-primary); text-decoration: none; font-weight: 500; }
   a:hover { text-decoration: underline; }
-  .empty { color: #888; padding: 40px 0; text-align: center; }
-  .who { color: #888; font-size: 13px; margin: 0 0 32px; }
-  .who b { color: #444; font-weight: 600; }
+  .empty { color: var(--octo-muted); padding: 40px 0; text-align: center; }
+  .who { color: var(--octo-muted); font-size: 13px; margin: 0 0 32px; }
+  .who b { color: var(--octo-ink); font-weight: 600; }
 </style></head><body>
-<h1>My docs</h1>
+<div class="head">` + brandMark + `<h1>My docs</h1></div>
 <p class="who">Documents hosted on this server` + who + `.</p>
 ` + body + `
 </body></html>`

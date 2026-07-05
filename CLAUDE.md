@@ -32,7 +32,9 @@ dependency-free leaf and `platform` as cross-cutting support.
 - `internal/transport/httpx/` — chi router, thin handlers, middleware.
 - `internal/storage/` — `MetadataStore` (postgres) + `BlobStore` (s3) interfaces;
   `memory/` is a test fake. No driver type leaks past a store package.
-- `internal/platform/` — `config`, `log` (slog), typed `apperr`, `sluglock`.
+- `internal/config/` — 12-factor config, parsed once (see Config below).
+- `internal/platform/` — cross-cutting support: `log` (slog), typed `apperr`,
+  `sluglock`.
 - `assets/overlay.js` — browser code, embedded via `go:embed`, served verbatim.
 
 ## Gotchas (these are enforced — don't fight them)
@@ -56,9 +58,16 @@ dependency-free leaf and `platform` as cross-cutting support.
 
 12-factor via env (`.env.example`). Parsed once in `internal/config`; no other
 package reads the environment for app settings. Key vars: `DATABASE_URL`,
-`S3_BUCKET`/`S3_ENDPOINT`/`S3_*`, `WRITE_TOKEN`, `PRIVATE`, `GITHUB_CLIENT_ID`.
+`S3_BUCKET`/`S3_ENDPOINT`/`S3_*`, `WRITE_TOKEN` (write auth), `PRIVATE`,
+`ALLOW_BOOTSTRAP`, `REPO_URL`. (GitHub OAuth was removed — no `GITHUB_*` vars.)
 
 ## Entrypoint
 
 `cmd/octo-doc` with subcommands: `serve` (default), `migrate`, `bootstrap`,
 `health`.
+
+## API
+
+Public surface is the versioned `/v1` envelope API conforming to the OCTO spec
+(`/v1/docs`, `/v1/comments`, `/v1/reactions`, `/v1/agent/replies`,
+`/v1/admin/bootstrap`). The legacy `/api/*` routes were removed.

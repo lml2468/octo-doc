@@ -28,6 +28,10 @@ type opJSON struct {
 	Emoji       string                  `json:"emoji"`
 	By          string                  `json:"by"`
 	Version     int                     `json:"version"`
+
+	// publish_merge
+	LocalComments []Comment         `json:"local_comments"`
+	AIDs          []StampedArtifact `json:"aids"`
 }
 
 func toCommentOp(j opJSON) CommentOp {
@@ -39,6 +43,7 @@ func toCommentOp(j opJSON) CommentOp {
 		Kind: j.Kind, At: j.At, ID: j.ID, Author: j.Author, Text: j.Text, Anchor: j.Anchor,
 		ParentID: j.ParentID, ReplyID: j.ReplyID, ResetStatus: j.ResetStatus, Actor: actor,
 		CommentID: j.CommentID, Emoji: j.Emoji, By: j.By, Version: j.Version,
+		LocalComments: j.LocalComments, AIDs: j.AIDs,
 	}
 }
 

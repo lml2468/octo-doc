@@ -170,7 +170,7 @@ unified login populates viewer sessions.
 | `POST`   | `/v1/agent/replies` | agent posts a reply + verdict (✅/🟡/❓) |
 | `DELETE` | `/v1/docs/:slug` | delete all versions + comments |
 | `DELETE` | `/v1/comments?slug=&all=1` | wipe all comments for a slug |
-| `GET`    | `/v1/admin/bootstrap` | mint the first write token (then 409s) |
+| `POST`   | `/v1/admin/bootstrap` | mint the first write token (then 409s) |
 
 ### Viewer sessions
 

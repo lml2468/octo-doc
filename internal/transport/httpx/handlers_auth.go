@@ -1,14 +1,27 @@
 package httpx
 
 import (
+	"context"
 	"net/http"
+	"time"
 )
 
 func (s *Server) handlePing(w http.ResponseWriter, _ *http.Request) {
-	writeData(w, 200, map[string]any{"ok": true, "service": "tdoc"})
+	writeData(w, 200, map[string]any{"ok": true, "service": "octo-doc"})
 }
 
-func (s *Server) handleHealthz(w http.ResponseWriter, _ *http.Request) {
+func (s *Server) handleHealthz(w http.ResponseWriter, r *http.Request) {
+	if s.health != nil {
+		ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
+		defer cancel()
+		if err := s.health(ctx); err != nil {
+			if s.logger != nil {
+				s.logger.Error("healthz check failed", "err", err.Error())
+			}
+			writeData(w, http.StatusServiceUnavailable, map[string]any{"ok": false})
+			return
+		}
+	}
 	writeData(w, 200, map[string]any{"ok": true})
 }
 

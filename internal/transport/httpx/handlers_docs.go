@@ -1,6 +1,8 @@
 package httpx
 
 import (
+	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"strconv"
@@ -23,12 +25,12 @@ type publishBody struct {
 	LocalComments []core.Comment
 }
 
-func (s *Server) readPublishBody(r *http.Request) (publishBody, error) {
+func (s *Server) readPublishBody(w http.ResponseWriter, r *http.Request) (publishBody, error) {
 	ct := strings.ToLower(r.Header.Get("Content-Type"))
 	if strings.Contains(ct, "multipart/form-data") {
 		return s.readMultipart(r)
 	}
-	return s.readJSONPublish(r)
+	return s.readJSONPublish(w, r)
 }
 
 func (s *Server) readMultipart(r *http.Request) (publishBody, error) {
@@ -54,7 +56,7 @@ func (s *Server) readMultipart(r *http.Request) (publishBody, error) {
 	return b, nil
 }
 
-func (s *Server) readJSONPublish(r *http.Request) (publishBody, error) {
+func (s *Server) readJSONPublish(w http.ResponseWriter, r *http.Request) (publishBody, error) {
 	var raw struct {
 		Slug    string `json:"slug"`
 		HTML    string `json:"html"`
@@ -65,7 +67,20 @@ func (s *Server) readJSONPublish(r *http.Request) (publishBody, error) {
 		} `json:"meta"`
 		Comments []core.Comment `json:"comments"`
 	}
-	_ = decodeJSON(r, &raw)
+	if r.Body != nil {
+		// Publish bodies carry the document HTML, so cap at the HTML limit plus JSON
+		// framing headroom rather than the small default JSON cap. The service layer
+		// still enforces MAX_HTML_BYTES on the decoded HTML field itself.
+		r.Body = http.MaxBytesReader(w, r.Body, s.cfg.MaxHTMLBytes+1<<20)
+		if err := json.NewDecoder(r.Body).Decode(&raw); err != nil {
+			var mbe *http.MaxBytesError
+			if errors.As(err, &mbe) {
+				return publishBody{}, apperr.PayloadTooLarge("request body too large", "body_too_large")
+			}
+			// Other decode errors fall through: a missing/invalid body surfaces as the
+			// service-layer "html required" 400, preserving prior tolerance.
+		}
+	}
 	// The CLI sends the doc's meta.json under `meta` (the documented contract:
 	// {slug, version, html, meta, comments}). Honor meta.title, but let an
 	// explicit top-level `title` win if both are present.
@@ -79,7 +94,7 @@ func (s *Server) readJSONPublish(r *http.Request) (publishBody, error) {
 }
 
 func (s *Server) handlePublish(w http.ResponseWriter, r *http.Request) error {
-	body, err := s.readPublishBody(r)
+	body, err := s.readPublishBody(w, r)
 	if err != nil {
 		return err
 	}

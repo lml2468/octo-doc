@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"log/slog"
+	"maps"
 	"net/http"
 	"strconv"
 
@@ -85,7 +86,7 @@ func errorEnum(status int) string {
 		return "UNSUPPORTED_MEDIA_TYPE"
 	case http.StatusTooManyRequests:
 		return "RATE_LIMITED"
-	case http.StatusServiceUnavailable:
+	case http.StatusBadGateway, http.StatusServiceUnavailable:
 		return "UPSTREAM_UNAVAILABLE"
 	default:
 		return "INTERNAL_ERROR"
@@ -113,9 +114,7 @@ func writeErr(w http.ResponseWriter, logger *slog.Logger, err error) {
 	}
 
 	details := map[string]any{}
-	for k, v := range ae.Details {
-		details[k] = v
-	}
+	maps.Copy(details, ae.Details)
 	// Preserve the fine-grained internal code for debugging unless the caller
 	// already set one explicitly.
 	if ae.Code != "" {

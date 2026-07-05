@@ -5,6 +5,7 @@ package config
 
 import (
 	"fmt"
+	"math"
 	"os"
 	"regexp"
 	"strconv"
@@ -34,6 +35,13 @@ type Config struct {
 	Private        bool
 	Owner          string
 	FrameAncestors string
+	// TrustProxyHeaders enables honoring X-Forwarded-For / X-Real-IP for the client
+	// IP (rate limiting). Enable ONLY when the server sits behind a trusted reverse
+	// proxy that sets these; otherwise a client can spoof them to evade limits.
+	TrustProxyHeaders bool
+	// CORSOrigins is the allowlist of origins permitted on mutating /v1 routes. Empty
+	// means no Access-Control-Allow-Origin is sent on writes (same-origin only).
+	CORSOrigins []string
 
 	RateLimitWindow time.Duration
 	RateLimitMax    int
@@ -70,6 +78,9 @@ func Load() (*Config, error) {
 		Owner:          strings.TrimSpace(env("OWNER", "")),
 		FrameAncestors: strings.TrimSpace(env("FRAME_ANCESTORS", "'none'")),
 
+		TrustProxyHeaders: envBool("TRUST_PROXY_HEADERS", false),
+		CORSOrigins:       splitList(env("CORS_ORIGINS", "")),
+
 		RateLimitWindow: time.Duration(envInt("RATE_LIMIT_WINDOW_MS", 60_000)) * time.Millisecond,
 		RateLimitMax:    envInt("RATE_LIMIT_MAX", 60),
 		MaxHTMLBytes:    int64(envInt("MAX_HTML_BYTES", 5*1024*1024)),
@@ -96,6 +107,18 @@ func env(key, dflt string) string {
 		return v
 	}
 	return dflt
+}
+
+// splitList parses a comma-separated env value into a trimmed, non-empty slice.
+// An empty or all-whitespace input yields a nil slice (the loop skips empties).
+func splitList(v string) []string {
+	var out []string
+	for part := range strings.SplitSeq(v, ",") {
+		if p := strings.TrimSpace(part); p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
 }
 
 func envInt(key string, dflt int) int {
@@ -125,6 +148,24 @@ func (c *Config) Validate() error {
 	}
 	if c.S3Bucket == "" {
 		problems = append(problems, "S3_BUCKET is required")
+	}
+	if c.Port <= 0 || c.Port > 65535 {
+		problems = append(problems, fmt.Sprintf("PORT must be 1..65535, got %d", c.Port))
+	}
+	if c.PGPoolMax <= 0 || c.PGPoolMax > math.MaxInt32 {
+		problems = append(problems, fmt.Sprintf("PG_POOL_MAX must be 1..%d, got %d", math.MaxInt32, c.PGPoolMax))
+	}
+	if c.RateLimitMax < 0 {
+		problems = append(problems, fmt.Sprintf("RATE_LIMIT_MAX must be >= 0, got %d", c.RateLimitMax))
+	}
+	if c.MaxHTMLBytes <= 0 {
+		problems = append(problems, fmt.Sprintf("MAX_HTML_BYTES must be positive, got %d", c.MaxHTMLBytes))
+	}
+	// A custom S3 endpoint (MinIO/R2) has no ambient credential chain, so static
+	// creds are required; on AWS the default chain may supply them, so only warn by
+	// requiring them when an endpoint is set.
+	if c.S3Endpoint != "" && (c.S3AccessKeyID == "" || c.S3SecretKey == "") {
+		problems = append(problems, "S3_ACCESS_KEY_ID and S3_SECRET_ACCESS_KEY are required when S3_ENDPOINT is set")
 	}
 	if len(problems) > 0 {
 		return fmt.Errorf("invalid configuration:\n  - %s", strings.Join(problems, "\n  - "))

@@ -17,7 +17,7 @@ func (s *Server) handleAgentReply(w http.ResponseWriter, r *http.Request) error 
 		Status    string `json:"status"`
 		AppliedIn int    `json:"applied_in"`
 	}
-	_ = decodeJSON(r, &body)
+	_ = decodeJSON(w, r, &body)
 	slug, err := requireSlug(body.Slug)
 	if err != nil {
 		return err

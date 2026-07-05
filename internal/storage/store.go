@@ -69,6 +69,9 @@ type MetadataStore interface {
 	PutToken(ctx context.Context, token string, rec TokenRecord) error
 	AnyToken(ctx context.Context) (bool, error)
 
+	// Health verifies the backend is reachable (readiness probe).
+	Health(ctx context.Context) error
+
 	Close() error
 }
 
@@ -81,6 +84,8 @@ type BlobStore interface {
 	// ListVersions returns the versions present for a slug, ascending.
 	ListVersions(ctx context.Context, slug string) ([]int, error)
 	DeleteDoc(ctx context.Context, slug string) error
+	// Health verifies the backend is reachable (readiness probe).
+	Health(ctx context.Context) error
 }
 
 // HashSlug hashes a slug to a fixed-length hex key safe as a path/prefix segment.

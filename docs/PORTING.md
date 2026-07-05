@@ -27,7 +27,7 @@ golden set is a one-time parity baseline, permanently enforced in CI. To
 regenerate them you need the archived TypeScript reference (kept outside this
 repo); the generator script was removed when the TS source was deleted.
 
-## The three traps
+## The four traps
 
 These are the places where a naive Go translation would silently diverge. Each
 has a dedicated golden case.
@@ -62,8 +62,30 @@ content is therefore identical bytes and hashes identically. The only place
 UTF-16 length still matters is the 80-unit `head` excerpt, handled by
 `utf16Slice`.
 
+### 4. `\s` is ASCII in RE2, Unicode in JavaScript
+
+JavaScript's regex `\s` matches the full Unicode whitespace set (vertical tab
+`\v`/U+000B, no-break space U+00A0, ideographic space U+3000, the U+2000–200A
+range, U+2028/U+2029, U+FEFF, …). Go's RE2 `\s` is **ASCII-only** (`[\t\n\f\r ]`).
+`stamp.go` normalizes an artifact's innerHTML with a whitespace-collapse before
+hashing it into the `data-tdoc-aid`; a bare `\s+` would collapse ASCII runs but
+leave a U+3000 or U+00A0 intact, producing a different normalized string — and a
+different aid — than upstream for any document containing non-ASCII whitespace
+(common in CJK source or pasted content). The port defines an explicit
+JS-equivalent class (`jsSpace`/`wsClass` in `stamp.go`) and uses it in every
+whitespace regex; `trimJSSpace` replaces `strings.TrimSpace` (whose
+`unicode.IsSpace` set also differs: it includes U+0085 NEL, which JS `.trim()`
+does not, and historically excluded U+FEFF). Golden case: `stamp/unicode-ws`.
+
 ## Deliberate divergences
 
+- **`SafeJSONForScript` restores U+2028/U+2029.** Go's `encoding/json` always
+  escapes the line/paragraph separators to ` `/` ` even with
+  `SetEscapeHTML(false)`, whereas JS `JSON.stringify` emits them raw. The overlay
+  config is injected as a JSON literal inside `<script>window.__TDOC__ = …`, so to
+  keep those bytes identical to upstream the port un-escapes them back to the raw
+  code points after marshaling. (Safe here: they are hazardous only in a *bare* JS
+  string literal, not in a JSON value inside a script element.)
 - **`EventEID` for one-shot events.** Upstream used `Math.random()`; the Go port
   uses an atomic counter + high-resolution time. This only affects the uniqueness
   suffix of non-idempotent event ids, never the fold result (`DedupEvents` keys on

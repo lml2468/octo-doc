@@ -51,12 +51,17 @@ func (s *CommentService) Read(ctx context.Context, slug string) ([]core.Comment,
 }
 
 func (s *CommentService) read(ctx context.Context, slug string) ([]core.Comment, error) {
-	list, err := s.meta.GetComments(ctx, slug)
-	if err != nil {
-		return nil, err
-	}
-	core.EnsureMigrated(list)
-	return list, nil
+	var list []core.Comment
+	err := s.lock.With(ctx, slug, func() error {
+		l, lerr := s.meta.GetComments(ctx, slug)
+		if lerr != nil {
+			return lerr
+		}
+		core.EnsureMigrated(l)
+		list = l
+		return nil
+	})
+	return list, err
 }
 
 // Create adds a top-level comment.
@@ -105,12 +110,24 @@ func (s *CommentService) AppendRaw(ctx context.Context, slug, id string, events 
 
 // Wipe removes all comments for a slug.
 func (s *CommentService) Wipe(ctx context.Context, slug string) (MutationResult, error) {
-	return s.mutate(ctx, slug, core.CommentOp{Kind: "wipe", At: nowISO()})
+	return s.mutate(ctx, slug, wipeOp())
 }
 
-// PublishMerge performs the publish-time non-destructive merge + anchor reconcile.
-func (s *CommentService) PublishMerge(ctx context.Context, slug string, local []core.Comment, aids []core.StampedArtifact, version int) (MutationResult, error) {
-	return s.mutate(ctx, slug, core.CommentOp{
+// WipeLocked is Wipe for a caller that ALREADY holds the per-slug lock (e.g.
+// DocService.Remove, which serializes the whole delete under one lock). It must
+// not re-acquire the lock — sluglock.Memory is not reentrant.
+func (s *CommentService) WipeLocked(ctx context.Context, slug string) (MutationResult, error) {
+	return s.applyOp(ctx, slug, wipeOp())
+}
+
+func wipeOp() core.CommentOp { return core.CommentOp{Kind: "wipe", At: nowISO()} }
+
+// PublishMergeLocked performs the publish-time non-destructive merge + anchor
+// reconcile for a caller that ALREADY holds the per-slug lock (DocService.Publish
+// serializes the whole publish sequence under one lock). It must not re-acquire
+// the lock — sluglock.Memory is not reentrant, so doing so would self-deadlock.
+func (s *CommentService) PublishMergeLocked(ctx context.Context, slug string, local []core.Comment, aids []core.StampedArtifact, version int) (MutationResult, error) {
+	return s.applyOp(ctx, slug, core.CommentOp{
 		Kind: "publish_merge", LocalComments: local, AIDs: aids, Version: version, At: nowISO(),
 	})
 }
@@ -119,22 +136,29 @@ func (s *CommentService) PublishMerge(ctx context.Context, slug string, local []
 func (s *CommentService) mutate(ctx context.Context, slug string, op core.CommentOp) (MutationResult, error) {
 	var res MutationResult
 	err := s.lock.With(ctx, slug, func() error {
-		list, lerr := s.meta.GetComments(ctx, slug)
-		if lerr != nil {
-			return lerr
-		}
-		newList, opRes := core.ApplyCommentOp(list, op)
-		if opRes.Status == 200 {
-			if opRes.Wipe {
-				if derr := s.meta.DeleteComments(ctx, slug); derr != nil {
-					return derr
-				}
-			} else if perr := s.meta.PutComments(ctx, slug, newList); perr != nil {
-				return perr
-			}
-		}
-		res = MutationResult{Status: opRes.Status, Body: opRes.Body}
-		return nil
+		r, aerr := s.applyOp(ctx, slug, op)
+		res = r
+		return aerr
 	})
 	return res, err
+}
+
+// applyOp performs one comment op's read→apply→write WITHOUT taking the lock. The
+// caller must hold the per-slug lock (via mutate or an outer DocService lock).
+func (s *CommentService) applyOp(ctx context.Context, slug string, op core.CommentOp) (MutationResult, error) {
+	list, lerr := s.meta.GetComments(ctx, slug)
+	if lerr != nil {
+		return MutationResult{}, lerr
+	}
+	newList, opRes := core.ApplyCommentOp(list, op)
+	if opRes.Status == 200 {
+		if opRes.Wipe {
+			if derr := s.meta.DeleteComments(ctx, slug); derr != nil {
+				return MutationResult{}, derr
+			}
+		} else if perr := s.meta.PutComments(ctx, slug, newList); perr != nil {
+			return MutationResult{}, perr
+		}
+	}
+	return MutationResult{Status: opRes.Status, Body: opRes.Body}, nil
 }

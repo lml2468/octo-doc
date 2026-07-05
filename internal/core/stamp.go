@@ -48,19 +48,50 @@ type StampResult struct {
 	AIDs []StampedArtifact
 }
 
+// jsSpace is the character-class body matching JavaScript's \s (ECMAScript
+// WhiteSpace + LineTerminator). Go's RE2 \s is ASCII-only ([\t\n\f\r ]) — it
+// omits vertical tab and every Unicode space (U+00A0 nbsp, U+3000 ideographic,
+// U+2028/U+2029 line/paragraph separators, …). Using bare \s would collapse
+// whitespace differently from the upstream TS, changing the normalized string
+// fed to Cyrb53 and thus the data-tdoc-aid — breaking byte-equivalence on any
+// document containing non-ASCII whitespace. See docs/PORTING.md (trap 4).
+const jsSpace = `\t\n\v\f\r \x{00a0}\x{1680}\x{2000}-\x{200a}\x{2028}\x{2029}\x{202f}\x{205f}\x{3000}\x{feff}`
+
+// wsClass is jsSpace as a bracketed regex character class; use wsClass+"*" /
+// wsClass+"+" wherever the TS source used \s* / \s+.
+const wsClass = `[` + jsSpace + `]`
+
 var (
-	dataTdocAttrRe  = regexp.MustCompile(`\sdata-tdoc-[\w-]+\s*=\s*"[^"]*"`)
-	dataTdocAidRe   = regexp.MustCompile(`\s+data-tdoc-aid\s*=\s*"[^"]*"`)
-	dataTdocAidRe2  = regexp.MustCompile(`\sdata-tdoc-aid\s*=\s*"[^"]*"`)
+	dataTdocAttrRe  = regexp.MustCompile(wsClass + `data-tdoc-[\w-]+` + wsClass + `*=` + wsClass + `*"[^"]*"`)
+	dataTdocAidRe   = regexp.MustCompile(wsClass + `+data-tdoc-aid` + wsClass + `*=` + wsClass + `*"[^"]*"`)
+	dataTdocAidRe2  = regexp.MustCompile(wsClass + `data-tdoc-aid` + wsClass + `*=` + wsClass + `*"[^"]*"`)
 	htmlCommentRe   = regexp.MustCompile(`(?s)<!--.*?-->`)
-	whitespaceRunRe = regexp.MustCompile(`\s+`)
+	whitespaceRunRe = regexp.MustCompile(wsClass + `+`)
 	tagStripRe      = regexp.MustCompile(`<[^>]+>`)
-	selfCloseEndRe  = regexp.MustCompile(`/\s*$`)
+	selfCloseEndRe  = regexp.MustCompile(`/` + wsClass + `*$`)
 	voidTagRe       = regexp.MustCompile(`(?i)^(img|iframe)$`)
 	optInArtifactRe = regexp.MustCompile(`(?i)\bdata-tdoc-artifact\b`)
-	optInClassRe    = regexp.MustCompile(`(?i)class\s*=\s*"[^"]*\btdoc-artifact\b[^"]*"`)
+	optInClassRe    = regexp.MustCompile(`(?i)class` + wsClass + `*=` + wsClass + `*"[^"]*\btdoc-artifact\b[^"]*"`)
 	probeTagRe      = regexp.MustCompile(`(?i)<([a-z][\w-]*)\b`)
 )
+
+// isJSSpace reports whether r is whitespace per JavaScript's String.prototype
+// .trim() (same set as jsSpace). It intentionally differs from unicode.IsSpace,
+// which includes U+0085 (NEL, not JS whitespace) and excludes U+FEFF.
+func isJSSpace(r rune) bool {
+	switch r {
+	case '\t', '\n', '\v', '\f', '\r', ' ',
+		0x00a0, 0x1680, 0x2028, 0x2029, 0x202f, 0x205f, 0x3000, 0xfeff:
+		return true
+	}
+	return r >= 0x2000 && r <= 0x200a
+}
+
+// trimJSSpace trims leading/trailing whitespace using JS .trim() semantics,
+// replacing strings.TrimSpace so aid hashing stays byte-equivalent with upstream.
+func trimJSSpace(s string) string {
+	return strings.TrimFunc(s, isJSSpace)
+}
 
 // aidFor computes the content-hash aid for one artifact element.
 func aidFor(tag, innerHTML, openAttrs string) string {
@@ -75,7 +106,7 @@ func aidFor(tag, innerHTML, openAttrs string) string {
 	norm := htmlCommentRe.ReplaceAllString(innerHTML, "")
 	norm = dataTdocAttrRe.ReplaceAllString(norm, "")
 	norm = whitespaceRunRe.ReplaceAllString(norm, " ")
-	norm = strings.TrimSpace(norm)
+	norm = trimJSSpace(norm)
 	return Cyrb53(tag+"|"+intrinsics+"|"+norm, 0)
 }
 
@@ -145,7 +176,7 @@ func collectHeadings(html string) []heading {
 			inner := html[contentStart:contentEnd]
 			text := tagStripRe.ReplaceAllString(inner, "")
 			text = whitespaceRunRe.ReplaceAllString(text, " ")
-			text = strings.TrimSpace(text)
+			text = trimJSSpace(text)
 			out = append(out, heading{end: end, text: text})
 			idx = end
 		}

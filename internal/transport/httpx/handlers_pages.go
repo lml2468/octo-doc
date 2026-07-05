@@ -44,11 +44,15 @@ const pageTokens = `
     --octo-ink: #1a1a1a;
     --octo-ink-strong: #111;
     --octo-muted: #888;
+    --octo-muted-2: #666;
     --octo-surface: #fff;
     --octo-surface-subtle: #f5f6f8;
     --octo-border: #e5e5e7;
+    --octo-hairline: #eee;
     --octo-radius-md: 6px;
     --octo-radius-lg: 10px;
+    --octo-shadow-fab: 0 4px 16px rgba(22,82,240,0.30);
+    --octo-shadow-card: 0 2px 8px rgba(0,0,0,0.05);
   }`
 
 // brandMark is a small CSS-drawn logo tile (rounded blue square with an "o·d"

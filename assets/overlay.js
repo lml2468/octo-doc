@@ -484,28 +484,40 @@
      Positioned just outside the artifact's right edge so it can't obscure
      content. Uses !important on the visible colors to defend against doc-side
      button:hover rules that would otherwise repaint our background. */
+  /* Hover "Comment" pill. It floats over arbitrary user HTML, so every box
+     property is reset with !important — otherwise the document's own rules (e.g.
+     an "svg { margin: 16px; display: block }" doc template) leak in and inflate
+     it. Compact, icon-forward, with a soft tinted shadow. */
   .tdoc-comment-pill {
     position: absolute !important; z-index: 999998 !important;
-    background: var(--octo-primary) !important; color: var(--octo-surface) !important;
-    font: 600 11px system-ui !important;
-    padding: 4px 10px !important;
+    box-sizing: border-box !important; height: auto !important; width: auto !important;
+    min-width: 0 !important; min-height: 0 !important; max-width: none !important;
+    margin: 0 !important;
+    background: var(--octo-primary) !important; color: #fff !important;
+    font: 600 12px/1 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif !important;
+    letter-spacing: 0.01em !important;
+    padding: 6px 11px 6px 9px !important;
     border: none !important; border-radius: var(--octo-radius-pill) !important;
     cursor: pointer !important;
-    box-shadow: 0 2px 8px rgba(22,82,240,0.38) !important;
-    display: inline-flex !important; align-items: center !important; gap: 4px !important;
-    transition: transform .12s, background-color .12s, box-shadow .12s, opacity .12s !important;
-    line-height: 1 !important;
-    text-decoration: none !important;
-    opacity: 0.92 !important; visibility: visible !important;
+    box-shadow: 0 2px 8px rgba(22,82,240,0.32), 0 1px 2px rgba(0,0,0,0.12) !important;
+    display: inline-flex !important; align-items: center !important; gap: 5px !important;
+    transition: transform .12s ease, background-color .12s, box-shadow .12s, opacity .12s !important;
+    text-decoration: none !important; white-space: nowrap !important;
+    opacity: 1 !important; visibility: visible !important;
+    -webkit-appearance: none !important; appearance: none !important;
   }
   .tdoc-comment-pill:hover {
-    background: var(--octo-primary-hover) !important; color: var(--octo-surface) !important;
-    opacity: 1 !important;
+    background: var(--octo-primary-hover) !important; color: #fff !important;
     transform: translateY(-1px) !important;
-    box-shadow: 0 4px 12px rgba(22,82,240,0.50) !important;
+    box-shadow: 0 4px 14px rgba(22,82,240,0.42), 0 1px 2px rgba(0,0,0,0.14) !important;
   }
-  .tdoc-comment-pill:active { background: #0f3bb0 !important; transform: translateY(0) !important; }
-  .tdoc-comment-pill svg { width: 12px !important; height: 12px !important; flex-shrink: 0 !important; stroke: var(--octo-surface) !important; }
+  .tdoc-comment-pill:active { transform: translateY(0) scale(0.97) !important; }
+  .tdoc-comment-pill svg {
+    width: 13px !important; height: 13px !important; flex: 0 0 13px !important;
+    margin: 0 !important; padding: 0 !important; display: block !important;
+    vertical-align: middle !important; stroke: #fff !important; fill: none !important;
+    max-width: none !important; box-shadow: none !important;
+  }
   .tdoc-drag-marquee { position: absolute; pointer-events: none; z-index: 999997; border: 1.5px solid var(--octo-primary); background: rgba(22,82,240,0.1); box-sizing: border-box; }
 
   /* Popup (new-comment) */
@@ -2535,11 +2547,13 @@
     commentPill.type = 'button';
     commentPill.setAttribute('aria-label', 'Comment on this');
     commentPill.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>Comment`;
-    // Top-right corner of the SECTION, so it visually belongs to the whole
-    // artifact regardless of where inside it the cursor is.
-    const pillW = 110;
-    commentPill.style.top = (window.scrollY + r.top + 8) + 'px';
-    commentPill.style.left = (window.scrollX + Math.max(r.left + 8, r.right - pillW - 8)) + 'px';
+    // Float on the element's top-right EDGE — vertically centered on the top
+    // border so the pill reads as attached to the whole element without covering
+    // its content. Compact (~96px); clamp so it never runs off a narrow element's
+    // left. Nudged 4px right so it overhangs the corner cleanly.
+    const pillW = 96;
+    commentPill.style.top = (window.scrollY + r.top - 13) + 'px';
+    commentPill.style.left = (window.scrollX + Math.max(r.left + 8, r.right - pillW + 4)) + 'px';
     commentPill.onclick = (e) => {
       e.stopPropagation();
       e.preventDefault();

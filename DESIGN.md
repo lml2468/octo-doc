@@ -10,14 +10,36 @@ colors:
   primaryHover: "#1245d0"
   ink: "#1a1a1a"
   inkStrong: "#111111"
+  ink2: "#444444"
   muted: "#888888"
+  muted2: "#666666"
+  faint: "#aaaaaa"
+  barText: "#555555"
   surface: "#ffffff"
   surfaceSubtle: "#f5f6f8"
+  surfaceHover: "#e5e6ea"
   border: "#e5e5e7"
+  hairline: "#eeeeee"
+  inkPanel: "#0a0a0a"
+  codeBg: "#f0f0ee"
+  preBg: "#f7f7f5"
+  preBorder: "#e8e7e3"
+  quoteRule: "#d9d8d3"
+  quoteText: "#6b6a66"
   highlight: "#fff7d0"
   highlightActive: "#ffd84d"
   danger: "#cc3333"
   accent: "#3ecf8e"
+  okBg: "#e8f5ed"
+  okFg: "#1a7340"
+  warnBg: "#fff4dc"
+  warnFg: "#8a5a00"
+  askBg: "#ffe7e7"
+  askFg: "#a52323"
+  mineBg: "#e8eeff"
+  agentBg: "#f3eaff"
+  agentBorder: "#c3a8f0"
+  agentFg: "#5a2da8"
 typography:
   h1:
     fontFamily: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif
@@ -51,6 +73,7 @@ rounded:
   sm: "4px"
   md: "6px"
   lg: "10px"
+  xl: "12px"
   pill: "999px"
 spacing:
   xs: "6px"
@@ -181,6 +204,11 @@ stacked in a z-tower of cards.
 Z-index is layered high and deliberately (toolbar `999999`, FAB `999997`) so the
 overlay always sits above arbitrary document stacking contexts.
 
+The elevation scale is codified as tokens in `assets/overlay.js` (`--octo-shadow-*`):
+`sm` (toolbar hairline lift), `card` (comment cards), `menu` (dropdowns/pickers),
+`pop` (dark composer popup), `fab` (the one pronounced tinted float), and `active`
+(the blue-tinted lift on a focused card/anchor). Use a token, not a raw `rgba()`.
+
 ## Shapes
 
 A small, consistent radius set:
@@ -188,6 +216,7 @@ A small, consistent radius set:
 - **sm** `4px` — inset chips and small inputs.
 - **md** `6px` — the default for buttons, menus, and modal panels.
 - **lg** `10px` — larger surfaces (popovers, the comment composer).
+- **xl** `12px` — the sign-in / publish / share modal panel.
 - **pill** `999px` — the FAB and comment pills, which are fully rounded to read as
   distinct floating affordances rather than part of the boxy chrome. Circular
   avatars use `50%`.

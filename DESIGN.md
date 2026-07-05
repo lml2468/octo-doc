@@ -205,9 +205,12 @@ Z-index is layered high and deliberately (toolbar `999999`, FAB `999997`) so the
 overlay always sits above arbitrary document stacking contexts.
 
 The elevation scale is codified as tokens in `assets/overlay.js` (`--octo-shadow-*`):
-`sm` (toolbar hairline lift), `card` (comment cards), `menu` (dropdowns/pickers),
-`pop` (dark composer popup), `fab` (the one pronounced tinted float), and `active`
+`sm` (toolbar hairline lift), `card` (comment cards), `menu` (dropdowns, pickers,
+the new-comment popup), `fab` (the one pronounced tinted float), and `active`
 (the blue-tinted lift on a focused card/anchor). Use a token, not a raw `rgba()`.
+Text inputs (the comment composer + reply box) get `--octo-focus-ring` on `:focus`
+— a soft blue halo that, with the border shifting to `primary`, is the single
+consistent focus affordance.
 
 ## Shapes
 

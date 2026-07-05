@@ -137,6 +137,7 @@
     --octo-shadow-pop: 0 12px 40px rgba(0,0,0,0.4);
     --octo-shadow-fab: 0 4px 16px rgba(22,82,240,0.35);
     --octo-shadow-active: 0 4px 16px rgba(22,82,240,0.18);
+    --octo-focus-ring: 0 0 0 3px rgba(22,82,240,0.15);
   }
   /* Layout */
   /* Default: text is selectable everywhere in the document body, so users
@@ -376,7 +377,7 @@
      The status chip on agent replies (applied / partial / question) lets
      the user tell at a glance whether their comment was addressed. */
   .tdoc-agent-badge { display: inline-flex; width: 24px; height: 24px; border-radius: 50%; background: var(--octo-ink-strong); color: var(--octo-surface); align-items: center; justify-content: center; font-size: 13px; }
-  .tdoc-agent-reply { background: #fafafb; border-left: 3px solid var(--octo-ink-strong); padding-left: 8px; }
+  .tdoc-agent-reply { background: var(--octo-surface-subtle); border-left: 3px solid var(--octo-ink-strong); padding-left: 8px; }
   .tdoc-agent-status { display: inline-block; font-size: 11px; padding: 1px 8px; border-radius: var(--octo-radius-pill); margin: 0 0 6px; font-weight: 600; }
   .tdoc-agent-status-applied { background: var(--octo-ok-bg); color: var(--octo-ok-fg); }
   .tdoc-agent-status-partial { background: var(--octo-warn-bg); color: var(--octo-warn-fg); }
@@ -386,12 +387,12 @@
   .tdoc-margin-comment .meta > span:first-child { flex: 1 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .tdoc-margin-comment .del { cursor: pointer; color: var(--octo-danger); }
   .tdoc-margin-comment .del:hover { text-decoration: underline; }
-  .tdoc-margin-comment .actions { display: inline-flex; gap: 8px; align-items: center; flex-shrink: 0; }
-  .tdoc-margin-comment .copy-md { cursor: pointer; color: var(--octo-muted); display: inline-flex; align-items: center; }
-  .tdoc-margin-comment .copy-md:hover { color: var(--octo-primary); }
+  .tdoc-margin-comment .actions { display: inline-flex; gap: 2px; align-items: center; flex-shrink: 0; }
+  .tdoc-margin-comment .copy-md { cursor: pointer; color: var(--octo-muted); display: inline-flex; align-items: center; padding: 3px; border-radius: var(--octo-radius-sm); transition: background .12s, color .12s; }
+  .tdoc-margin-comment .copy-md:hover { color: var(--octo-primary); background: var(--octo-surface-subtle); }
   .tdoc-margin-comment .copy-md svg { width: 14px; height: 14px; display: block; }
-  .tdoc-margin-comment .tdoc-reply-toggle { cursor: pointer; color: var(--octo-primary); }
-  .tdoc-margin-comment .tdoc-reply-toggle:hover { text-decoration: underline; }
+  .tdoc-margin-comment .tdoc-reply-toggle { cursor: pointer; color: var(--octo-primary); font-weight: 500; padding: 2px 7px; border-radius: var(--octo-radius-sm); transition: background .12s; }
+  .tdoc-margin-comment .tdoc-reply-toggle:hover { background: var(--octo-surface-subtle); }
 
   /* Reactions + emoji picker */
   .tdoc-reactions { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; align-items: center; }
@@ -421,13 +422,13 @@
     pointer-events: none;
     z-index: 999999;
   }
-  .tdoc-react-add { background: transparent; border: none; color: var(--octo-faint); padding: 0; cursor: pointer; line-height: 1; transition: color .12s, opacity .12s; display: inline-flex; align-items: center; }
+  .tdoc-react-add { background: transparent; border: none; color: var(--octo-faint); padding: 3px; border-radius: var(--octo-radius-sm); cursor: pointer; line-height: 1; transition: color .12s, opacity .12s, background .12s; display: inline-flex; align-items: center; }
   .tdoc-react-add svg { width: 16px; height: 16px; display: block; }
-  .tdoc-reactions .tdoc-react-add { opacity: 0; padding: 2px 4px; }
+  .tdoc-reactions .tdoc-react-add { opacity: 0; }
   .tdoc-margin-comment:hover .tdoc-reactions .tdoc-react-add, .tdoc-reply:hover .tdoc-reactions .tdoc-react-add, .tdoc-reactions:has(.tdoc-react-chip) .tdoc-react-add { opacity: 1; }
   .tdoc-react-add.inline svg { width: 14px; height: 14px; }
   .tdoc-react-add.inline { opacity: 0.55; vertical-align: middle; }
-  .tdoc-react-add:hover { color: var(--octo-primary); opacity: 1; }
+  .tdoc-react-add:hover { color: var(--octo-primary); opacity: 1; background: var(--octo-surface-subtle); }
   .tdoc-emoji-picker { position: absolute; background: var(--octo-surface); border: 1px solid var(--octo-border); border-radius: var(--octo-radius-lg); padding: 6px; display: grid; grid-template-columns: repeat(6, 32px); gap: 2px; box-shadow: var(--octo-shadow-menu); z-index: 1000001; }
   .tdoc-emoji-picker button { background: transparent; border: none; padding: 0; cursor: pointer; border-radius: var(--octo-radius-sm); width: 32px; height: 32px; font-size: 18px; line-height: 1; display: inline-flex; align-items: center; justify-content: center; }
   .tdoc-emoji-picker button:hover { background: var(--octo-surface-subtle); }
@@ -446,18 +447,19 @@
   .tdoc-reply .author img { width: 18px; height: 18px; border-radius: 50%; }
   .tdoc-reply .author .login { font-weight: 600; font-size: 12px; color: var(--octo-ink-strong); }
   .tdoc-reply .author .anon { color: var(--octo-muted); font-style: italic; font-size: 12px; }
-  .tdoc-reply .text { color: #222; font-size: 13px; line-height: 1.4; word-wrap: break-word; }
+  .tdoc-reply .text { color: var(--octo-ink); font-size: 13px; line-height: 1.4; word-wrap: break-word; }
   .tdoc-reply .meta { font-size: 11px; color: var(--octo-muted); margin-top: 4px; display: flex; justify-content: space-between; }
   .tdoc-reply .del { cursor: pointer; color: var(--octo-danger); }
   .tdoc-reply .del:hover { text-decoration: underline; }
   .tdoc-reply-form { display: none; margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--octo-hairline); }
   .tdoc-reply-form.open { display: block; }
-  .tdoc-reply-form textarea { width: 100%; min-height: 48px; box-sizing: border-box; padding: 6px 8px; font: 13px system-ui; border: 1px solid #ccc; border-radius: var(--octo-radius-md); resize: vertical; outline: none; }
-  .tdoc-reply-form textarea:focus { border-color: var(--octo-primary); }
-  .tdoc-reply-form-foot { display: flex; justify-content: space-between; align-items: center; margin-top: 6px; }
+  .tdoc-reply-form textarea { width: 100%; min-height: 48px; box-sizing: border-box; padding: 8px 10px; font: 13px system-ui; line-height: 1.45; color: var(--octo-ink); border: 1px solid var(--octo-border); border-radius: var(--octo-radius-md); resize: vertical; outline: none; transition: border-color .12s, box-shadow .12s; }
+  .tdoc-reply-form textarea::placeholder { color: var(--octo-muted); }
+  .tdoc-reply-form textarea:focus { border-color: var(--octo-primary); box-shadow: var(--octo-focus-ring); }
+  .tdoc-reply-form-foot { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; }
   .tdoc-reply-form-foot .hint { color: var(--octo-muted); font-size: 11px; }
-  .tdoc-reply-form-foot .tdoc-reply-submit { background: var(--octo-primary); color: var(--octo-surface); border: none; border-radius: var(--octo-radius-md); padding: 5px 12px; font: 12px system-ui; cursor: pointer; }
-  .tdoc-reply-form-foot .tdoc-reply-submit:hover { background: var(--octo-primary-hover); }
+  .tdoc-reply-form-foot .tdoc-reply-submit { background: var(--octo-primary); color: var(--octo-surface); border: none; border-radius: var(--octo-radius-md); padding: 6px 14px; font: 12px system-ui; font-weight: 600; cursor: pointer; box-shadow: 0 1px 2px rgba(22,82,240,0.2); transition: background .12s, box-shadow .12s; }
+  .tdoc-reply-form-foot .tdoc-reply-submit:hover { background: var(--octo-primary-hover); box-shadow: 0 2px 8px rgba(22,82,240,0.28); }
 
   /* Anchor highlights (Custom Highlight API + fallback span) */
   ::highlight(tdoc-pending) { background-color: #fff3a8; }
@@ -508,17 +510,22 @@
   .tdoc-comment-pill svg { width: 12px !important; height: 12px !important; flex-shrink: 0 !important; stroke: var(--octo-surface) !important; }
   .tdoc-drag-marquee { position: absolute; pointer-events: none; z-index: 999997; border: 1.5px solid var(--octo-primary); background: rgba(22,82,240,0.1); box-sizing: border-box; }
 
-  /* Popup (new-comment) */
-  .tdoc-popup { position: absolute; background: var(--octo-ink-panel); color: var(--octo-surface); border-radius: var(--octo-radius-lg); padding: 14px; width: 320px; box-shadow: var(--octo-shadow-pop); z-index: 999998; font: 13px system-ui, sans-serif; }
-  .tdoc-popup .head { display: flex; justify-content: space-between; margin-bottom: 8px; }
-  .tdoc-popup .head .h { color: var(--octo-faint); }
-  .tdoc-popup .head .x { cursor: pointer; color: var(--octo-muted); }
-  .tdoc-popup textarea { width: 100%; min-height: 64px; background: transparent; color: var(--octo-surface); border: 1px solid var(--octo-primary); border-radius: var(--octo-radius-md); padding: 8px; font: inherit; resize: vertical; box-sizing: border-box; outline: none; }
-  .tdoc-popup .foot { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; }
+  /* Popup (new-comment) — light surface, consistent with the toolbar/cards. */
+  .tdoc-popup { position: absolute; background: var(--octo-surface); color: var(--octo-ink); border: 1px solid var(--octo-border); border-radius: var(--octo-radius-lg); padding: 14px; width: 320px; box-shadow: var(--octo-shadow-menu); z-index: 999998; font: 13px system-ui, sans-serif; }
+  .tdoc-popup .head { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 10px; }
+  /* Anchor preview as a subtle chip so it reads as "commenting on this". */
+  .tdoc-popup .head .h { flex: 1 1 auto; min-width: 0; background: var(--octo-surface-subtle); color: var(--octo-ink-2); font-size: 12px; padding: 3px 8px; border-radius: var(--octo-radius-sm); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tdoc-popup .head .x { flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; cursor: pointer; color: var(--octo-muted); border-radius: var(--octo-radius-sm); font-size: 16px; line-height: 1; transition: background .12s, color .12s; }
+  .tdoc-popup .head .x:hover { background: var(--octo-surface-subtle); color: var(--octo-ink); }
+  .tdoc-popup textarea { width: 100%; min-height: 72px; background: var(--octo-surface); color: var(--octo-ink); border: 1px solid var(--octo-border); border-radius: var(--octo-radius-md); padding: 9px 10px; font: inherit; line-height: 1.45; resize: vertical; box-sizing: border-box; outline: none; transition: border-color .12s, box-shadow .12s; }
+  .tdoc-popup textarea::placeholder { color: var(--octo-muted); }
+  .tdoc-popup textarea:focus { border-color: var(--octo-primary); box-shadow: var(--octo-focus-ring); }
+  .tdoc-popup .foot { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; }
   .tdoc-popup .hint { color: var(--octo-muted); font-size: 11px; }
-  .tdoc-popup .submit { background: var(--octo-primary); border: none; color: var(--octo-surface); padding: 6px 14px; border-radius: var(--octo-radius-md); cursor: pointer; font: inherit; font-weight: 500; }
-  .tdoc-popup .submit:hover { background: var(--octo-primary-hover); }
-  .tdoc-popup .signin-needed { color: #f5a623; font-size: 12px; padding: 8px 0; }
+  .tdoc-popup .submit { background: var(--octo-primary); border: none; color: var(--octo-surface); padding: 7px 16px; border-radius: var(--octo-radius-md); cursor: pointer; font: inherit; font-weight: 600; box-shadow: 0 1px 2px rgba(22,82,240,0.2); transition: background .12s, box-shadow .12s; }
+  .tdoc-popup .submit:hover { background: var(--octo-primary-hover); box-shadow: 0 2px 8px rgba(22,82,240,0.28); }
+  .tdoc-popup .submit:disabled { opacity: 0.5; cursor: not-allowed; box-shadow: none; }
+  .tdoc-popup .signin-needed { color: var(--octo-warn-fg); font-size: 12px; padding: 8px 0; }
 
   /* Modal (sign-in) */
   .tdoc-modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,0.55); z-index: 1000000; display: flex; align-items: center; justify-content: center; font: 14px system-ui, sans-serif; }

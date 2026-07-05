@@ -1,0 +1,14 @@
+[
+  {
+    "aid": "1irbfyvntc7",
+    "tag": "img",
+    "head": "",
+    "heading": null
+  },
+  {
+    "aid": "8mfmnxo4w2",
+    "tag": "figure",
+    "head": "\n  \u003cimg src=\"a.png\" alt=\"　spaced\u000balttext\"\u003e\n  　CJK caption\u000bhere　\n",
+    "heading": null
+  }
+]

@@ -23,6 +23,7 @@ CREATE TABLE IF NOT EXISTS meta (slug TEXT PRIMARY KEY, json JSONB NOT NULL, upd
 CREATE TABLE IF NOT EXISTS comments (slug TEXT PRIMARY KEY, json JSONB NOT NULL, updated_at BIGINT NOT NULL);
 CREATE TABLE IF NOT EXISTS sessions (sid TEXT PRIMARY KEY, json JSONB NOT NULL, expires_at BIGINT NOT NULL);
 CREATE TABLE IF NOT EXISTS tokens (token TEXT PRIMARY KEY, json JSONB NOT NULL, created_at BIGINT NOT NULL);
+CREATE INDEX IF NOT EXISTS sessions_expires_at_idx ON sessions (expires_at);
 `
 
 // Store is a PostgreSQL-backed MetadataStore.
@@ -95,18 +96,23 @@ func (s *Store) GetMeta(ctx context.Context, slug string) (*storage.DocMeta, err
 func (s *Store) PutMeta(ctx context.Context, slug string, meta storage.DocMeta) error {
 	raw, err := json.Marshal(meta)
 	if err != nil {
-		return err
+		return fmt.Errorf("marshal meta %q: %w", slug, err)
 	}
 	_, err = s.pool.Exec(ctx,
 		"INSERT INTO meta(slug,json,updated_at) VALUES($1,$2,$3) ON CONFLICT(slug) DO UPDATE SET json=$2, updated_at=$3",
 		slug, raw, nowMillis())
-	return err
+	if err != nil {
+		return fmt.Errorf("put meta %q: %w", slug, err)
+	}
+	return nil
 }
 
 // DeleteMeta implements storage.MetadataStore.
 func (s *Store) DeleteMeta(ctx context.Context, slug string) error {
-	_, err := s.pool.Exec(ctx, "DELETE FROM meta WHERE slug=$1", slug)
-	return err
+	if _, err := s.pool.Exec(ctx, "DELETE FROM meta WHERE slug=$1", slug); err != nil {
+		return fmt.Errorf("delete meta %q: %w", slug, err)
+	}
+	return nil
 }
 
 // ListMeta implements storage.MetadataStore.
@@ -158,18 +164,23 @@ func (s *Store) GetComments(ctx context.Context, slug string) ([]core.Comment, e
 func (s *Store) PutComments(ctx context.Context, slug string, list []core.Comment) error {
 	raw, err := json.Marshal(list)
 	if err != nil {
-		return err
+		return fmt.Errorf("marshal comments %q: %w", slug, err)
 	}
 	_, err = s.pool.Exec(ctx,
 		"INSERT INTO comments(slug,json,updated_at) VALUES($1,$2,$3) ON CONFLICT(slug) DO UPDATE SET json=$2, updated_at=$3",
 		slug, raw, nowMillis())
-	return err
+	if err != nil {
+		return fmt.Errorf("put comments %q: %w", slug, err)
+	}
+	return nil
 }
 
 // DeleteComments implements storage.MetadataStore.
 func (s *Store) DeleteComments(ctx context.Context, slug string) error {
-	_, err := s.pool.Exec(ctx, "DELETE FROM comments WHERE slug=$1", slug)
-	return err
+	if _, err := s.pool.Exec(ctx, "DELETE FROM comments WHERE slug=$1", slug); err != nil {
+		return fmt.Errorf("delete comments %q: %w", slug, err)
+	}
+	return nil
 }
 
 // --- sessions ---
@@ -261,6 +272,14 @@ func (s *Store) AnyToken(ctx context.Context) (bool, error) {
 // Close releases the connection pool.
 func (s *Store) Close() error {
 	s.pool.Close()
+	return nil
+}
+
+// Health verifies the database is reachable (used by the readiness probe).
+func (s *Store) Health(ctx context.Context) error {
+	if err := s.pool.Ping(ctx); err != nil {
+		return fmt.Errorf("postgres ping: %w", err)
+	}
 	return nil
 }
 

@@ -63,7 +63,7 @@ func (s *Server) handleCreateComment(w http.ResponseWriter, r *http.Request) err
 		ParentID *string      `json:"parent_id"`
 		Anchor   *core.Anchor `json:"anchor"`
 	}
-	_ = decodeJSON(r, &body)
+	_ = decodeJSON(w, r, &body)
 	slug, err := requireSlug(body.Slug)
 	if err != nil {
 		return err
@@ -101,7 +101,7 @@ func (s *Server) handlePatchComment(w http.ResponseWriter, r *http.Request) erro
 		Anchor  *core.Anchor `json:"anchor"`
 		Version json.Number  `json:"version"`
 	}
-	_ = decodeJSON(r, &body)
+	_ = decodeJSON(w, r, &body)
 	slug, err := requireSlug(body.Slug)
 	if err != nil {
 		return err
@@ -163,7 +163,7 @@ func (s *Server) handleReact(w http.ResponseWriter, r *http.Request) error {
 		Emoji     string      `json:"emoji"`
 		Version   json.Number `json:"version"`
 	}
-	_ = decodeJSON(r, &body)
+	_ = decodeJSON(w, r, &body)
 	slug, err := requireSlug(body.Slug)
 	if err != nil {
 		return err

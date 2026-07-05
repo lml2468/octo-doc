@@ -65,6 +65,17 @@ func Open(ctx context.Context, opts Options) (*Store, error) {
 	return &Store{client: client, bucket: opts.Bucket}, nil
 }
 
+// Health verifies the bucket is reachable (used by the readiness probe). Open
+// intentionally does not validate connectivity, so this is the first real check.
+func (s *Store) Health(ctx context.Context) error {
+	if _, err := s.client.HeadBucket(ctx, &awss3.HeadBucketInput{
+		Bucket: aws.String(s.bucket),
+	}); err != nil {
+		return fmt.Errorf("s3 head bucket %q: %w", s.bucket, err)
+	}
+	return nil
+}
+
 func (s *Store) prefixFor(slug string) string {
 	return "docs/" + storage.HashSlug(slug)
 }

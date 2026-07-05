@@ -21,11 +21,13 @@ import (
 	"github.com/Mininglamp-OSS/octo-doc/internal/transport/httpx"
 )
 
-// buildServices opens the storage backends and constructs the service layer.
-func buildServices(ctx context.Context, cfg *config.Config) (*service.DocService, *service.CommentService, *service.AuthService, func() error, error) {
+// buildServices opens the storage backends and constructs the service layer. The
+// returned health func pings both stores (readiness probe); closeStore releases
+// the pool.
+func buildServices(ctx context.Context, cfg *config.Config) (deps *httpx.Deps, closeStore func() error, err error) {
 	meta, err := postgres.Open(ctx, cfg.DatabaseURL, cfg.PGPoolMax)
 	if err != nil {
-		return nil, nil, nil, nil, err
+		return nil, nil, err
 	}
 	blobs, err := s3store.Open(ctx, s3store.Options{
 		Bucket:         cfg.S3Bucket,
@@ -37,35 +39,46 @@ func buildServices(ctx context.Context, cfg *config.Config) (*service.DocService
 	})
 	if err != nil {
 		_ = meta.Close()
-		return nil, nil, nil, nil, err
+		return nil, nil, err
 	}
 	locker := sluglock.NewMemory()
 	comments := service.NewCommentService(meta, locker)
-	docs := service.NewDocService(blobs, meta, comments, cfg.BaseURL, cfg.MaxHTMLBytes)
+	docs := service.NewDocService(blobs, meta, comments, locker, cfg.BaseURL, cfg.MaxHTMLBytes)
 	auth := service.NewAuthService(meta, cfg)
-	return docs, comments, auth, meta.Close, nil
+	health := func(hctx context.Context) error {
+		if e := meta.Health(hctx); e != nil {
+			return e
+		}
+		return blobs.Health(hctx)
+	}
+	return &httpx.Deps{
+		Config: cfg, Docs: docs, Comments: comments, Auth: auth, Health: health,
+	}, meta.Close, nil
 }
 
 func serve(cfg *config.Config, logger *slog.Logger) error {
 	if err := cfg.Validate(); err != nil {
 		return err
 	}
-	ctx := context.Background()
-	docs, comments, auth, closeStore, err := buildServices(ctx, cfg)
+	startCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	deps, closeStore, err := buildServices(startCtx, cfg)
 	if err != nil {
 		return err
 	}
 	defer func() { _ = closeStore() }()
 
-	srv := httpx.New(httpx.Deps{
-		Config: cfg, Logger: logger, Docs: docs, Comments: comments, Auth: auth,
-		OverlayJS: assets.OverlayJS,
-	})
+	deps.Logger = logger
+	deps.OverlayJS = assets.OverlayJS
+	srv := httpx.New(*deps)
 
 	httpServer := &http.Server{
 		Addr:              fmt.Sprintf("%s:%d", cfg.Host, cfg.Port),
 		Handler:           srv.Handler(),
 		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       30 * time.Second,
+		WriteTimeout:      60 * time.Second,
+		IdleTimeout:       120 * time.Second,
 	}
 
 	// Graceful shutdown on SIGINT/SIGTERM.
@@ -94,7 +107,8 @@ func migrate(cfg *config.Config, logger *slog.Logger) error {
 	if cfg.DatabaseURL == "" {
 		return errors.New("DATABASE_URL is required for migrate")
 	}
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
 	if err := postgres.Migrate(ctx, cfg.DatabaseURL); err != nil {
 		return err
 	}
@@ -106,7 +120,8 @@ func bootstrap(cfg *config.Config) error {
 	if err := cfg.Validate(); err != nil {
 		return err
 	}
-	ctx := context.Background()
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
 	meta, err := postgres.Open(ctx, cfg.DatabaseURL, cfg.PGPoolMax)
 	if err != nil {
 		return err

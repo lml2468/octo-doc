@@ -1,0 +1,47 @@
+{
+  "body": {
+    "mergedComments": 1
+  },
+  "folded": [
+    {
+      "id": "c1",
+      "author": {
+        "login": "alice"
+      },
+      "created": "2024-01-01T00:00:00.000Z",
+      "created_in": 1,
+      "version": 1,
+      "anchor": {
+        "kind": "aid",
+        "text": "anchored text",
+        "aid": "old-aid"
+      },
+      "text": "existing comment",
+      "status": "open",
+      "replies": [],
+      "reactions": {},
+      "deleted": false
+    },
+    {
+      "id": "c2",
+      "author": {
+        "login": "bob"
+      },
+      "created": "2024-01-15T00:00:00.000Z",
+      "created_in": 1,
+      "version": 1,
+      "anchor": {
+        "kind": "aid",
+        "text": "local anchor",
+        "aid": "local-aid"
+      },
+      "text": "local comment",
+      "status": "open",
+      "replies": [],
+      "reactions": {},
+      "deleted": false
+    }
+  ],
+  "status": 200,
+  "wipe": false
+}

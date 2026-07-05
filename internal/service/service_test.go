@@ -13,8 +13,9 @@ import (
 func newDoc(t *testing.T) (*service.DocService, *service.CommentService) {
 	t.Helper()
 	store := memory.New()
-	cs := service.NewCommentService(store, sluglock.NewMemory())
-	ds := service.NewDocService(store, store, cs, "", 5<<20)
+	locker := sluglock.NewMemory()
+	cs := service.NewCommentService(store, locker)
+	ds := service.NewDocService(store, store, cs, locker, "", 5<<20)
 	return ds, cs
 }
 
@@ -44,7 +45,8 @@ func TestPublishRejectsEmptyAndOversized(t *testing.T) {
 		t.Error("empty HTML should be rejected")
 	}
 	store := memory.New()
-	small := service.NewDocService(store, store, service.NewCommentService(store, sluglock.NewMemory()), "", 10)
+	locker := sluglock.NewMemory()
+	small := service.NewDocService(store, store, service.NewCommentService(store, locker), locker, "", 10)
 	if _, err := small.Publish(ctx, service.PublishInput{Slug: "d", HTML: "<html>way too large</html>"}); err == nil {
 		t.Error("oversized HTML should be rejected")
 	}
@@ -124,4 +126,88 @@ func contains(s, sub string) bool {
 		}
 	}
 	return false
+}
+
+// TestConcurrentPublishConsistent drives many concurrent publishes of the same
+// slug through the per-slug lock and asserts every version 1..N is present exactly
+// once — i.e. no two publishes resolved to the same version and clobbered a blob.
+func TestConcurrentPublishConsistent(t *testing.T) {
+	ds, _ := newDoc(t)
+	ctx := context.Background()
+	const n = 30
+
+	errs := make(chan error, n)
+	for range n {
+		go func() {
+			_, err := ds.Publish(ctx, service.PublishInput{
+				Slug: "same", HTML: "<html><body><p>x</p></body></html>",
+			})
+			errs <- err
+		}()
+	}
+	for range n {
+		if err := <-errs; err != nil {
+			t.Fatalf("publish failed: %v", err)
+		}
+	}
+
+	vl, err := ds.ListVersions(ctx, "same")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(vl.Versions) != n {
+		t.Fatalf("got %d versions, want %d (a publish was lost)", len(vl.Versions), n)
+	}
+	seen := map[int]bool{}
+	for _, v := range vl.Versions {
+		if seen[v.N] {
+			t.Fatalf("duplicate version %d", v.N)
+		}
+		seen[v.N] = true
+	}
+	for i := 1; i <= n; i++ {
+		if !seen[i] {
+			t.Fatalf("missing version %d", i)
+		}
+	}
+}
+
+// TestConcurrentPublishAndRemove exercises Publish and Remove of the same slug
+// racing through the shared per-slug lock; it must not panic or deadlock and must
+// leave a self-consistent final state (either fully removed, or a valid version
+// list whose latest blob exists).
+func TestConcurrentPublishAndRemove(t *testing.T) {
+	ds, _ := newDoc(t)
+	ctx := context.Background()
+
+	done := make(chan error, 2)
+	go func() {
+		_, err := ds.Publish(ctx, service.PublishInput{
+			Slug: "rp", HTML: "<html><body><p>x</p></body></html>",
+		})
+		done <- err
+	}()
+	go func() { done <- ds.Remove(ctx, "rp") }()
+	for range 2 {
+		if err := <-done; err != nil {
+			t.Fatalf("op failed: %v", err)
+		}
+	}
+
+	// Final state must be self-consistent: ListVersions returns nil (removed) or a
+	// list; if a list, the render path for the latest version must resolve.
+	vl, err := ds.ListVersions(ctx, "rp")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if vl != nil && len(vl.Versions) > 0 {
+		latest := vl.Versions[len(vl.Versions)-1].N
+		rd, err := ds.Render(ctx, "rp", latest)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if rd == nil {
+			t.Fatalf("version %d listed but blob missing (inconsistent state)", latest)
+		}
+	}
 }

@@ -1,0 +1,47 @@
+{
+  "list": [
+    {
+      "id": "c1",
+      "author": { "login": "alice" },
+      "created": "2024-01-01T00:00:00.000Z",
+      "created_in": 1,
+      "events": [
+        {
+          "kind": "created",
+          "eid": "e1",
+          "at_version": 1,
+          "at": "2024-01-01T00:00:00.000Z",
+          "anchor": { "kind": "aid", "aid": "old-aid", "text": "anchored text" },
+          "text": "existing comment"
+        }
+      ]
+    }
+  ],
+  "op": {
+    "kind": "publish_merge",
+    "version": 2,
+    "at": "2024-02-01T00:00:00.000Z",
+    "local_comments": [
+      {
+        "id": "c2",
+        "author": { "login": "bob" },
+        "created": "2024-01-15T00:00:00.000Z",
+        "created_in": 1,
+        "events": [
+          {
+            "kind": "created",
+            "eid": "e2",
+            "at_version": 1,
+            "at": "2024-01-15T00:00:00.000Z",
+            "anchor": { "kind": "aid", "aid": "local-aid", "text": "local anchor" },
+            "text": "local comment"
+          }
+        ]
+      }
+    ],
+    "aids": [
+      { "aid": "old-aid", "tag": "figure", "head": "anchored text", "heading": null },
+      { "aid": "local-aid", "tag": "img", "head": "local anchor", "heading": null }
+    ]
+  }
+}

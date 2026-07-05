@@ -29,7 +29,7 @@ func newTestServer(t *testing.T, cfg *config.Config) http.Handler {
 	store := memory.New()
 	locker := sluglock.NewMemory()
 	comments := service.NewCommentService(store, locker)
-	docs := service.NewDocService(store, store, comments, cfg.BaseURL, cfg.MaxHTMLBytes)
+	docs := service.NewDocService(store, store, comments, locker, cfg.BaseURL, cfg.MaxHTMLBytes)
 	auth := service.NewAuthService(store, cfg)
 	srv := httpx.New(httpx.Deps{
 		Config: cfg, Logger: log.New("silent"), Docs: docs, Comments: comments, Auth: auth,
@@ -62,8 +62,8 @@ func TestPingIdentity(t *testing.T) {
 	var body map[string]any
 	_ = json.Unmarshal(rec.Body.Bytes(), &body)
 	data, _ := body["data"].(map[string]any)
-	if data == nil || data["service"] != "tdoc" {
-		t.Fatalf("ping data = %v; want data.service=tdoc", body)
+	if data == nil || data["service"] != "octo-doc" {
+		t.Fatalf("ping data = %v; want data.service=octo-doc", body)
 	}
 }
 
@@ -249,12 +249,12 @@ func TestForkExport(t *testing.T) {
 func TestBootstrapOnce(t *testing.T) {
 	cfg := &config.Config{AllowBootstrap: true, MaxHTMLBytes: 1 << 20, RepoURL: "https://x", RateLimitMax: 0}
 	h := newTestServer(t, cfg)
-	rec := do(t, h, http.MethodGet, "/v1/admin/bootstrap", nil, "")
+	rec := do(t, h, http.MethodPost, "/v1/admin/bootstrap", nil, "")
 	if rec.Code != 200 {
 		t.Fatalf("bootstrap = %d: %s", rec.Code, rec.Body.String())
 	}
 	// Second call conflicts.
-	rec = do(t, h, http.MethodGet, "/v1/admin/bootstrap", nil, "")
+	rec = do(t, h, http.MethodPost, "/v1/admin/bootstrap", nil, "")
 	if rec.Code != 409 {
 		t.Fatalf("second bootstrap = %d; want 409", rec.Code)
 	}

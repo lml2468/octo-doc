@@ -6,16 +6,24 @@ import (
 	"encoding/json"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/Mininglamp-OSS/octo-doc/internal/config"
 	"github.com/Mininglamp-OSS/octo-doc/internal/platform/apperr"
 )
 
+// maxJSONBody bounds JSON request bodies (comments, reactions, agent replies).
+// Document HTML is published via multipart and governed separately by
+// MAX_HTML_BYTES; no JSON endpoint needs a large body.
+const maxJSONBody = 1 << 20 // 1 MiB
+
 // decodeJSON decodes the request body into v, tolerating an empty/invalid body.
-func decodeJSON(r *http.Request, v any) error {
+// The body is capped at maxJSONBody via http.MaxBytesReader to bound memory.
+func decodeJSON(w http.ResponseWriter, r *http.Request, v any) error {
 	if r.Body == nil {
 		return nil
 	}
+	r.Body = http.MaxBytesReader(w, r.Body, maxJSONBody)
 	return json.NewDecoder(r.Body).Decode(v)
 }
 
@@ -31,9 +39,18 @@ func sessionCookie(r *http.Request) string {
 	return c.Value
 }
 
-// clearCookie expires a cookie.
+// clearCookie expires a cookie. Flags mirror a real session cookie so a future
+// login provider inherits safe defaults (HttpOnly, SameSite=Lax, Secure).
 func clearCookie(w http.ResponseWriter, name string, secure bool) {
-	http.SetCookie(w, &http.Cookie{Name: name, Value: "", Path: "/", MaxAge: 0, Secure: secure})
+	http.SetCookie(w, &http.Cookie{
+		Name:     name,
+		Value:    "",
+		Path:     "/",
+		MaxAge:   -1,
+		HttpOnly: true,
+		Secure:   secure,
+		SameSite: http.SameSiteLaxMode,
+	})
 }
 
 // requireSlug validates a slug from a string, returning a typed 400 on failure.
@@ -67,9 +84,15 @@ func compactDigits(s string) string {
 
 // randHex4 returns 4 random bytes as 8 hex chars.
 func randHex4() string {
-	b := make([]byte, 4)
+	return randHex(4)
+}
+
+// randHex returns n random bytes as 2n hex chars, or a zero string on the (not
+// expected) failure of the system RNG.
+func randHex(n int) string {
+	b := make([]byte, n)
 	if _, err := rand.Read(b); err != nil {
-		return "00000000"
+		return strings.Repeat("0", n*2)
 	}
 	return hex.EncodeToString(b)
 }

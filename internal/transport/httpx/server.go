@@ -1,11 +1,13 @@
 package httpx
 
 import (
+	"context"
 	"log/slog"
 	"net/http"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
 
 	"github.com/Mininglamp-OSS/octo-doc/internal/config"
 	"github.com/Mininglamp-OSS/octo-doc/internal/service"
@@ -19,6 +21,7 @@ type Server struct {
 	comments  *service.CommentService
 	auth      *service.AuthService
 	overlayJS string
+	health    func(context.Context) error
 }
 
 // Deps bundles the constructor arguments for a Server.
@@ -29,6 +32,9 @@ type Deps struct {
 	Comments  *service.CommentService
 	Auth      *service.AuthService
 	OverlayJS string
+	// Health verifies backing stores are reachable (readiness probe). Optional; a
+	// nil Health means /healthz reports liveness only.
+	Health func(context.Context) error
 }
 
 // New constructs a Server.
@@ -40,6 +46,7 @@ func New(d Deps) *Server {
 		comments:  d.Comments,
 		auth:      d.Auth,
 		overlayJS: d.OverlayJS,
+		health:    d.Health,
 	}
 }
 
@@ -60,17 +67,17 @@ func (s *Server) Handler() http.Handler {
 
 		// Admin / auth. Viewer identity is anonymous for now (no built-in login
 		// provider); /auth/me reports it and logout clears any future session.
-		r.Get("/admin/bootstrap", s.wrap(s.handleBootstrap))
+		r.Post("/admin/bootstrap", s.cors(s.wrap(s.handleBootstrap)))
 		r.Get("/auth/me", s.wrap(s.handleAuthMe))
 		r.Post("/auth/logout", s.cors(s.wrap(s.handleLogout)))
 
 		// Documents.
 		r.With(s.requireWriteAuth).Method(http.MethodPost, "/docs", s.cors(s.limit(writeLimiter, false, s.wrap(s.handlePublish))))
-		r.Get("/docs/{slug}/versions", s.cors(s.wrap(s.handleVersions)))
+		r.Get("/docs/{slug}/versions", s.cors(s.maybeRequireReadAuth(s.wrap(s.handleVersions))))
 		r.With(s.requireWriteAuth).Delete("/docs/{slug}", s.cors(s.wrap(s.handleDeleteDoc)))
 
 		// Comments + reactions.
-		r.Get("/comments", s.cors(s.limit(writeLimiter, true, s.wrap(s.handleListComments))))
+		r.Get("/comments", s.cors(s.maybeRequireReadAuth(s.limit(writeLimiter, true, s.wrap(s.handleListComments)))))
 		r.Post("/comments", s.cors(s.limit(writeLimiter, true, s.wrap(s.handleCreateComment))))
 		r.Patch("/comments", s.cors(s.limit(writeLimiter, true, s.wrap(s.handlePatchComment))))
 		r.Delete("/comments", s.cors(s.limit(writeLimiter, true, s.wrap(s.handleDeleteComment))))
@@ -91,7 +98,7 @@ func (s *Server) Handler() http.Handler {
 	r.NotFound(func(w http.ResponseWriter, _ *http.Request) {
 		http.Error(w, "Not found", http.StatusNotFound)
 	})
-	return r
+	return middleware.RequestID(s.accessLog(r))
 }
 
 // handlerFunc is a handler that may return an error, mapped centrally.
@@ -106,10 +113,38 @@ func (s *Server) wrap(h handlerFunc) http.HandlerFunc {
 	}
 }
 
-// cors adds permissive CORS headers for the API (CLI/agents are cross-origin).
+// cors adds CORS headers for the API. Reads (GET, and OPTIONS preflights for a
+// GET) are allowed from any origin, since reads are safe/idempotent and used by
+// CLIs and agents. Mutating requests — and preflights for them — echo the request
+// origin only if it is in the configured CORSOrigins allowlist; with no allowlist,
+// no ACAO is sent on writes, so a browser blocks cross-origin mutations
+// (same-origin still works).
 func (s *Server) cors(next http.HandlerFunc) http.HandlerFunc {
+	allowed := map[string]struct{}{}
+	for _, o := range s.cfg.CORSOrigins {
+		allowed[o] = struct{}{}
+	}
 	return func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
+		origin := r.Header.Get("Origin")
+		// Classify by the effective method: for a preflight, that is the method the
+		// real request will use (Access-Control-Request-Method), not OPTIONS itself —
+		// otherwise a write preflight would be treated as a read and wrongly get *.
+		effective := r.Method
+		if r.Method == http.MethodOptions {
+			if reqMethod := r.Header.Get("Access-Control-Request-Method"); reqMethod != "" {
+				effective = reqMethod
+			}
+		}
+		isRead := effective == http.MethodGet || effective == http.MethodHead
+		switch {
+		case isRead:
+			w.Header().Set("Access-Control-Allow-Origin", "*")
+		case origin != "":
+			if _, ok := allowed[origin]; ok {
+				w.Header().Set("Access-Control-Allow-Origin", origin)
+				w.Header().Add("Vary", "Origin")
+			}
+		}
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE, OPTIONS")
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
 		if r.Method == http.MethodOptions {

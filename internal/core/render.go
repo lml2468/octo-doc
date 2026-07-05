@@ -46,9 +46,56 @@ func SafeJSONForScript(v any) (string, error) {
 		return "", err
 	}
 	s := strings.TrimRight(buf.String(), "\n") // Encoder appends a newline
+	// Go's encoding/json always escapes U+2028/U+2029 (\u2028 / \u2029) even with
+	// SetEscapeHTML(false); JavaScript's JSON.stringify emits them raw. Restore the
+	// raw code points so the injected window.__TDOC__ bytes match upstream. (They
+	// are valid inside a <script> JSON literal — only bare U+2028/9 in a JS string
+	// literal would be a hazard, which this is not.)
+	s = unescapeLineSep(s)
 	s = strings.ReplaceAll(s, "</script>", `<\/script>`)
 	s = strings.ReplaceAll(s, "<!--", `<\!--`)
 	return s, nil
+}
+
+// unescapeLineSep rewrites genuine \u2028 / \u2029 JSON escape sequences (the
+// 6-char ASCII text json emits) back to their raw code points, matching
+// JavaScript JSON.stringify. A sequence is rewritten only when the backslash that
+// starts it is itself unescaped (an even number of backslashes precede it), so a
+// real escape is restored but the literal text \u2028 inside a string value
+// (which json encodes as \\u2028 — an escaped backslash then u2028) is left
+// intact. The preceding-backslash parity is tracked in the single forward pass.
+func unescapeLineSep(s string) string {
+	const esc8, esc9 = `\u2028`, `\u2029`
+	if !strings.Contains(s, `\u202`) {
+		return s
+	}
+	var b strings.Builder
+	b.Grow(len(s))
+	bs := 0 // consecutive backslashes immediately before the current index
+	for i := 0; i < len(s); {
+		if s[i] == '\\' && bs%2 == 0 {
+			if strings.HasPrefix(s[i:], esc8) {
+				b.WriteRune('\u2028')
+				i += len(esc8)
+				bs = 0
+				continue
+			}
+			if strings.HasPrefix(s[i:], esc9) {
+				b.WriteRune('\u2029')
+				i += len(esc9)
+				bs = 0
+				continue
+			}
+		}
+		if s[i] == '\\' {
+			bs++
+		} else {
+			bs = 0
+		}
+		b.WriteByte(s[i])
+		i++
+	}
+	return b.String()
 }
 
 var htmlEscaper = strings.NewReplacer(

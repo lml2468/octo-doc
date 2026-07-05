@@ -8,6 +8,7 @@ import (
 
 	"github.com/Mininglamp-OSS/octo-doc/internal/config"
 	"github.com/Mininglamp-OSS/octo-doc/internal/platform/apperr"
+	"github.com/Mininglamp-OSS/octo-doc/internal/platform/sluglock"
 	"github.com/Mininglamp-OSS/octo-doc/internal/storage"
 )
 
@@ -25,11 +26,12 @@ const sessionTTLSeconds = 60 * 60 * 24 * 30
 type AuthService struct {
 	meta storage.MetadataStore
 	cfg  *config.Config
+	lock sluglock.Locker
 }
 
 // NewAuthService constructs an AuthService.
 func NewAuthService(meta storage.MetadataStore, cfg *config.Config) *AuthService {
-	return &AuthService{meta: meta, cfg: cfg}
+	return &AuthService{meta: meta, cfg: cfg, lock: sluglock.NewMemory()}
 }
 
 // IsValidWriteToken does a constant-time check that token is the static or a
@@ -49,7 +51,10 @@ func (s *AuthService) IsValidWriteToken(ctx context.Context, token string) (bool
 }
 
 // Bootstrap mints the first write token. One-shot: errors once any token exists
-// or a static token is configured.
+// or a static token is configured. The check-and-set runs under a lock so two
+// concurrent bootstraps can't both mint a "first" token (single-instance
+// guarantee; a multi-instance deployment should disable ALLOW_BOOTSTRAP and
+// provision a token out of band).
 func (s *AuthService) Bootstrap(ctx context.Context) (string, error) {
 	if !s.cfg.AllowBootstrap {
 		return "", apperr.Forbidden("bootstrap disabled", "bootstrap_disabled")
@@ -57,17 +62,21 @@ func (s *AuthService) Bootstrap(ctx context.Context) (string, error) {
 	if s.cfg.WriteToken != "" {
 		return "", apperr.Conflict("a static WRITE_TOKEN is configured", "static_token_configured")
 	}
-	any, err := s.meta.AnyToken(ctx)
+	var token string
+	err := s.lock.With(ctx, "__bootstrap__", func() error {
+		exists, aerr := s.meta.AnyToken(ctx)
+		if aerr != nil {
+			return aerr
+		}
+		if exists {
+			return apperr.Conflict("already bootstrapped", "already_bootstrapped")
+		}
+		token = NewToken()
+		return s.meta.PutToken(ctx, token, storage.TokenRecord{
+			Token: token, Created: time.Now().UTC().Format(time.RFC3339), Label: "bootstrap",
+		})
+	})
 	if err != nil {
-		return "", err
-	}
-	if any {
-		return "", apperr.Conflict("already bootstrapped", "already_bootstrapped")
-	}
-	token := NewToken()
-	if err := s.meta.PutToken(ctx, token, storage.TokenRecord{
-		Token: token, Created: time.Now().UTC().Format(time.RFC3339), Label: "bootstrap",
-	}); err != nil {
 		return "", err
 	}
 	return token, nil

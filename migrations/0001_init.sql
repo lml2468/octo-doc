@@ -21,6 +21,10 @@ CREATE TABLE IF NOT EXISTS sessions (
   expires_at  BIGINT NOT NULL
 );
 
+-- Sessions are swept by expiry on every write; index the predicate so that sweep
+-- is not a full table scan under load.
+CREATE INDEX IF NOT EXISTS sessions_expires_at_idx ON sessions (expires_at);
+
 CREATE TABLE IF NOT EXISTS tokens (
   token       TEXT PRIMARY KEY,
   json        JSONB NOT NULL,        -- { token, created, label }

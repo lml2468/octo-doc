@@ -38,6 +38,20 @@ func TestSafeJSONForScript(t *testing.T) {
 	if want := `<\/script><\!--`; !contains(out2, want) {
 		t.Errorf("expected neutralized %q in %q", want, out2)
 	}
+
+	// U+2028/U+2029 must survive as raw code points (matching JS JSON.stringify),
+	// not Go's default \u2028 / \u2029 escaping. See parity trap 4 in docs/PORTING.md.
+	sep := map[string]string{"x": "a\u2028b\u2029c"}
+	out3, err := SafeJSONForScript(sep)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if contains(out3, `\u2028`) || contains(out3, `\u2029`) {
+		t.Errorf("U+2028/U+2029 must not be escaped, got %q", out3)
+	}
+	if want := "a\u2028b\u2029c"; !contains(out3, want) {
+		t.Errorf("expected raw separators in %q", out3)
+	}
 }
 
 func TestInjectOverlayCfg(t *testing.T) {
@@ -71,4 +85,21 @@ func indexOfStr(s, sub string) int {
 		}
 	}
 	return -1
+}
+
+func TestSafeJSONForScriptLiteralEscapeNotCorrupted(t *testing.T) {
+	// A value whose CONTENT is the literal 6-char text \u2028 must survive: json
+	// encodes it as \\u2028 (escaped backslash + u2028); the unescape step must NOT
+	// rewrite it to a raw separator.
+	lit := map[string]string{"x": `pre\u2028post`}
+	out, err := SafeJSONForScript(lit)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !contains(out, `\\u2028`) {
+		t.Errorf("literal escape corrupted: %q", out)
+	}
+	if contains(out, "\u2028") {
+		t.Errorf("literal escape wrongly became a raw separator: %q", out)
+	}
 }

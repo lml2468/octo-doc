@@ -7,7 +7,7 @@ From nothing to a live, TLS-secured doc server in ~15 minutes on a $5 VPS.
 ```bash
 git clone https://github.com/Mininglamp-OSS/octo-doc && cd octo-doc
 DOMAIN=docs.example.com docker compose -f deploy/docker-compose.yml up -d --wait
-TOKEN=$(curl -s http://localhost:8080/v1/admin/bootstrap | jq -r .data.token)
+TOKEN=$(curl -sX POST http://localhost:8080/v1/admin/bootstrap | jq -r .data.token)
 echo "Publish with:  export TDOC_BASE_URL=https://docs.example.com TDOC_TOKEN=$TOKEN"
 ```
 
@@ -45,7 +45,7 @@ automatically on app start (`octo-doc migrate` is also exposed for manual runs).
 ### 4. Mint a write token
 
 ```bash
-TOKEN=$(curl -s http://localhost:8080/v1/admin/bootstrap | jq -r .data.token)
+TOKEN=$(curl -sX POST http://localhost:8080/v1/admin/bootstrap | jq -r .data.token)
 echo "$TOKEN"          # save this — bootstrap only works once
 ```
 
@@ -94,7 +94,7 @@ export S3_SECRET_ACCESS_KEY=minioadmin
 ./octo-doc migrate            # create schema (idempotent)
 ./octo-doc serve              # listens on :8080
 # in another shell — mint the first token:
-./octo-doc bootstrap          # or: curl -s localhost:8080/v1/admin/bootstrap | jq -r .data.token
+./octo-doc bootstrap          # or: curl -sX POST localhost:8080/v1/admin/bootstrap | jq -r .data.token
 ```
 
 Put it behind your own nginx/Caddy/Traefik for TLS — reference configs are in

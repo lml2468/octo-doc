@@ -80,7 +80,7 @@ backend, mint a write token, then push each version:
 
 ```bash
 BASE=http://localhost:8080
-TOKEN=$(curl -s "$BASE/v1/admin/bootstrap" | jq -r .data.token)
+TOKEN=$(curl -sX POST "$BASE/v1/admin/bootstrap" | jq -r .data.token)
 
 for slug in $(ls cf-dump/kv/meta | sed 's/\.json$//'); do
   comments=$(jq -c '.comments // []' "cf-dump/kv/comments/${slug}.json" 2>/dev/null || echo '[]')

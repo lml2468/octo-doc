@@ -46,14 +46,41 @@ func TestLoadOverrides(t *testing.T) {
 }
 
 func TestValidate(t *testing.T) {
-	if err := (&Config{S3Bucket: "b"}).Validate(); err == nil {
+	// A minimally-valid config: required strings present + positive numeric knobs.
+	valid := func() *Config {
+		return &Config{
+			DatabaseURL: "x", S3Bucket: "b",
+			Port: 8080, PGPoolMax: 10, RateLimitMax: 60, MaxHTMLBytes: 1 << 20,
+		}
+	}
+	if err := valid().Validate(); err != nil {
+		t.Errorf("valid config rejected: %v", err)
+	}
+
+	c := valid()
+	c.DatabaseURL = ""
+	if err := c.Validate(); err == nil {
 		t.Error("missing DATABASE_URL should fail validation")
 	}
-	if err := (&Config{DatabaseURL: "x"}).Validate(); err == nil {
+	c = valid()
+	c.S3Bucket = ""
+	if err := c.Validate(); err == nil {
 		t.Error("missing S3_BUCKET should fail validation")
 	}
-	if err := (&Config{DatabaseURL: "x", S3Bucket: "b"}).Validate(); err != nil {
-		t.Errorf("valid config rejected: %v", err)
+	c = valid()
+	c.Port = 0
+	if err := c.Validate(); err == nil {
+		t.Error("zero PORT should fail validation")
+	}
+	c = valid()
+	c.MaxHTMLBytes = 0
+	if err := c.Validate(); err == nil {
+		t.Error("zero MAX_HTML_BYTES should fail validation")
+	}
+	c = valid()
+	c.S3Endpoint = "http://minio:9000" // custom endpoint without creds
+	if err := c.Validate(); err == nil {
+		t.Error("S3_ENDPOINT without credentials should fail validation")
 	}
 }
 

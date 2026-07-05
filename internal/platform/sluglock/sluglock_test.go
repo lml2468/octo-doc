@@ -2,6 +2,7 @@ package sluglock
 
 import (
 	"context"
+	"strconv"
 	"sync"
 	"testing"
 )
@@ -56,5 +57,25 @@ func TestContextCancellationHonored(t *testing.T) {
 	err := m.With(ctx, "k", func() error { return nil })
 	if err == nil {
 		t.Error("cancelled context should be honored before acquiring")
+	}
+}
+
+func TestMapReclaimedAfterUse(t *testing.T) {
+	m := NewMemory()
+	ctx := context.Background()
+	const n = 1000
+	var wg sync.WaitGroup
+	for i := range n {
+		key := "slug-" + string(rune('a'+i%26)) + strconv.Itoa(i)
+		wg.Go(func() {
+			_ = m.With(ctx, key, func() error { return nil })
+		})
+	}
+	wg.Wait()
+	m.mu.Lock()
+	remaining := len(m.locks)
+	m.mu.Unlock()
+	if remaining != 0 {
+		t.Fatalf("lock map not reclaimed: %d entries remain (want 0)", remaining)
 	}
 }

@@ -7,6 +7,7 @@ import (
 
 	"github.com/Mininglamp-OSS/octo-doc/internal/core"
 	"github.com/Mininglamp-OSS/octo-doc/internal/platform/apperr"
+	"github.com/Mininglamp-OSS/octo-doc/internal/platform/sluglock"
 	"github.com/Mininglamp-OSS/octo-doc/internal/storage"
 )
 
@@ -18,13 +19,17 @@ type DocService struct {
 	blobs    storage.BlobStore
 	meta     storage.MetadataStore
 	comments *CommentService
+	lock     sluglock.Locker
 	baseURL  string
 	maxBytes int64
 }
 
-// NewDocService constructs a DocService.
-func NewDocService(blobs storage.BlobStore, meta storage.MetadataStore, comments *CommentService, baseURL string, maxBytes int64) *DocService {
-	return &DocService{blobs: blobs, meta: meta, comments: comments, baseURL: baseURL, maxBytes: maxBytes}
+// NewDocService constructs a DocService. The locker MUST be the same instance the
+// CommentService uses, so that a publish (which holds the slug lock across the
+// whole resolve→put→meta→merge sequence) is serialized against comment mutations
+// for the same slug.
+func NewDocService(blobs storage.BlobStore, meta storage.MetadataStore, comments *CommentService, lock sluglock.Locker, baseURL string, maxBytes int64) *DocService {
+	return &DocService{blobs: blobs, meta: meta, comments: comments, lock: lock, baseURL: baseURL, maxBytes: maxBytes}
 }
 
 // PublishInput is the input to Publish.
@@ -61,26 +66,48 @@ func (s *DocService) Publish(ctx context.Context, in PublishInput) (*PublishResu
 		return nil, apperr.PayloadTooLarge(fmt.Sprintf("document exceeds %d bytes", s.maxBytes), "html_too_large")
 	}
 
+	stamped := core.StampAids(in.HTML)
+
+	// Hold the per-slug lock across the whole critical section: version resolution,
+	// the immutable blob write, the version-list bump, and the comment merge must be
+	// atomic, or two concurrent publishes of the same slug can resolve to the same
+	// version and clobber each other (and drift meta vs blobs).
+	var result *PublishResult
+	err := s.lock.With(ctx, in.Slug, func() error {
+		r, perr := s.publishLocked(ctx, in, stamped)
+		result = r
+		return perr
+	})
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+// publishLocked runs the publish critical section. The caller MUST hold the
+// per-slug lock (Publish does); it therefore uses PublishMergeLocked and never
+// re-acquires the lock.
+func (s *DocService) publishLocked(ctx context.Context, in PublishInput, stamped core.StampResult) (*PublishResult, error) {
 	version, err := s.resolveVersion(ctx, in.Slug, in.Version)
 	if err != nil {
 		return nil, err
 	}
 
-	stamped := core.StampAids(in.HTML)
-
 	size, err := s.blobs.PutDoc(ctx, in.Slug, version, stamped.HTML)
 	if err != nil {
 		return nil, apperr.Upstream("blob write failed", "blob_write_failed", err)
 	}
-	if _, ok, herr := s.blobs.HeadDoc(ctx, in.Slug, version); herr != nil || !ok {
-		return nil, apperr.Validation("blob write did not persist", "blob_write_lost")
+	if _, ok, herr := s.blobs.HeadDoc(ctx, in.Slug, version); herr != nil {
+		return nil, apperr.Upstream("blob head failed", "blob_head_failed", herr)
+	} else if !ok {
+		return nil, apperr.Upstream("blob write did not persist", "blob_write_lost", nil)
 	}
 
 	if err := s.upsertMeta(ctx, in, version); err != nil {
 		return nil, err
 	}
 
-	merge, err := s.comments.PublishMerge(ctx, in.Slug, in.LocalComments, stamped.AIDs, version)
+	merge, err := s.comments.PublishMergeLocked(ctx, in.Slug, in.LocalComments, stamped.AIDs, version)
 	if err != nil {
 		return nil, err
 	}
@@ -156,16 +183,22 @@ func (s *DocService) ListVersions(ctx context.Context, slug string) (*VersionLis
 	return &VersionList{Slug: slug, Title: title, Versions: versions}, nil
 }
 
-// Remove deletes all versions, metadata, and comments for a slug.
+// Remove deletes all versions, metadata, and comments for a slug. It holds the
+// per-slug lock across all three deletes so it is serialized against a concurrent
+// Publish of the same slug (which holds the same lock); otherwise a delete could
+// interleave with a publish and leave orphaned blobs or meta pointing at a
+// missing blob.
 func (s *DocService) Remove(ctx context.Context, slug string) error {
-	if err := s.blobs.DeleteDoc(ctx, slug); err != nil {
+	return s.lock.With(ctx, slug, func() error {
+		if err := s.blobs.DeleteDoc(ctx, slug); err != nil {
+			return err
+		}
+		if err := s.meta.DeleteMeta(ctx, slug); err != nil {
+			return err
+		}
+		_, err := s.comments.WipeLocked(ctx, slug)
 		return err
-	}
-	if err := s.meta.DeleteMeta(ctx, slug); err != nil {
-		return err
-	}
-	_, err := s.comments.Wipe(ctx, slug)
-	return err
+	})
 }
 
 // OwnerDoc is one row in the owner catalog.

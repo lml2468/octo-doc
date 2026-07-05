@@ -4,6 +4,7 @@ package memory
 
 import (
 	"context"
+	"encoding/json"
 	"sort"
 	"sync"
 	"time"
@@ -40,6 +41,26 @@ func New() *Store {
 
 // --- MetadataStore ---
 
+// cloneJSON returns a fully-independent copy of v by round-tripping through JSON —
+// the same isolation the postgres store gets for free (it serializes to JSONB and
+// re-parses). A shallow copy is not enough for the stored types: DocMeta.Extra
+// holds nested map/slice values, and core.Comment has nested Events/Reactions and
+// pointer fields that in-place op application mutates. The fake must match
+// postgres to stay a faithful conformance store. These are plain data types, so a
+// marshal failure is a programmer error — panic loudly rather than silently
+// returning an aliasing copy (which would reintroduce the exact bug this prevents).
+func cloneJSON[T any](v T) T {
+	raw, err := json.Marshal(v)
+	if err != nil {
+		panic("memory store: marshal for clone: " + err.Error())
+	}
+	var out T
+	if err := json.Unmarshal(raw, &out); err != nil {
+		panic("memory store: unmarshal for clone: " + err.Error())
+	}
+	return out
+}
+
 // GetMeta implements storage.MetadataStore.
 func (s *Store) GetMeta(_ context.Context, slug string) (*storage.DocMeta, error) {
 	s.mu.RLock()
@@ -48,14 +69,15 @@ func (s *Store) GetMeta(_ context.Context, slug string) (*storage.DocMeta, error
 	if !ok {
 		return nil, nil
 	}
-	return &m, nil
+	c := cloneJSON(m)
+	return &c, nil
 }
 
 // PutMeta implements storage.MetadataStore.
 func (s *Store) PutMeta(_ context.Context, slug string, meta storage.DocMeta) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.meta[slug] = meta
+	s.meta[slug] = cloneJSON(meta)
 	return nil
 }
 
@@ -73,7 +95,7 @@ func (s *Store) ListMeta(_ context.Context) ([]storage.MetaEntry, error) {
 	defer s.mu.RUnlock()
 	out := make([]storage.MetaEntry, 0, len(s.meta))
 	for slug, m := range s.meta {
-		out = append(out, storage.MetaEntry{Slug: slug, Meta: m})
+		out = append(out, storage.MetaEntry{Slug: slug, Meta: cloneJSON(m)})
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Slug < out[j].Slug })
 	return out, nil
@@ -87,14 +109,14 @@ func (s *Store) GetComments(_ context.Context, slug string) ([]core.Comment, err
 	if list == nil {
 		return []core.Comment{}, nil
 	}
-	return list, nil
+	return cloneJSON(list), nil
 }
 
 // PutComments implements storage.MetadataStore.
 func (s *Store) PutComments(_ context.Context, slug string, list []core.Comment) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.comments[slug] = list
+	s.comments[slug] = cloneJSON(list)
 	return nil
 }
 
@@ -169,6 +191,10 @@ func (s *Store) AnyToken(_ context.Context) (bool, error) {
 
 // Close implements storage.MetadataStore.
 func (s *Store) Close() error { return nil }
+
+// Health implements storage.MetadataStore and storage.BlobStore; the in-memory
+// store is always reachable.
+func (s *Store) Health(_ context.Context) error { return nil }
 
 // --- BlobStore ---
 

@@ -56,7 +56,7 @@ func TestFullLifecycle(t *testing.T) {
 	cfg := &config.Config{WriteToken: "e2e", MaxHTMLBytes: 5 << 20, RepoURL: "https://example.com", RateLimitMax: 0}
 	locker := sluglock.NewMemory()
 	comments := service.NewCommentService(pg, locker)
-	docs := service.NewDocService(blobs, pg, comments, "", cfg.MaxHTMLBytes)
+	docs := service.NewDocService(blobs, pg, comments, locker, "", cfg.MaxHTMLBytes)
 	auth := service.NewAuthService(pg, cfg)
 	h := httpx.New(httpx.Deps{Config: cfg, Logger: log.New("silent"), Docs: docs, Comments: comments, Auth: auth, OverlayJS: assets.OverlayJS}).Handler()
 

@@ -140,12 +140,28 @@
     --octo-focus-ring: 0 0 0 3px rgba(22,82,240,0.15);
   }
   /* Layout */
+  /* Keyboard focus: one consistent ring across all interactive chrome, so
+     tabbing through the overlay is visible and accessible. :focus-visible only
+     shows it for keyboard users, not on mouse click. */
+  .tdoc-bar button:focus-visible, .tdoc-version-toggle:focus-visible,
+  .tdoc-chip:focus-visible, .tdoc-menu button:focus-visible,
+  .tdoc-secondary-menu button:focus-visible, .tdoc-version-menu button:focus-visible,
+  .tdoc-emoji-picker button:focus-visible, .tdoc-react-chip:focus-visible,
+  .tdoc-react-add:focus-visible, .tdoc-reanchor-btn:focus-visible,
+  .tdoc-reply-toggle:focus-visible, .tdoc-comment-pill:focus-visible,
+  .tdoc-fab:focus-visible, .tdoc-margin-comment .copy-md:focus-visible,
+  .tdoc-margin-comment .del:focus-visible, .tdoc-popup .submit:focus-visible,
+  .tdoc-popup .head .x:focus-visible, .tdoc-reply-submit:focus-visible,
+  .tdoc-modal button:focus-visible {
+    outline: none !important;
+    box-shadow: var(--octo-focus-ring) !important;
+  }
   /* Default: text is selectable everywhere in the document body, so users
      can highlight prose inside any container (including custom-div-wrapped
      artifacts like transcript panes). UI chrome opts out explicitly via
      .tdoc-* selectors below. Media artifacts (img/svg/canvas/video) are
      non-selectable by their nature so they don't need an exception. */
-  body { padding-top: 44px !important; padding-bottom: 24px; -webkit-user-select: text; user-select: text; }
+  body { padding-top: 49px !important; padding-bottom: 24px; -webkit-user-select: text; user-select: text; }
   body .tdoc-bar, body .tdoc-bar *, body #tdoc-comment-layer, body #tdoc-comment-layer *, body .tdoc-hover-outline, body .tdoc-comment-pill, body .tdoc-emoji-picker, body .tdoc-secondary-menu, body .tdoc-anchor-mark.tdoc-anchor-mark-element, body .tdoc-drag-marquee, body .tdoc-modal, body .tdoc-modal * { -webkit-user-select: none !important; user-select: none !important; }
   body .tdoc-modal .code, body .tdoc-modal textarea, body .tdoc-modal input { -webkit-user-select: text !important; user-select: text !important; }
   /* Reserve the 320px comment column on the right. The article centers
@@ -169,7 +185,7 @@
   body:not(.tdoc-has-comments):not(.tdoc-narrow):not(:has(> .wrap, > main, > article, > .content, > .container)) {
     padding-left: max(24px, calc((100% - 720px) / 2)) !important;
     padding-right: max(24px, calc((100% - 720px) / 2)) !important;
-    padding-top: 68px !important;
+    padding-top: 73px !important;
   }
   body.tdoc-narrow:not(:has(> .wrap, > main, > article, > .content, > .container)) {
     padding-left: 20px !important;
@@ -195,6 +211,7 @@
     background: var(--octo-surface);
     text-rendering: optimizeLegibility;
     -webkit-font-smoothing: antialiased;
+    overflow-wrap: anywhere;
   }
   :where(body h1) { font-size: 38px; line-height: 1.15; font-weight: 700; letter-spacing: -0.02em; margin: 0 0 20px; color: var(--octo-ink); }
   :where(body h2) { font-size: 27px; line-height: 1.25; font-weight: 700; letter-spacing: -0.01em; margin: 44px 0 14px; color: var(--octo-ink); }
@@ -202,12 +219,12 @@
   :where(body h4) { font-size: 17px; font-weight: 700; margin: 22px 0 6px; color: var(--octo-ink); }
   :where(body h5, body h6) { font-size: 14px; font-weight: 600; margin: 16px 0 4px; color: var(--octo-ink); text-transform: uppercase; letter-spacing: 0.06em; }
   :where(body p) { margin: 0 0 16px; }
-  :where(body a) { color: var(--octo-primary); text-decoration: underline; text-underline-offset: 2px; }
+  :where(body a) { color: var(--octo-primary); text-decoration: underline; text-underline-offset: 2px; overflow-wrap: anywhere; }
   :where(body a:hover) { text-decoration-thickness: 2px; }
   :where(body ul, body ol) { margin: 0 0 18px; padding-left: 26px; }
   :where(body li) { margin: 8px 0; }
   :where(body blockquote) { margin: 20px 0; padding: 2px 0 2px 20px; border-left: 3px solid var(--octo-quote-rule); color: var(--octo-quote-text); }
-  :where(body code) { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.88em; background: var(--octo-code-bg); padding: 2px 6px; border-radius: var(--octo-radius-md); }
+  :where(body code) { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.88em; background: var(--octo-code-bg); padding: 2px 6px; border-radius: var(--octo-radius-md); overflow-wrap: anywhere; }
   :where(body pre) { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 14.5px; line-height: 1.6; background: var(--octo-pre-bg); border: 1px solid var(--octo-pre-border); border-radius: var(--octo-radius-lg); padding: 16px 18px; margin: 20px 0; overflow-x: auto; }
   :where(body pre code) { background: transparent; padding: 0; border-radius: 0; }
   :where(body hr) { border: 0; border-top: 1px solid var(--octo-pre-border); margin: 36px 0; }
@@ -288,7 +305,7 @@
 
   /* Breadcrumb: workspace · slug · v3 — separated by " / ". */
   .tdoc-bar .crumb { color: var(--octo-bar-text); font-weight: 500; padding: 4px 6px; border-radius: var(--octo-radius-md); max-width: 24ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .tdoc-bar .crumb-sep { color: var(--octo-border); user-select: none; padding: 0 1px; }
+  .tdoc-bar .crumb-sep { color: var(--octo-faint); user-select: none; padding: 0 1px; }
   .tdoc-bar .doc-title { color: var(--octo-ink); font-weight: 600; font-size: 14px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
   /* Default action button — icon and/or label, no border, hover bg only. */
@@ -363,9 +380,9 @@
      the viewer is on a non-latest version. Single-direction nudge: it only
      points forward to the latest version. Hidden by default; the bar-setup
      code reveals it (and adds the body padding) only when version < latest. */
-  .tdoc-oldver-strip { display: none; position: fixed; top: 44px; left: 0; right: 0; height: 28px; background: #fbf6e9; color: #6b5e3a; border-bottom: 1px solid #efe6cd; font: 12px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; align-items: center; justify-content: center; gap: 6px; z-index: 999998; padding: 0 12px; }
+  .tdoc-oldver-strip { display: none; position: fixed; top: 49px; left: 0; right: 0; height: 28px; background: #fbf6e9; color: #6b5e3a; border-bottom: 1px solid #efe6cd; font: 12px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; align-items: center; justify-content: center; gap: 6px; z-index: 999998; padding: 0 12px; }
   body.tdoc-has-oldver-strip .tdoc-oldver-strip { display: flex; }
-  body.tdoc-has-oldver-strip { padding-top: 72px !important; }
+  body.tdoc-has-oldver-strip { padding-top: 77px !important; }
   .tdoc-oldver-strip a { color: #8a6d1f; font-weight: 600; text-decoration: none; border-bottom: 1px solid currentColor; }
   .tdoc-oldver-strip a:hover { color: #6b5413; }
   /* Ghost marker — a faint horizontal line at the unanchored comment's
@@ -387,7 +404,7 @@
   .tdoc-agent-status-partial { background: var(--octo-warn-bg); color: var(--octo-warn-fg); }
   .tdoc-agent-status-question { background: var(--octo-ask-bg); color: var(--octo-ask-fg); }
   .tdoc-margin-comment .text { color: var(--octo-ink-strong); line-height: 1.45; word-wrap: break-word; }
-  .tdoc-margin-comment .meta { font-size: 11px; color: var(--octo-muted); margin-top: 8px; display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+  .tdoc-margin-comment .meta { font-size: 11px; color: var(--octo-muted-2); margin-top: 8px; display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
   .tdoc-margin-comment .meta > span:first-child { flex: 1 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .tdoc-margin-comment .del { cursor: pointer; color: var(--octo-danger); }
   .tdoc-margin-comment .del:hover { text-decoration: underline; }
@@ -400,8 +417,8 @@
 
   /* Reactions + emoji picker */
   .tdoc-reactions { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; align-items: center; }
-  .tdoc-react-chip { position: relative; display: inline-flex; align-items: center; gap: 4px; font: 12px system-ui; background: var(--octo-surface-subtle); border: 1px solid var(--octo-border); border-radius: var(--octo-radius-pill); padding: 2px 8px; cursor: pointer; color: #333; transition: background .12s, border-color .12s; }
-  .tdoc-react-chip:hover { background: #eef0f3; }
+  .tdoc-react-chip { position: relative; display: inline-flex; align-items: center; gap: 4px; font: 12px system-ui; background: var(--octo-surface-subtle); border: 1px solid var(--octo-border); border-radius: var(--octo-radius-pill); padding: 2px 8px; cursor: pointer; color: var(--octo-ink-2); transition: background .12s, border-color .12s; }
+  .tdoc-react-chip:hover { background: var(--octo-surface-hover); }
   .tdoc-react-chip.mine { background: var(--octo-mine-bg); border-color: var(--octo-primary); color: var(--octo-primary); }
   /* Agent reactions get a tinted background so users can scan a long doc
      and spot which comments the agent has already responded to. */
@@ -421,7 +438,7 @@
     padding: 4px 8px;
     border-radius: var(--octo-radius-md);
     font: 11px/1.3 system-ui;
-    white-space: pre;
+    white-space: pre-wrap;
     max-width: 240px;
     pointer-events: none;
     z-index: 999999;
@@ -452,7 +469,7 @@
   .tdoc-reply .author .login { font-weight: 600; font-size: 12px; color: var(--octo-ink-strong); }
   .tdoc-reply .author .anon { color: var(--octo-muted); font-style: italic; font-size: 12px; }
   .tdoc-reply .text { color: var(--octo-ink); font-size: 13px; line-height: 1.4; word-wrap: break-word; }
-  .tdoc-reply .meta { font-size: 11px; color: var(--octo-muted); margin-top: 4px; display: flex; justify-content: space-between; }
+  .tdoc-reply .meta { font-size: 11px; color: var(--octo-muted-2); margin-top: 4px; display: flex; justify-content: space-between; }
   .tdoc-reply .del { cursor: pointer; color: var(--octo-danger); }
   .tdoc-reply .del:hover { text-decoration: underline; }
   .tdoc-reply-form { display: none; margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--octo-hairline); }
@@ -461,7 +478,7 @@
   .tdoc-reply-form textarea::placeholder { color: var(--octo-muted); }
   .tdoc-reply-form textarea:focus { border-color: var(--octo-primary); box-shadow: var(--octo-focus-ring); }
   .tdoc-reply-form-foot { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; }
-  .tdoc-reply-form-foot .hint { color: var(--octo-muted); font-size: 11px; }
+  .tdoc-reply-form-foot .hint { color: var(--octo-muted-2); font-size: 11px; }
   .tdoc-reply-form-foot .tdoc-reply-submit { background: var(--octo-primary); color: var(--octo-surface); border: none; border-radius: var(--octo-radius-md); padding: 6px 14px; font: 12px system-ui; font-weight: 600; cursor: pointer; box-shadow: 0 1px 2px rgba(22,82,240,0.2); transition: background .12s, box-shadow .12s; }
   .tdoc-reply-form-foot .tdoc-reply-submit:hover { background: var(--octo-primary-hover); box-shadow: 0 2px 8px rgba(22,82,240,0.28); }
 
@@ -537,7 +554,7 @@
   .tdoc-popup textarea::placeholder { color: var(--octo-muted); }
   .tdoc-popup textarea:focus { border-color: var(--octo-primary); box-shadow: var(--octo-focus-ring); }
   .tdoc-popup .foot { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; }
-  .tdoc-popup .hint { color: var(--octo-muted); font-size: 11px; }
+  .tdoc-popup .hint { color: var(--octo-muted-2); font-size: 11px; }
   .tdoc-popup .submit { background: var(--octo-primary); border: none; color: var(--octo-surface); padding: 7px 16px; border-radius: var(--octo-radius-md); cursor: pointer; font: inherit; font-weight: 600; box-shadow: 0 1px 2px rgba(22,82,240,0.2); transition: background .12s, box-shadow .12s; }
   .tdoc-popup .submit:hover { background: var(--octo-primary-hover); box-shadow: 0 2px 8px rgba(22,82,240,0.28); }
   .tdoc-popup .submit:disabled { opacity: 0.5; cursor: not-allowed; box-shadow: none; }
@@ -614,7 +631,7 @@
   }
 
   /* Footer */
-  .tdoc-footer { margin-top: 80px; padding: 20px 16px 28px; font: 12px system-ui, sans-serif; color: var(--octo-muted); text-align: center; border-top: 1px solid var(--octo-hairline); box-sizing: border-box; max-width: 100%; }
+  .tdoc-footer { margin-top: 80px; padding: 20px 16px 28px; font: 12px system-ui, sans-serif; color: var(--octo-muted-2); text-align: center; border-top: 1px solid var(--octo-hairline); box-sizing: border-box; max-width: 100%; }
   .tdoc-footer .tdoc-footer-row { display: inline-flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: center; row-gap: 4px; }
   .tdoc-footer a { color: var(--octo-muted-2); text-decoration: none; }
   .tdoc-footer a:hover { color: var(--octo-primary); text-decoration: underline; }

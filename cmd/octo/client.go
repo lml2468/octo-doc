@@ -23,10 +23,14 @@ type client struct {
 	http    *http.Client
 }
 
-func newClient(baseURL, token string) *client {
+// newClient builds a client. cred is the credential sent as Authorization: Bearer
+// — the write token for author operations, or a doc share code for reader
+// operations (pull/comment on a private doc). The server resolves the capability
+// from the credential; the CLI never uses cookies.
+func newClient(baseURL, cred string) *client {
 	return &client{
 		baseURL: strings.TrimRight(baseURL, "/"),
-		token:   token,
+		token:   cred,
 		http:    &http.Client{Timeout: 120 * time.Second},
 	}
 }
@@ -53,26 +57,7 @@ func (e *apiError) String() string {
 	return e.Code
 }
 
-// publishReq is the POST /v1/docs request body: {slug, version, html, meta, comments}.
-type publishReq struct {
-	Slug     string       `json:"slug"`
-	Version  int          `json:"version"`
-	HTML     string       `json:"html"`
-	Meta     *publishMeta `json:"meta,omitempty"`
-	Comments []comment    `json:"comments,omitempty"`
-}
-
-// publishMeta is the doc's meta.json sent under the publish `meta` key. The
-// server currently honors only Title (it rebuilds the version list from the
-// uploaded blobs and stamps its own timestamps); Versions is sent for
-// completeness and forward-compatibility, but per-version prompts are not yet
-// persisted server-side, so don't rely on them surviving a round-trip.
-type publishMeta struct {
-	Title    string       `json:"title,omitempty"`
-	Versions []versionRef `json:"versions,omitempty"`
-}
-
-// publishResp is the POST /v1/docs success payload.
+// publishResp is a publish/promote success payload.
 type publishResp struct {
 	Slug           string `json:"slug"`
 	Version        int    `json:"version"`
@@ -165,9 +150,21 @@ func (c *client) do(ctx context.Context, method, path string, body any) (json.Ra
 	return env.Data, nil
 }
 
-// publish uploads one version. The server merges comments non-destructively by id.
-func (c *client) publish(ctx context.Context, req publishReq) (*publishResp, error) {
-	data, err := c.do(ctx, http.MethodPost, "/v1/docs", req)
+// draftReq is the PUT /v1/docs/{slug}/draft request body (html + title).
+type draftReq struct {
+	HTML  string `json:"html"`
+	Title string `json:"title,omitempty"`
+}
+
+// saveDraft writes (overwrites) the mutable draft slot for a slug.
+func (c *client) saveDraft(ctx context.Context, slug, html, title string) error {
+	_, err := c.do(ctx, http.MethodPut, "/v1/docs/"+slug+"/draft", draftReq{HTML: html, Title: title})
+	return err
+}
+
+// promote promotes the current draft to a new immutable version.
+func (c *client) promote(ctx context.Context, slug string) (*publishResp, error) {
+	data, err := c.do(ctx, http.MethodPost, "/v1/docs/"+slug+"/draft/promote", map[string]any{})
 	if err != nil {
 		return nil, err
 	}

@@ -10,10 +10,9 @@ func ok(msg string)   { fmt.Printf("  \033[32m✓\033[0m %s\n", msg) }
 func warn(msg string) { fmt.Printf("  \033[33m!\033[0m %s\n", msg) }
 func bad(msg string)  { fmt.Printf("  \033[31m✗\033[0m %s\n", msg) }
 
-// cmdDoctor is a read-only health check: it confirms the CLI's own version, the
-// local preview server, and (if configured) reachability + auth of the remote
-// octo-doc server. Unlike the bash doctor it needs no node/jq/curl — the CLI is
-// self-contained — so it only reports on what actually matters now.
+// cmdDoctor is a read-only health check: it confirms the CLI's own version + doc
+// store and (if configured) reachability + auth of the remote octo-doc server.
+// Authoring is remote-first — there is no local preview to check.
 func cmdDoctor(_ []string) error {
 	cfg := loadConfig()
 	fmt.Println("octo doctor")
@@ -27,20 +26,9 @@ func cmdDoctor(_ []string) error {
 	}
 	fmt.Println()
 
-	fmt.Printf("Local preview server (:%d):\n", cfg.Port)
-	switch {
-	case pingIsOurs(cfg.Port):
-		ok(fmt.Sprintf("preview up at http://localhost:%d", cfg.Port))
-	case portAnswers(cfg.Port):
-		bad(fmt.Sprintf("port %d answers HTTP but is NOT the octo preview (foreign service)", cfg.Port))
-	default:
-		warn("preview not running (start: octo preview start)")
-	}
-	fmt.Println()
-
 	fmt.Println("Remote octo-doc server:")
 	if cfg.BaseURL == "" {
-		warn("no server configured. Set OCTO_BASE_URL (+ OCTO_TOKEN) or run `octo publish <slug>`.")
+		warn("no server configured. Set OCTO_BASE_URL (+ OCTO_TOKEN).")
 	} else {
 		if pingService(cfg.BaseURL+"/v1/ping") == "octo-doc" {
 			ok("server reachable: " + cfg.BaseURL)

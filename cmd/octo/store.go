@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
-	"strconv"
 
 	// Aliased because the local `config` type would shadow the package name.
 	configpkg "github.com/Mininglamp-OSS/octo-doc/internal/config"
@@ -44,10 +43,11 @@ type versionRef struct {
 
 // docMeta is the meta.json shape.
 type docMeta struct {
-	Title    string       `json:"title"`
-	Slug     string       `json:"slug"`
-	Created  string       `json:"created,omitempty"`
-	Versions []versionRef `json:"versions"`
+	Title       string       `json:"title"`
+	Slug        string       `json:"slug"`
+	Created     string       `json:"created,omitempty"`
+	Versions    []versionRef `json:"versions"`
+	DraftPrompt string       `json:"draft_prompt,omitempty"`
 }
 
 // store is the filesystem-backed doc store.
@@ -66,9 +66,6 @@ func (s *store) metaPath(slug string) string {
 }
 func (s *store) commentsPath(slug string) string {
 	return filepath.Join(s.slugDir(slug), "comments.json")
-}
-func (s *store) htmlPath(slug string, v int) string {
-	return filepath.Join(s.slugDir(slug), "v"+strconv.Itoa(v), "index.html")
 }
 
 // exists reports whether a doc directory is present.

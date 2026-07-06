@@ -17,3 +17,6 @@ deploy/docker-compose.local.yml
 
 # Browser tooling output
 .playwright-mcp/
+
+# stray root build of the octo client (use bin/octo)
+/octo

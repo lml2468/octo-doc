@@ -181,3 +181,54 @@ func TestSetAgentReactionReplacesStale(t *testing.T) {
 		t.Error("❓ should be set")
 	}
 }
+
+// TestCommentIDsUniqueSameInstant guards the collision fix: two comments created
+// back-to-back (same millisecond) must get distinct ids, or the second becomes
+// unaddressable by findComment/delete/react.
+func TestCommentIDsUniqueSameInstant(t *testing.T) {
+	ps := newTestServer(t)
+	seedDoc(t, ps.store, "<html><body>x</body></html>")
+	h := ps.routes()
+	post := func() {
+		rr := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/v1/comments", strings.NewReader(`{"slug":"doc","version":1,"text":"x"}`))
+		req.Header.Set("Content-Type", "application/json")
+		h.ServeHTTP(rr, req)
+		if rr.Code != 200 {
+			t.Fatalf("create failed: %d", rr.Code)
+		}
+	}
+	seen := map[string]bool{}
+	for range 50 {
+		post()
+	}
+	list, _ := ps.store.readComments("doc")
+	for _, c := range list {
+		if seen[c.ID] {
+			t.Fatalf("duplicate comment id: %s", c.ID)
+		}
+		seen[c.ID] = true
+	}
+	if len(seen) != 50 {
+		t.Errorf("expected 50 unique ids, got %d", len(seen))
+	}
+}
+
+// TestPublishRouteWired confirms /v1/publish reaches the publish handler (not a
+// 404 fall-through), so the overlay's local-mode Publish button works. With no
+// server configured it should return the 503 the handler emits — never 404.
+func TestPublishRouteWired(t *testing.T) {
+	ps := newTestServer(t)
+	ps.cfg = config{Dir: ps.store.dir} // no BaseURL → publish must fail cleanly
+	seedDoc(t, ps.store, "<html><body>x</body></html>")
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/v1/publish", strings.NewReader(`{"slug":"doc"}`))
+	req.Header.Set("Content-Type", "application/json")
+	ps.routes().ServeHTTP(rr, req)
+	if rr.Code == http.StatusNotFound {
+		t.Fatal("/v1/publish fell through to 404 — route not wired")
+	}
+	if rr.Code != http.StatusServiceUnavailable {
+		t.Errorf("no-server publish should be 503, got %d: %s", rr.Code, rr.Body.String())
+	}
+}

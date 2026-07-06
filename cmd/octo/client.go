@@ -62,7 +62,11 @@ type publishReq struct {
 	Comments []comment    `json:"comments,omitempty"`
 }
 
-// publishMeta carries the doc title + version history the server honors on publish.
+// publishMeta is the doc's meta.json sent under the publish `meta` key. The
+// server currently honors only Title (it rebuilds the version list from the
+// uploaded blobs and stamps its own timestamps); Versions is sent for
+// completeness and forward-compatibility, but per-version prompts are not yet
+// persisted server-side, so don't rely on them surviving a round-trip.
 type publishMeta struct {
 	Title    string       `json:"title,omitempty"`
 	Versions []versionRef `json:"versions,omitempty"`

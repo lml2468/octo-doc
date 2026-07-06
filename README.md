@@ -136,7 +136,7 @@ octo-doc health      # local healthcheck (used by the container)
 The agent client binary (`cmd/octo`) — see [Agent skill](#agent-skill):
 
 ```bash
-octo new | preview | publish | pull | unpublish | list | fork | doctor | update
+octo new | preview | publish | pull | unpublish | list | fork | version-add | reply | doctor | update
 ```
 
 ## Development

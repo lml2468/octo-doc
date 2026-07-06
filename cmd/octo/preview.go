@@ -46,6 +46,7 @@ func cmdPreview(args []string) error {
 type previewServer struct {
 	store *store
 	port  int
+	cfg   config // for the in-process /v1/publish handler
 }
 
 // pidPath is where a backgrounded preview server records its PID (under the doc dir).
@@ -61,7 +62,7 @@ func previewServe(cfg config) error {
 	if err := os.MkdirAll(cfg.Dir, 0o755); err != nil {
 		return err
 	}
-	ps := &previewServer{store: newStore(cfg.Dir), port: cfg.Port}
+	ps := &previewServer{store: newStore(cfg.Dir), port: cfg.Port, cfg: cfg}
 	srv := &http.Server{
 		Handler:           ps.routes(),
 		ReadHeaderTimeout: 10 * time.Second,

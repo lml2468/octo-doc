@@ -1,6 +1,8 @@
 package main
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"html"
@@ -34,6 +36,7 @@ func (ps *previewServer) routes() http.Handler {
 	mux.HandleFunc("/v1/comments", ps.handleComments)
 	mux.HandleFunc("/v1/agent/replies", ps.handleAgentReply)
 	mux.HandleFunc("/v1/reactions", ps.handleReactions)
+	mux.HandleFunc("/v1/publish", ps.handlePublish)
 	return mux
 }
 
@@ -234,7 +237,7 @@ func (ps *previewServer) createComment(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		rep := reply{
-			ID: "r_" + nowMillis(), ParentID: body.ParentID, Text: body.Text,
+			ID: newReplyID(), ParentID: body.ParentID, Text: body.Text,
 			Author: nil, Created: now, Reactions: map[string][]string{},
 		}
 		list[idx].Replies = append(list[idx].Replies, rep)
@@ -250,7 +253,7 @@ func (ps *previewServer) createComment(w http.ResponseWriter, r *http.Request) {
 		version = 1
 	}
 	c := comment{
-		ID: "c_" + nowMillis(), Version: version, Anchor: body.Anchor, Text: body.Text,
+		ID: newCommentID(), Version: version, Anchor: body.Anchor, Text: body.Text,
 		Author: nil, Status: "open", Created: now, Replies: []reply{}, Reactions: map[string][]string{},
 	}
 	list = append(list, c)
@@ -380,7 +383,7 @@ func (ps *previewServer) handleAgentReply(w http.ResponseWriter, r *http.Request
 	}
 	avatar := (*string)(nil)
 	rep := reply{
-		ID: "r_" + nowMillis(), ParentID: body.ParentID, Text: body.Text,
+		ID: newReplyID(), ParentID: body.ParentID, Text: body.Text,
 		Author:      &core.Author{Kind: "agent", Login: agentLogin, Name: agentLogin, AvatarURL: avatar},
 		AgentStatus: status, Created: nowISO(), Reactions: map[string][]string{},
 	}
@@ -445,6 +448,41 @@ func (ps *previewServer) handleReactions(w http.ResponseWriter, r *http.Request)
 	dataEnv(w, map[string]any{"ok": true, "reactions": *reactions})
 }
 
+// handlePublish runs a publish in-process for the overlay's local-mode Publish
+// button, which POSTs {slug} to /v1/publish and expects {data:{url}}. It takes
+// the identical code path as `octo publish`, so a browser publish and a CLI
+// publish behave the same. Requires a configured server + write token.
+func (ps *previewServer) handlePublish(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		errEnv(w, http.StatusNotFound, "Not found")
+		return
+	}
+	if !isLocalMutation(r) {
+		errEnv(w, http.StatusForbidden, "forbidden")
+		return
+	}
+	var body struct {
+		Slug string `json:"slug"`
+	}
+	if err := readBody(r, &body); err != nil {
+		errEnv(w, http.StatusRequestEntityTooLarge, "payload_too_large")
+		return
+	}
+	slug := safeSlug(body.Slug)
+	if slug == "" {
+		errEnv(w, http.StatusBadRequest, "invalid slug")
+		return
+	}
+	url, err := publishDoc(r.Context(), ps.cfg, slug, io.Discard)
+	if err != nil {
+		// No server configured / no token / upload failure — surface as a 503 the
+		// overlay renders in its status line.
+		errEnv(w, http.StatusServiceUnavailable, err.Error())
+		return
+	}
+	dataEnv(w, map[string]any{"url": url})
+}
+
 // indexPage renders the doc listing at "/".
 func (ps *previewServer) indexPage() string {
 	slugs, _ := ps.store.listSlugs()
@@ -500,8 +538,28 @@ func (ps *previewServer) indexPage() string {
 // nowISO returns the current UTC time as an ISO-8601 Z timestamp.
 func nowISO() string { return time.Now().UTC().Format("2006-01-02T15:04:05.000Z") }
 
-// nowMillis returns the current Unix time in milliseconds, for id generation.
-func nowMillis() string { return strconv.FormatInt(time.Now().UnixMilli(), 10) }
+// newCommentID / newReplyID mint ids in the server's format: a prefix, the
+// timestamp digits, and a random suffix. The random suffix is what prevents
+// collisions when two comments are created in the same millisecond — without it
+// findComment/findReactions/delete would all act on the first match and the
+// second record would be unaddressable.
+func newCommentID() string { return "c_" + idStamp() }
+func newReplyID() string   { return "r_" + idStamp() }
+
+// idStamp is the shared time+random tail of an id: compact timestamp + "_" + 8 hex.
+func idStamp() string {
+	digits := make([]byte, 0, 20)
+	for _, c := range nowISO() {
+		if c >= '0' && c <= '9' {
+			digits = append(digits, byte(c))
+		}
+	}
+	var rnd [4]byte
+	if _, err := rand.Read(rnd[:]); err != nil {
+		panic("octo: crypto/rand failed: " + err.Error())
+	}
+	return string(digits) + "_" + hex.EncodeToString(rnd[:])
+}
 
 // findComment returns the index of a top-level comment by id, or -1.
 func findComment(list []comment, id string) int {

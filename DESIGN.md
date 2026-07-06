@@ -110,10 +110,17 @@ components:
     backgroundColor: "{colors.highlightActive}"
     textColor: "{colors.inkStrong}"
   comment-pill:
-    backgroundColor: "{colors.surface}"
-    textColor: "{colors.ink}"
+    backgroundColor: "{colors.primary}"
+    textColor: "{colors.surface}"
     typography: "{typography.label-sm}"
     rounded: "{rounded.pill}"
+    padding: "6px 11px"
+  comment-composer:
+    backgroundColor: "{colors.surface}"
+    textColor: "{colors.ink}"
+    typography: "{typography.ui}"
+    rounded: "{rounded.lg}"
+    padding: "14px"
 ---
 
 # octo-doc
@@ -208,9 +215,13 @@ The elevation scale is codified as tokens in `assets/overlay.js` (`--octo-shadow
 `sm` (toolbar hairline lift), `card` (comment cards), `menu` (dropdowns, pickers,
 the new-comment popup), `fab` (the one pronounced tinted float), and `active`
 (the blue-tinted lift on a focused card/anchor). Use a token, not a raw `rgba()`.
-Text inputs (the comment composer + reply box) get `--octo-focus-ring` on `:focus`
-— a soft blue halo that, with the border shifting to `primary`, is the single
-consistent focus affordance.
+
+**Focus.** A single `--octo-focus-ring` token (`0 0 0 3px rgba(22,82,240,0.15)`)
+is the one focus affordance across the whole overlay. Text inputs (the comment
+composer + reply box) show it on `:focus` alongside a `primary` border; every
+interactive chrome control — bar buttons, chips, menu items, the FAB, the comment
+pill, reaction/reply controls, modal buttons — shows it on `:focus-visible`, so
+keyboard navigation is always visible without a ring flashing on mouse clicks.
 
 ## Shapes
 
@@ -233,12 +244,25 @@ A small, consistent radius set:
   `{rounded.md}`, `7px 14px`, weight 600. **button-primary-hover** darkens to
   `{colors.primaryHover}`.
 - **fab** — the floating comment button, bottom-right, `{rounded.pill}`, primary
-  blue with the tinted drop shadow. Shows the live comment count (e.g. "💬 3").
+  blue with the tinted drop shadow. Shows the live comment count as a contrasting
+  white pill badge (e.g. "💬 3").
 - **anchor-mark** — the inline highlight on commented document text
   (`{colors.highlight}`); **anchor-mark-active** intensifies to
   `{colors.highlightActive}` for the focused anchor.
-- **comment-pill** — a white, pill-shaped, hairline-bordered chip anchored beside
-  commented text, in `label-sm`.
+- **comment-pill** — the compact **"Comment"** affordance that floats on the
+  top-right edge of a hovered element: primary blue, `{rounded.pill}`, icon +
+  label, ~25px tall. Every box property is reset with `!important` so document CSS
+  (e.g. an `svg { margin }` rule) can't distort it — the overlay floats over
+  untrusted HTML and must be fully insulated.
+- **comment-composer** — the new-comment popup and the reply box: a light
+  `{colors.surface}` panel (matching the rest of the chrome, not a dark sheet), a
+  muted anchor-preview chip, a real close button with a hit area, and a textarea
+  that rests on a `{colors.border}` outline and gains a `primary` border +
+  `--octo-focus-ring` on focus.
+- **table** — minimal divider style: no cell fills or per-cell borders, a hairline
+  (`{colors.border}`) under each row, a slightly stronger rule (`{colors.quoteRule}`)
+  under the uppercase muted header, and a `{colors.surfaceSubtle}` row hover.
+  `border-collapse: collapse` so it stays clean at any width.
 
 ## Do's and Don'ts
 
@@ -255,3 +279,11 @@ A small, consistent radius set:
   for transient success feedback only. **Don't** use either as a resting surface.
 - **Do** use `pill` radius exclusively for floating affordances (FAB, pills) and
   `md` for everything else. **Don't** mix radii within one control group.
+- **Do** give every interactive control a `--octo-focus-ring` on `:focus-visible`,
+  and use `{colors.muted2}` (not `{colors.muted}`) for text at 12px or smaller so
+  it clears WCAG AA. **Don't** ship chrome that's invisible to keyboard users or
+  fails contrast at small sizes.
+- **Do** fully reset a chrome element's box with `!important` when it floats over
+  the document (the comment pill), and give document prose `overflow-wrap: anywhere`
+  so a long URL can't force a horizontal scrollbar. **Don't** assume the document's
+  own CSS won't leak into overlay chrome — it will.

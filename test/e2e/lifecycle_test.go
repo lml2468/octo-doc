@@ -82,8 +82,8 @@ func TestFullLifecycle(t *testing.T) {
 		t.Fatal("render missing overlay or aids")
 	}
 
-	// Comment + agent reply.
-	c := postJSON(t, srv.URL+"/v1/comments", "",
+	// Comment + agent reply (author credential — docs are private by default).
+	c := postJSON(t, srv.URL+"/v1/comments", "e2e",
 		`{"slug":"`+slug+`","text":"q","version":1,"anchor":{"kind":"text","text":"anchor me"}}`)
 	cid := c["id"].(string)
 	_ = postJSON(t, srv.URL+"/v1/agent/replies", "e2e",
@@ -135,9 +135,13 @@ func postJSON(t *testing.T, url, token, body string) map[string]any {
 	return data
 }
 
+// getText GETs a doc/JSON route as the author (the e2e write token) — docs are
+// private by default, so reads need a credential.
 func getText(t *testing.T, url string) string {
 	t.Helper()
-	res, err := http.Get(url) //nolint:noctx
+	req, _ := http.NewRequest(http.MethodGet, url, nil)
+	req.Header.Set("Authorization", "Bearer e2e")
+	res, err := http.DefaultClient.Do(req) //nolint:noctx
 	if err != nil {
 		t.Fatal(err)
 	}

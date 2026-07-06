@@ -200,6 +200,41 @@ func (s *Server) handleRenderDraft(w http.ResponseWriter, r *http.Request) error
 	return nil
 }
 
+// handleShare mints (or rotates) the per-doc share code and returns a coded read
+// URL. Author-only. POST /v1/docs/{slug}/share.
+func (s *Server) handleShare(w http.ResponseWriter, r *http.Request) error {
+	slug, err := requireSlug(chi.URLParam(r, "slug"))
+	if err != nil {
+		return err
+	}
+	code, err := s.auth.GenerateCode(r.Context(), slug)
+	if err != nil {
+		return err
+	}
+	// Point at the latest version if one exists, else the doc root.
+	url := s.cfg.BaseURL + "/d/" + slug + "/v/1?code=" + code
+	if vl, verr := s.docs.ListVersions(r.Context(), slug); verr == nil && vl != nil && len(vl.Versions) > 0 {
+		latest := vl.Versions[len(vl.Versions)-1].N
+		url = s.cfg.BaseURL + "/d/" + slug + "/v/" + strconv.Itoa(latest) + "?code=" + code
+	}
+	writeData(w, 200, map[string]any{"slug": slug, "code": code, "url": url})
+	return nil
+}
+
+// handleRevokeShare clears the per-doc share code (existing links stop working).
+// Author-only. DELETE /v1/docs/{slug}/share.
+func (s *Server) handleRevokeShare(w http.ResponseWriter, r *http.Request) error {
+	slug, err := requireSlug(chi.URLParam(r, "slug"))
+	if err != nil {
+		return err
+	}
+	if err := s.auth.RevokeCode(r.Context(), slug); err != nil {
+		return err
+	}
+	writeData(w, 200, map[string]any{"slug": slug, "revoked": true})
+	return nil
+}
+
 func (s *Server) handleVersions(w http.ResponseWriter, r *http.Request) error {
 	slug, err := requireSlug(chi.URLParam(r, "slug"))
 	if err != nil {

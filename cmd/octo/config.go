@@ -18,6 +18,7 @@ import (
 type config struct {
 	BaseURL string
 	Token   string
+	Code    string
 	Dir     string
 	Port    int
 }
@@ -98,6 +99,7 @@ func loadConfig() config {
 	c := config{
 		BaseURL: strings.TrimRight(envFirst("OCTO_BASE_URL", "TDOC_BASE_URL"), "/"),
 		Token:   envFirst("OCTO_TOKEN", "TDOC_TOKEN"),
+		Code:    envFirst("OCTO_CODE"),
 		Dir:     docDir(),
 		Port:    port(),
 	}

@@ -53,6 +53,28 @@ func clearCookie(w http.ResponseWriter, name string, secure bool) {
 	})
 }
 
+// capCookieMaxAge is how long a browser remembers a doc's share-code capability
+// (30 days). Re-visiting the ?code= link refreshes it.
+const capCookieMaxAge = 60 * 60 * 24 * 30
+
+// setCapCookie stores a validated per-doc share code as an HttpOnly cookie so the
+// browser carries it on later reads AND on the /v1 comment/reaction writes. The
+// cookie NAME encodes the slug (octo_cap_<hash>), so Path=/ is safe: the browser
+// may send several cap cookies, but the server only reads the one matching the
+// requested doc — no cross-doc leakage. (A per-doc Path would fail, since /d/<slug>
+// would not be sent to /v1/comments.)
+func setCapCookie(w http.ResponseWriter, slug, code string, secure bool) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     capCookieName(slug),
+		Value:    code,
+		Path:     "/",
+		MaxAge:   capCookieMaxAge,
+		HttpOnly: true,
+		Secure:   secure,
+		SameSite: http.SameSiteLaxMode,
+	})
+}
+
 // requireSlug validates a slug from a string, returning a typed 400 on failure.
 func requireSlug(value string) (string, error) {
 	slug := config.SafeSlug(value)

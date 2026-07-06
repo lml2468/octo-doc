@@ -68,6 +68,11 @@ func (s *Server) handleCreateComment(w http.ResponseWriter, r *http.Request) err
 	if err != nil {
 		return err
 	}
+	// A comment requires at least a reader capability (the doc's share code) — or
+	// the author write token. Default-private: no credential → 404.
+	if err := s.requireDocCap(r, slug); err != nil {
+		return err
+	}
 	if body.Text == "" {
 		return apperr.Validation("slug and text required", "text_required")
 	}
@@ -109,6 +114,9 @@ func (s *Server) handlePatchComment(w http.ResponseWriter, r *http.Request) erro
 	if body.ID == "" || body.Anchor == nil {
 		return apperr.Validation("slug, id, anchor required", "anchor_required")
 	}
+	if err := s.requireDocCap(r, slug); err != nil {
+		return err
+	}
 	if err := s.authorizeMutation(r, slug, body.ID, session); err != nil {
 		return err
 	}
@@ -136,6 +144,9 @@ func (s *Server) handleDeleteComment(w http.ResponseWriter, r *http.Request) err
 	id := r.URL.Query().Get("id")
 	if id == "" {
 		return apperr.Validation("slug and id required", "id_required")
+	}
+	if err := s.requireDocCap(r, slug); err != nil {
+		return err
 	}
 	if err := s.authorizeMutation(r, slug, id, session); err != nil {
 		return err
@@ -173,6 +184,9 @@ func (s *Server) handleReact(w http.ResponseWriter, r *http.Request) error {
 	}
 	if len(body.Emoji) == 0 || len(body.Emoji) > 32 {
 		return apperr.Validation("invalid emoji", "invalid_emoji")
+	}
+	if err := s.requireDocCap(r, slug); err != nil {
+		return err
 	}
 	by := "anon"
 	if session != nil {

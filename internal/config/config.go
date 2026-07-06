@@ -32,7 +32,6 @@ type Config struct {
 
 	WriteToken     string
 	AllowBootstrap bool
-	Private        bool
 	Owner          string
 	FrameAncestors string
 	// TrustProxyHeaders enables honoring X-Forwarded-For / X-Real-IP for the client
@@ -74,7 +73,6 @@ func Load() (*Config, error) {
 
 		WriteToken:     env("WRITE_TOKEN", ""),
 		AllowBootstrap: envBool("ALLOW_BOOTSTRAP", true),
-		Private:        envBool("PRIVATE", false),
 		Owner:          strings.TrimSpace(env("OWNER", "")),
 		FrameAncestors: strings.TrimSpace(env("FRAME_ANCESTORS", "'none'")),
 

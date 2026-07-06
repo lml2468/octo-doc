@@ -212,6 +212,32 @@ func (c *client) agentReply(ctx context.Context, req agentReplyReq) error {
 	return err
 }
 
+// shareResp is the POST /v1/docs/{slug}/share success payload.
+type shareResp struct {
+	Slug string `json:"slug"`
+	Code string `json:"code"`
+	URL  string `json:"url"`
+}
+
+// share mints (or rotates) the doc's share code and returns the coded read URL.
+func (c *client) share(ctx context.Context, slug string) (*shareResp, error) {
+	data, err := c.do(ctx, http.MethodPost, "/v1/docs/"+slug+"/share", nil)
+	if err != nil {
+		return nil, err
+	}
+	var out shareResp
+	if err := json.Unmarshal(data, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// revokeShare clears the doc's share code (existing links stop working).
+func (c *client) revokeShare(ctx context.Context, slug string) error {
+	_, err := c.do(ctx, http.MethodDelete, "/v1/docs/"+slug+"/share", nil)
+	return err
+}
+
 // commentReq is the POST /v1/comments request body. A parent_id makes it a reply;
 // an anchor binds a top-level comment to specific text. Reads/comments are public,
 // so no token is required.

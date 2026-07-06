@@ -74,14 +74,14 @@ func (s *Server) Handler() http.Handler {
 		// Documents.
 		r.With(s.requireWriteAuth).Method(http.MethodPost, "/docs", s.cors(s.limit(writeLimiter, false, s.wrap(s.handlePublish))))
 		r.Get("/docs/{slug}/versions", s.cors(s.requireDocReadJSON(slugFromPath, s.wrap(s.handleVersions))))
-		r.With(s.requireWriteAuth).Delete("/docs/{slug}", s.cors(s.wrap(s.handleDeleteDoc)))
-		// Draft slot (author-only, write-auth): save the mutable draft and promote
-		// it to an immutable version.
-		r.With(s.requireWriteAuth).Method(http.MethodPut, "/docs/{slug}/draft", s.cors(s.limit(writeLimiter, false, s.wrap(s.handleSaveDraft))))
-		r.With(s.requireWriteAuth).Post("/docs/{slug}/draft/promote", s.cors(s.limit(writeLimiter, false, s.wrap(s.handlePromote))))
+		r.With(s.requireDocAuthor).Delete("/docs/{slug}", s.cors(s.wrap(s.handleDeleteDoc)))
+		// Draft slot (author-only). requireDocAuthor accepts the write token via
+		// Bearer (CLI) or the per-doc cookie (browser).
+		r.With(s.requireDocAuthor).Method(http.MethodPut, "/docs/{slug}/draft", s.cors(s.limit(writeLimiter, false, s.wrap(s.handleSaveDraft))))
+		r.With(s.requireDocAuthor).Post("/docs/{slug}/draft/promote", s.cors(s.limit(writeLimiter, false, s.wrap(s.handlePromote))))
 		// Share: mint / rotate / revoke the per-doc read+comment code (author-only).
-		r.With(s.requireWriteAuth).Post("/docs/{slug}/share", s.cors(s.wrap(s.handleShare)))
-		r.With(s.requireWriteAuth).Delete("/docs/{slug}/share", s.cors(s.wrap(s.handleRevokeShare)))
+		r.With(s.requireDocAuthor).Post("/docs/{slug}/share", s.cors(s.wrap(s.handleShare)))
+		r.With(s.requireDocAuthor).Delete("/docs/{slug}/share", s.cors(s.wrap(s.handleRevokeShare)))
 
 		// Comments + reactions. Reads and writes require at least a reader
 		// capability (the doc's share code) — enforced per-handler since the slug
@@ -96,9 +96,10 @@ func (s *Server) Handler() http.Handler {
 
 	// Rendered docs + export/fork. Default-private: a reader needs the doc's share
 	// code (via ?code= → cookie), the author needs the write token. The draft view
-	// stays author-only (write-auth); a share code never unlocks drafts.
-	r.With(s.requireWriteAuth).Get("/d/{slug}/draft", s.secHeaders(s.wrap(s.handleRenderDraft)))
-	r.With(s.requireWriteAuth).Head("/d/{slug}/draft", s.secHeaders(s.wrap(s.handleRenderDraft)))
+	// is author-only; the write token can arrive as ?code= (browser) and is
+	// exchanged for a cookie the same way a reader code is.
+	r.Get("/d/{slug}/draft", s.requireDocAuthorHTML(s.secHeaders(s.wrap(s.handleRenderDraft))))
+	r.Head("/d/{slug}/draft", s.requireDocAuthorHTML(s.secHeaders(s.wrap(s.handleRenderDraft))))
 	r.Get("/d/{slug}/v/{version}", s.requireDocReadHTML(s.secHeaders(s.wrap(s.handleRender))))
 	r.Head("/d/{slug}/v/{version}", s.requireDocReadHTML(s.secHeaders(s.wrap(s.handleRender))))
 	r.Get("/d/{slug}/v/{version}/{kind}", s.requireDocReadHTML(s.secHeaders(s.wrap(s.handleForkExport))))

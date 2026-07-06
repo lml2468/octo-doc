@@ -185,12 +185,12 @@ func TestDraftLifecycle(t *testing.T) {
 	h := newTestServer(t, nil)
 	auth := map[string]string{"Authorization": "Bearer test-token", "Content-Type": "application/json"}
 
-	// Draft save requires write auth.
+	// Draft save is author-only; no credential → 404 (existence hidden).
 	rec := do(t, h, http.MethodPut, "/v1/docs/dr/draft",
 		map[string]string{"Content-Type": "application/json"},
 		`{"html":"<html><body><h1>draft</h1></body></html>"}`)
-	if rec.Code != 401 {
-		t.Fatalf("unauthenticated draft save = %d; want 401", rec.Code)
+	if rec.Code != 401 && rec.Code != 404 {
+		t.Fatalf("unauthenticated draft save = %d; want 401/404", rec.Code)
 	}
 
 	// Save a draft (overwrite twice to prove it's mutable).

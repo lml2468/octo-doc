@@ -13,6 +13,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/Mininglamp-OSS/octo-doc/internal/core"
+	"github.com/Mininglamp-OSS/octo-doc/internal/platform/sluglock"
 	"github.com/Mininglamp-OSS/octo-doc/internal/storage"
 )
 
@@ -29,6 +30,14 @@ CREATE INDEX IF NOT EXISTS sessions_expires_at_idx ON sessions (expires_at);
 // Store is a PostgreSQL-backed MetadataStore.
 type Store struct {
 	pool *pgxpool.Pool
+	// lockPool is a SEPARATE pool used only for advisory locks. Advisory locks are
+	// session-scoped, so a lock is held for the whole critical section while the
+	// locked work runs its own queries. If locks and queries shared one pool, N≥pool
+	// concurrent lock-holders would consume every connection and no locked work
+	// could get a connection to finish — a deadlock (observed). A dedicated lock
+	// pool decouples them: a full lock pool just queues new waiters, while holders
+	// always get query connections from `pool` to complete and release.
+	lockPool *pgxpool.Pool
 }
 
 var _ storage.MetadataStore = (*Store)(nil)
@@ -55,7 +64,16 @@ func Open(ctx context.Context, databaseURL string, poolMax int) (*Store, error) 
 		pool.Close()
 		return nil, fmt.Errorf("apply schema: %w", err)
 	}
-	return &Store{pool: pool}, nil
+	// Separate pool for advisory locks (see Store.lockPool). Sized like the main
+	// pool so many slugs can be locked concurrently; a full lock pool just applies
+	// backpressure to new waiters rather than starving locked work of query conns.
+	lockCfg := cfg.Copy()
+	lockPool, err := pgxpool.NewWithConfig(ctx, lockCfg)
+	if err != nil {
+		pool.Close()
+		return nil, fmt.Errorf("connect postgres (lock pool): %w", err)
+	}
+	return &Store{pool: pool, lockPool: lockPool}, nil
 }
 
 // Migrate applies the schema without keeping a store handle.
@@ -269,10 +287,21 @@ func (s *Store) AnyToken(ctx context.Context) (bool, error) {
 	return n > 0, nil
 }
 
-// Close releases the connection pool.
+// Close releases the connection pools.
 func (s *Store) Close() error {
 	s.pool.Close()
+	if s.lockPool != nil {
+		s.lockPool.Close()
+	}
 	return nil
+}
+
+// Locker returns a per-key distributed locker backed by PostgreSQL advisory
+// locks over this store's dedicated lock pool. Share one instance across services
+// so publish, comment, and bootstrap serialize on the same slug across app
+// instances.
+func (s *Store) Locker() sluglock.Locker {
+	return &advisoryLocker{pool: s.lockPool}
 }
 
 // Health verifies the database is reachable (used by the readiness probe).

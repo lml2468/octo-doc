@@ -30,7 +30,7 @@ func newTestServer(t *testing.T, cfg *config.Config) http.Handler {
 	locker := sluglock.NewMemory()
 	comments := service.NewCommentService(store, locker)
 	docs := service.NewDocService(store, store, comments, locker, cfg.BaseURL, cfg.MaxHTMLBytes)
-	auth := service.NewAuthService(store, cfg)
+	auth := service.NewAuthService(store, cfg, locker)
 	srv := httpx.New(httpx.Deps{
 		Config: cfg, Logger: log.New("silent"), Docs: docs, Comments: comments, Auth: auth,
 		OverlayJS: "/* overlay */",

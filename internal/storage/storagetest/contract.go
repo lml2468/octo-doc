@@ -171,4 +171,33 @@ func RunBlob(t *testing.T, bs storage.BlobStore) {
 	if v, _ := bs.ListVersions(ctx, "blogslug"); len(v) != 0 {
 		t.Fatalf("versions after delete = %v; want empty", v)
 	}
+
+	// Draft slot: mutable, overwritable, and invisible to ListVersions.
+	if _, ok, err := bs.GetDraft(ctx, "draftslug"); err != nil || ok {
+		t.Fatalf("GetDraft absent = ok %v, err %v; want false", ok, err)
+	}
+	if _, err := bs.PutDraft(ctx, "draftslug", "<html>draft v1</html>"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := bs.PutDraft(ctx, "draftslug", "<html>draft v2</html>"); err != nil {
+		t.Fatal(err) // overwrite must succeed
+	}
+	d, ok, err := bs.GetDraft(ctx, "draftslug")
+	if err != nil || !ok || d != "<html>draft v2</html>" {
+		t.Fatalf("GetDraft = %q, %v, %v; want the overwritten value", d, ok, err)
+	}
+	// A draft must never register as a version.
+	if v, _ := bs.ListVersions(ctx, "draftslug"); len(v) != 0 {
+		t.Fatalf("draft leaked into ListVersions: %v", v)
+	}
+	if err := bs.DeleteDraft(ctx, "draftslug"); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok, _ := bs.GetDraft(ctx, "draftslug"); ok {
+		t.Fatal("draft still present after DeleteDraft")
+	}
+	// DeleteDraft on an absent slug is not an error.
+	if err := bs.DeleteDraft(ctx, "neverexisted"); err != nil {
+		t.Fatalf("DeleteDraft absent = %v; want nil", err)
+	}
 }

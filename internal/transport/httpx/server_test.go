@@ -171,6 +171,78 @@ func TestPublishRenderLifecycle(t *testing.T) {
 	}
 }
 
+func TestDraftLifecycle(t *testing.T) {
+	h := newTestServer(t, nil)
+	auth := map[string]string{"Authorization": "Bearer test-token", "Content-Type": "application/json"}
+
+	// Draft save requires write auth.
+	rec := do(t, h, http.MethodPut, "/v1/docs/dr/draft",
+		map[string]string{"Content-Type": "application/json"},
+		`{"html":"<html><body><h1>draft</h1></body></html>"}`)
+	if rec.Code != 401 {
+		t.Fatalf("unauthenticated draft save = %d; want 401", rec.Code)
+	}
+
+	// Save a draft (overwrite twice to prove it's mutable).
+	for _, body := range []string{
+		`{"html":"<html><body><h1>draft one</h1></body></html>","title":"Draft Doc"}`,
+		`{"html":"<html><body><h1>draft two</h1></body></html>","title":"Draft Doc"}`,
+	} {
+		rec = do(t, h, http.MethodPut, "/v1/docs/dr/draft", auth, body)
+		if rec.Code != 200 {
+			t.Fatalf("draft save = %d: %s", rec.Code, rec.Body.String())
+		}
+	}
+
+	// The draft is NOT a version — versions endpoint has none yet.
+	rec = do(t, h, http.MethodGet, "/v1/docs/dr/versions", nil, "")
+	if strings.Contains(rec.Body.String(), `"n":1`) {
+		t.Fatalf("draft leaked into versions: %s", rec.Body.String())
+	}
+
+	// Draft render is author-only (write auth) and runs in draft mode.
+	rec = do(t, h, http.MethodGet, "/d/dr/draft", nil, "")
+	if rec.Code != 401 {
+		t.Fatalf("unauthenticated draft render = %d; want 401", rec.Code)
+	}
+	rec = do(t, h, http.MethodGet, "/d/dr/draft", map[string]string{"Authorization": "Bearer test-token"}, "")
+	if rec.Code != 200 {
+		t.Fatalf("draft render = %d: %s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), `"mode":"draft"`) {
+		t.Error("draft not rendered in draft mode")
+	}
+	if !strings.Contains(rec.Body.String(), "draft two") {
+		t.Error("draft render shows stale content")
+	}
+
+	// Promote → the draft becomes immutable v1.
+	rec = do(t, h, http.MethodPost, "/v1/docs/dr/draft/promote", auth, "")
+	if rec.Code != 200 {
+		t.Fatalf("promote = %d: %s", rec.Code, rec.Body.String())
+	}
+	var pub map[string]any
+	_ = json.Unmarshal(rec.Body.Bytes(), &pub)
+	if d, _ := pub["data"].(map[string]any); d == nil || d["version"].(float64) != 1 {
+		t.Fatalf("promote body = %v; want version 1", pub)
+	}
+
+	// v1 is now public + committed; the draft slot is cleared.
+	if rec = do(t, h, http.MethodGet, "/d/dr/v/1", nil, ""); rec.Code != 200 {
+		t.Fatalf("published v1 render = %d", rec.Code)
+	}
+	rec = do(t, h, http.MethodGet, "/d/dr/draft", map[string]string{"Authorization": "Bearer test-token"}, "")
+	if rec.Code != 404 {
+		t.Fatalf("draft after promote = %d; want 404 (cleared)", rec.Code)
+	}
+
+	// Promoting again with no draft is a clean 404, not a 500.
+	rec = do(t, h, http.MethodPost, "/v1/docs/dr/draft/promote", auth, "")
+	if rec.Code != 404 {
+		t.Fatalf("promote with no draft = %d; want 404", rec.Code)
+	}
+}
+
 func TestCommentLifecycle(t *testing.T) {
 	h := newTestServer(t, nil)
 	auth := map[string]string{"Authorization": "Bearer test-token", "Content-Type": "application/json"}

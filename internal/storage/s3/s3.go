@@ -84,6 +84,12 @@ func (s *Store) keyFor(slug string, version int) string {
 	return s.prefixFor(slug) + "/v" + strconv.Itoa(version) + "/index.html"
 }
 
+// draftKeyFor is the mutable draft slot. The "draft" segment is deliberately not
+// "v<digits>", so ListVersions's version regex never matches it.
+func (s *Store) draftKeyFor(slug string) string {
+	return s.prefixFor(slug) + "/draft/index.html"
+}
+
 func isNotFound(err error) bool {
 	if _, ok := errors.AsType[*types.NoSuchKey](err); ok {
 		return true
@@ -150,6 +156,52 @@ func (s *Store) HeadDoc(ctx context.Context, slug string, version int) (int64, b
 		return *out.ContentLength, true, nil
 	}
 	return 0, true, nil
+}
+
+// PutDraft writes (overwrites) the mutable draft slot for a slug.
+func (s *Store) PutDraft(ctx context.Context, slug string, html string) (int64, error) {
+	_, err := s.client.PutObject(ctx, &awss3.PutObjectInput{
+		Bucket:      aws.String(s.bucket),
+		Key:         aws.String(s.draftKeyFor(slug)),
+		Body:        strings.NewReader(html),
+		ContentType: aws.String("text/html; charset=utf-8"),
+	})
+	if err != nil {
+		return 0, err
+	}
+	return int64(len(html)), nil
+}
+
+// GetDraft fetches the draft slot, returning (html, found, error).
+func (s *Store) GetDraft(ctx context.Context, slug string) (string, bool, error) {
+	out, err := s.client.GetObject(ctx, &awss3.GetObjectInput{
+		Bucket: aws.String(s.bucket),
+		Key:    aws.String(s.draftKeyFor(slug)),
+	})
+	if err != nil {
+		if isNotFound(err) {
+			return "", false, nil
+		}
+		return "", false, err
+	}
+	defer func() { _ = out.Body.Close() }()
+	data, err := io.ReadAll(out.Body)
+	if err != nil {
+		return "", false, err
+	}
+	return string(data), true, nil
+}
+
+// DeleteDraft removes the draft slot. A missing draft is not an error.
+func (s *Store) DeleteDraft(ctx context.Context, slug string) error {
+	_, err := s.client.DeleteObject(ctx, &awss3.DeleteObjectInput{
+		Bucket: aws.String(s.bucket),
+		Key:    aws.String(s.draftKeyFor(slug)),
+	})
+	if err != nil && !isNotFound(err) {
+		return err
+	}
+	return nil
 }
 
 // ListVersions returns the versions present for a slug, ascending.

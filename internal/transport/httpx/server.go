@@ -75,6 +75,10 @@ func (s *Server) Handler() http.Handler {
 		r.With(s.requireWriteAuth).Method(http.MethodPost, "/docs", s.cors(s.limit(writeLimiter, false, s.wrap(s.handlePublish))))
 		r.Get("/docs/{slug}/versions", s.cors(s.maybeRequireReadAuth(s.wrap(s.handleVersions))))
 		r.With(s.requireWriteAuth).Delete("/docs/{slug}", s.cors(s.wrap(s.handleDeleteDoc)))
+		// Draft slot (author-only, write-auth): save the mutable draft and promote
+		// it to an immutable version.
+		r.With(s.requireWriteAuth).Method(http.MethodPut, "/docs/{slug}/draft", s.cors(s.limit(writeLimiter, false, s.wrap(s.handleSaveDraft))))
+		r.With(s.requireWriteAuth).Post("/docs/{slug}/draft/promote", s.cors(s.limit(writeLimiter, false, s.wrap(s.handlePromote))))
 
 		// Comments + reactions.
 		r.Get("/comments", s.cors(s.maybeRequireReadAuth(s.limit(writeLimiter, true, s.wrap(s.handleListComments)))))
@@ -87,6 +91,9 @@ func (s *Server) Handler() http.Handler {
 
 	// Rendered docs + export/fork. These return browser HTML (overlay injected),
 	// not the JSON envelope, so they keep the /d/ document-URL scheme.
+	// The draft view is author-only (write-auth), rendered in "draft" mode.
+	r.With(s.requireWriteAuth).Get("/d/{slug}/draft", s.secHeaders(s.wrap(s.handleRenderDraft)))
+	r.With(s.requireWriteAuth).Head("/d/{slug}/draft", s.secHeaders(s.wrap(s.handleRenderDraft)))
 	r.Get("/d/{slug}/v/{version}", s.maybeRequireReadAuth(s.secHeaders(s.wrap(s.handleRender))))
 	r.Head("/d/{slug}/v/{version}", s.maybeRequireReadAuth(s.secHeaders(s.wrap(s.handleRender))))
 	r.Get("/d/{slug}/v/{version}/{kind}", s.maybeRequireReadAuth(s.secHeaders(s.wrap(s.handleForkExport))))

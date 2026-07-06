@@ -1,9 +1,11 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"io"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -11,26 +13,26 @@ import (
 	"strings"
 )
 
-// cmdNew scaffolds a doc from finished HTML — the programmatic entry other agents
-// call when they already have a doc-shaped artifact. It stage-validates the HTML
-// in a temp dir and only swaps it into place on success, so a bad payload can
-// never destroy an existing doc. It then ensures the local preview is up and
-// prints the local URL last (callers capture it); with --publish, the published
-// URL is printed on a second line.
+// cmdNew creates a doc remote-first: it validates the finished HTML, keeps a local
+// working copy (so `version-add`/`pull` have a source), then saves it as a mutable
+// draft on the server and prints the draft URL. This is also the programmatic
+// entry other skills call when they already have a doc-shaped artifact.
+//
+// With --open, it opens the draft in a browser. Because the draft is author-only
+// and a browser can't send a Bearer header, the URL carries ?code=<write-token>,
+// which the server exchanges for an HttpOnly cookie and strips from the address bar.
 func cmdNew(args []string) error {
 	fs := flag.NewFlagSet("new", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
 	var (
 		slug      = fs.String("slug", "", "slug for the new doc (kebab-case, required)")
 		title     = fs.String("title", "", "human-readable title (required)")
-		htmlFile  = fs.String("html-file", "", "path to the full HTML for v1")
-		htmlStdin = fs.Bool("html-stdin", false, "read HTML for v1 from stdin")
+		htmlFile  = fs.String("html-file", "", "path to the full HTML")
+		htmlStdin = fs.Bool("html-stdin", false, "read HTML from stdin")
 		prompt    = fs.String("prompt", "", "prompt-of-record stored in meta.json")
-		publish   = fs.Bool("publish", false, "also publish after scaffolding")
-		open      = fs.Bool("open", false, "open the URL in the default browser")
-		noServe   = fs.Bool("no-serve", false, "don't start the local preview (for headless/seed use)")
+		open      = fs.Bool("open", false, "open the draft in the default browser")
 		quiet     = fs.Bool("quiet", false, "suppress informational output")
-		force     = fs.Bool("force", false, "overwrite an existing slug")
+		force     = fs.Bool("force", false, "overwrite an existing local slug")
 	)
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -58,6 +60,10 @@ func cmdNew(args []string) error {
 	}
 
 	cfg := loadConfig()
+	cl, err := requireServer(cfg, true) // creating a draft is an author op
+	if err != nil {
+		return err
+	}
 	st := newStore(cfg.Dir)
 	if st.exists(*slug) && !*force {
 		return fmt.Errorf("slug %q already exists at %s; use --force to overwrite, or a different slug", *slug, st.slugDir(*slug))
@@ -66,9 +72,8 @@ func cmdNew(args []string) error {
 		return err
 	}
 
-	// Read the HTML into memory and validate before touching the doc dir.
+	// Read the HTML into memory and validate before touching anything.
 	var htmlBytes []byte
-	var err error
 	if *htmlStdin {
 		htmlBytes, err = io.ReadAll(os.Stdin)
 	} else {
@@ -84,8 +89,34 @@ func cmdNew(args []string) error {
 		return fmt.Errorf("html does not contain a <body> tag — did you pass markdown by mistake? (existing doc left untouched)")
 	}
 
-	// Stage → validate → swap: write into a temp dir under cfg.Dir, then move.
-	stage, err := os.MkdirTemp(cfg.Dir, ".stage-"+*slug+"-")
+	// Save the draft on the server first — if that fails, nothing local changes.
+	if err := cl.saveDraft(context.Background(), *slug, string(htmlBytes), *title); err != nil {
+		return fmt.Errorf("save draft: %w", err)
+	}
+
+	// Keep a local working copy (the source for version-add / pull). Stage →
+	// validate → swap so a re-run can't corrupt an existing copy.
+	if err := st.writeWorkingCopy(*slug, *title, *prompt, htmlBytes); err != nil {
+		return err
+	}
+	info("draft saved for %s", *slug)
+
+	draftURL := cfg.BaseURL + "/d/" + *slug + "/draft"
+	// The author's browser needs the write token as ?code= (exchanged for a cookie).
+	authorURL := draftURL + "?code=" + url.QueryEscape(cfg.Token)
+	if *open {
+		openBrowser(authorURL)
+	}
+	// Print the plain draft URL (last line, capturable). The author opens it with
+	// --open, or appends ?code=<token> themselves.
+	fmt.Println(draftURL)
+	return nil
+}
+
+// writeWorkingCopy persists the local working copy: meta.json + comments.json +
+// v1/index.html (the draft's source), replacing any existing copy atomically-ish.
+func (s *store) writeWorkingCopy(slug, title, prompt string, html []byte) error {
+	stage, err := os.MkdirTemp(s.dir, ".stage-"+slug+"-")
 	if err != nil {
 		return err
 	}
@@ -93,14 +124,11 @@ func cmdNew(args []string) error {
 	if err := os.MkdirAll(filepath.Join(stage, "v1"), 0o755); err != nil {
 		return err
 	}
-	if err := os.WriteFile(filepath.Join(stage, "v1", "index.html"), htmlBytes, 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(stage, "v1", "index.html"), html, 0o644); err != nil {
 		return err
 	}
-
-	// Validation passed — now it's safe to replace.
-	docDir := st.slugDir(*slug)
-	if st.exists(*slug) {
-		info("overwriting existing slug %q (--force)", *slug)
+	docDir := s.slugDir(slug)
+	if s.exists(slug) {
 		if err := os.RemoveAll(docDir); err != nil {
 			return err
 		}
@@ -111,69 +139,25 @@ func cmdNew(args []string) error {
 	if err := os.Rename(filepath.Join(stage, "v1"), filepath.Join(docDir, "v1")); err != nil {
 		return err
 	}
-
-	// meta.json + empty comments.json.
 	created := nowISO()
 	caller := envFirst("OCTO_NEW_CALLER", "TDOC_NEW_CALLER", "CLAUDE_SKILL_NAME")
 	if caller == "" {
 		caller = "unknown"
 	}
-	recorded := *prompt
+	recorded := prompt
 	if recorded == "" {
 		recorded = "Imported via octo new by " + caller
 	}
 	meta := &docMeta{
-		Title:    *title,
-		Slug:     *slug,
+		Title:    title,
+		Slug:     slug,
 		Created:  created,
 		Versions: []versionRef{{N: 1, Created: created, Prompt: recorded}},
 	}
-	if err := st.writeMeta(*slug, meta); err != nil {
+	if err := s.writeMeta(slug, meta); err != nil {
 		return err
 	}
-	if err := st.writeComments(*slug, []comment{}); err != nil {
-		return err
-	}
-	info("scaffolded %s (v1)", docDir)
-
-	// Ensure the local preview server is up so the printed URL is live — unless
-	// --no-serve (headless / seed use, where a preview would be a pointless side
-	// effect and a port to fight over).
-	localURLStr := fmt.Sprintf("http://localhost:%d/d/%s/v/1", cfg.Port, *slug)
-	if !*noServe {
-		if err := previewStart(cfg); err != nil {
-			return fmt.Errorf("doc scaffolded at %s but preview not serving: %w", docDir, err)
-		}
-	}
-
-	// Optional publish (non-fatal on failure — the local doc still stands).
-	publishedURL := ""
-	if *publish {
-		info("publishing to octo-doc server...")
-		if err := cmdPublish([]string{*slug}); err != nil {
-			fmt.Fprintf(os.Stderr, "octo-new: publish failed; local doc is still available: %v\n", err)
-		} else {
-			publishedURL = fmt.Sprintf("%s/d/%s/v/1", cfg.BaseURL, *slug)
-		}
-	}
-
-	if *open {
-		target := localURLStr
-		if publishedURL != "" {
-			target = publishedURL
-		}
-		openBrowser(target)
-	}
-
-	// Output contract: last line(s) are URLs callers can capture. With --no-serve
-	// there is no live local URL to hand back, so print only a published one (if any).
-	if !*noServe {
-		fmt.Println(localURLStr)
-	}
-	if publishedURL != "" {
-		fmt.Println(publishedURL)
-	}
-	return nil
+	return s.writeComments(slug, []comment{})
 }
 
 // openBrowser best-effort opens a URL in the default browser.

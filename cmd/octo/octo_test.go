@@ -9,8 +9,8 @@ import (
 func TestConfigEnvPrecedence(t *testing.T) {
 	t.Setenv("OCTO_BASE_URL", "https://octo.example.com/")
 	t.Setenv("OCTO_TOKEN", "octo-tok")
+	t.Setenv("OCTO_CODE", "sharecode")
 	t.Setenv("OCTO_DIR", t.TempDir())
-	t.Setenv("OCTO_PORT", "9191")
 	cfg := loadConfig()
 	if cfg.BaseURL != "https://octo.example.com" {
 		t.Errorf("BaseURL not trimmed: %q", cfg.BaseURL)
@@ -18,8 +18,8 @@ func TestConfigEnvPrecedence(t *testing.T) {
 	if cfg.Token != "octo-tok" {
 		t.Errorf("Token = %q", cfg.Token)
 	}
-	if cfg.Port != 9191 {
-		t.Errorf("Port = %d", cfg.Port)
+	if cfg.Code != "sharecode" {
+		t.Errorf("Code = %q", cfg.Code)
 	}
 }
 
@@ -36,14 +36,6 @@ func TestConfigTDOCFallback(t *testing.T) {
 	}
 	if cfg.Token != "legacy-tok" {
 		t.Errorf("Token fallback = %q", cfg.Token)
-	}
-}
-
-func TestConfigDefaultPort(t *testing.T) {
-	os.Unsetenv("OCTO_PORT")
-	os.Unsetenv("TDOC_PORT")
-	if got := port(); got != defaultPort {
-		t.Errorf("default port = %d, want %d", got, defaultPort)
 	}
 }
 

@@ -4,18 +4,16 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
-	"os"
 )
 
 // requireServer resolves config and returns a client, requiring a base URL (and,
-// when needWrite is set, a token). It also persists the resolved config so the
-// next run needs no env, matching the bash tools' behavior.
+// when needWrite is set, a write token). It persists the resolved config so the
+// next run needs no env.
 func requireServer(cfg config, needWrite bool) (*client, error) {
 	if cfg.BaseURL == "" {
 		return nil, errors.New(`no octo-doc server configured.
 
-Set the server to publish to:
+Set the server to author against:
     export OCTO_BASE_URL="https://your-host"   # or http://localhost:8080
     export OCTO_TOKEN="<write token>"          # from: octo-doc bootstrap
 
@@ -26,114 +24,37 @@ To mint a token from a fresh server (only when it has no static WRITE_TOKEN):
 		return nil, fmt.Errorf("no write token. Set OCTO_TOKEN or add it to ~/.octo/config.json\n"+
 			"       Get one with: curl -sS -X POST %q/v1/admin/bootstrap | jq -r .data.token", cfg.BaseURL)
 	}
-	// Persist for next time (best-effort; a failure here is non-fatal).
 	if needWrite {
-		_ = saveConfig(cfg.BaseURL, cfg.Token)
+		_ = saveConfig(cfg.BaseURL, cfg.Token) // best-effort
 	}
-	return newClient(cfg.BaseURL, cfg.Token), nil
+	// Credential sent as Bearer: the write token for author ops; for reader ops
+	// (pull/comment on a private doc) fall back to the doc share code.
+	cred := cfg.Token
+	if cred == "" {
+		cred = cfg.Code
+	}
+	return newClient(cfg.BaseURL, cred), nil
 }
 
-// cmdPublish uploads a local doc's versions to the configured server. It uploads
-// every version (oldest first, latest last) so the full history is preserved and
-// the printed URL always points at the freshest version. Older-version failures
-// are warnings; a latest-version failure is fatal.
+// cmdPublish promotes the doc's current server-side draft to a new immutable
+// published version. Authoring iterates on the mutable draft (via `octo new` /
+// `octo version-add`); publish is the explicit "freeze this" step.
+//
+//	octo publish <slug>
 func cmdPublish(args []string) error {
 	if len(args) < 1 || args[0] == "" {
 		return errors.New("usage: octo publish <slug>")
 	}
 	slug := args[0]
 	cfg := loadConfig()
-	url, err := publishDoc(context.Background(), cfg, slug, os.Stderr)
+	cl, err := requireServer(cfg, true)
 	if err != nil {
 		return err
 	}
-	fmt.Printf("\nPublished: %s\n", url)
+	res, err := cl.promote(context.Background(), slug)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("Published: %s\n", res.URL)
 	return nil
-}
-
-// publishDoc uploads all of a local doc's versions to the configured server and
-// returns the published URL of the latest version. Progress is written to
-// progress (may be io.Discard). It is shared by the `publish` command and the
-// preview server's /v1/publish endpoint so both take the identical code path.
-func publishDoc(ctx context.Context, cfg config, slug string, progress io.Writer) (string, error) {
-	st := newStore(cfg.Dir)
-	if !st.exists(slug) {
-		return "", fmt.Errorf("no local doc at %s. Create it with `octo new`", st.slugDir(slug))
-	}
-	cl, err := requireServer(cfg, true)
-	if err != nil {
-		return "", err
-	}
-	meta, err := st.readMeta(slug)
-	if err != nil {
-		return "", err
-	}
-	comments, err := st.readComments(slug)
-	if err != nil {
-		return "", err
-	}
-
-	versions := meta.sortedVersions()
-	latest := meta.latestVersion()
-
-	_, _ = fmt.Fprintf(progress, "[octo] publishing %s to %s\n", slug, cfg.BaseURL)
-	// Full meta (title + version history) rides only the latest upload; older
-	// uploads carry title only. The server rebuilds the version list from blobs
-	// and honors just the title, so re-sending the whole Versions slice V times
-	// would be O(V²) wasted bytes for identical server state — the same reason
-	// comments are attached only to the latest version below.
-	fullMeta := &publishMeta{Title: meta.Title, Versions: meta.Versions}
-	titleMeta := &publishMeta{Title: meta.Title}
-
-	var olderFailed []int
-	var lastResp *publishResp
-	for _, vr := range versions {
-		pm, vComments := titleMeta, []comment(nil)
-		if vr.N == latest {
-			pm, vComments = fullMeta, comments
-		}
-		resp, upErr := st.uploadVersion(ctx, cl, slug, vr.N, pm, vComments)
-		if vr.N == latest {
-			if upErr != nil {
-				return "", fmt.Errorf("latest v%d failed: %w — aborting", latest, upErr)
-			}
-			lastResp = resp
-			continue
-		}
-		if upErr != nil {
-			olderFailed = append(olderFailed, vr.N)
-		}
-	}
-	if len(olderFailed) > 0 {
-		_, _ = fmt.Fprintf(progress, "[octo] WARNING: older version(s) failed: %v — re-run to retry.\n", olderFailed)
-	}
-	url := fmt.Sprintf("%s/d/%s/v/%d", cfg.BaseURL, slug, latest)
-	if lastResp != nil && lastResp.URL != "" {
-		url = lastResp.URL
-	}
-	return url, nil
-}
-
-// uploadVersion sends one version's HTML (+ meta + optional comments) to POST
-// /v1/docs. Comments are attached only for the latest version (the caller passes
-// nil otherwise); the server merges them idempotently by id.
-func (s *store) uploadVersion(ctx context.Context, cl *client, slug string, v int, pm *publishMeta, comments []comment) (*publishResp, error) {
-	html, err := os.ReadFile(s.htmlPath(slug, v))
-	if err != nil {
-		return nil, fmt.Errorf("v%d html missing: %w", v, err)
-	}
-	req := publishReq{Slug: slug, Version: v, HTML: string(html), Meta: pm}
-	if len(comments) > 0 {
-		req.Comments = comments
-	}
-	resp, err := cl.publish(ctx, req)
-	if err != nil {
-		return nil, err
-	}
-	if resp.MergedComments > 0 {
-		fmt.Fprintf(os.Stderr, "[octo] v%d uploaded (%d bytes, +%d comment(s) merged)\n", v, resp.Size, resp.MergedComments)
-	} else {
-		fmt.Fprintf(os.Stderr, "[octo] v%d uploaded (%d bytes)\n", v, resp.Size)
-	}
-	return resp, nil
 }

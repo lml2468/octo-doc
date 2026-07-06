@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 )
 
@@ -20,7 +19,6 @@ type config struct {
 	Token   string
 	Code    string
 	Dir     string
-	Port    int
 }
 
 // configFile is where publish persists {base_url, token} for later runs.
@@ -28,9 +26,6 @@ type configFile struct {
 	BaseURL string `json:"base_url"`
 	Token   string `json:"token"`
 }
-
-// defaultPort is the local preview server port, preserved from tdoc.
-const defaultPort = 7878
 
 // envFirst returns the first non-empty environment variable among names.
 func envFirst(names ...string) string {
@@ -83,16 +78,6 @@ func docDir() string {
 	return octo // default; created on first use
 }
 
-// port resolves the preview port from OCTO_PORT/TDOC_PORT, else the default.
-func port() int {
-	if v := envFirst("OCTO_PORT", "TDOC_PORT"); v != "" {
-		if n, err := strconv.Atoi(v); err == nil && n > 0 {
-			return n
-		}
-	}
-	return defaultPort
-}
-
 // loadConfig resolves the full client config, reading the config file only to
 // fill in a base URL or token not already supplied via the environment.
 func loadConfig() config {
@@ -101,7 +86,6 @@ func loadConfig() config {
 		Token:   envFirst("OCTO_TOKEN", "TDOC_TOKEN"),
 		Code:    envFirst("OCTO_CODE"),
 		Dir:     docDir(),
-		Port:    port(),
 	}
 	if c.BaseURL == "" || c.Token == "" {
 		if path, ok := configPath(); ok {

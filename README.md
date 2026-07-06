@@ -45,7 +45,7 @@ Full guide: **[docs/SELF_HOSTING.md](docs/SELF_HOSTING.md)** ($5 VPS in 15 min).
 | **URL** | `/d/<slug>/v/<version>` (preserved from tdoc) |
 | **Comments** | append-only event log; every version is a snapshot |
 | **Artifacts** | each commentable element is stamped `data-tdoc-aid="<hash>"` so comments anchor by identity, not DOM position — **byte-identical to upstream** |
-| **Auth** | Bearer token for writes; reads public by default (`PRIVATE=1` to lock) |
+| **Auth** | private by default: the write token = author; a per-doc share **code** grants read+comment. See [docs/AUTH.md](docs/AUTH.md) |
 | **Storage** | PostgreSQL (metadata) + S3-compatible (blobs) behind two interfaces |
 | **Scaling** | stateless app; run N replicas behind a load balancer — per-slug writes serialize via PostgreSQL advisory locks |
 
@@ -78,30 +78,33 @@ over the **`octo` client CLI** (built from this repo — see below):
 ```bash
 export OCTO_BASE_URL="https://docs.example.com"
 export OCTO_TOKEN="$(octo-doc bootstrap)"   # or POST /v1/admin/bootstrap
-/octo new "an interactive explainer of compound interest"
+/octo new "an interactive explainer of compound interest"  # draft
 /octo publish my-explainer                   # → https://docs.example.com/d/my-explainer/v/1
+/octo share my-explainer                     # → a read+comment ?code= link
 ```
 
 ### The `octo` client CLI
 
-`cmd/octo` is a second, self-contained binary: the agent-side client. It scaffolds
-docs on disk, serves a local preview with the **same** overlay the server injects,
-and publishes to a remote octo-doc server over the `/v1` API. It links no database
-or blob store — only the pure `core` kernel and the embedded `overlay.js` — so a
-local preview renders byte-identically to the published doc **without a mirrored
-copy of the overlay**.
+`cmd/octo` is a second, self-contained binary: the agent-side client. Authoring is
+**remote-first** — a doc lives on the server from creation as a mutable draft;
+`octo publish` promotes the draft to an immutable version. It links no database or
+blob store (only the pure `core` kernel + embedded `overlay.js`), and there is no
+local preview server: creating and previewing happen against a running octo-doc
+server (the local docker stack counts).
 
 ```bash
-make build-octo                              # build bin/octo
-octo new --slug demo --title "Demo" --html-file demo.html
-octo preview start                           # local preview at :7878
-octo publish demo                            # upload every version to $OCTO_BASE_URL
-octo pull demo                               # merge server comments back to disk
-octo doctor                                  # check local deps + the server
-octo update                                  # self-update from GitHub Releases
+make build-octo                                        # build bin/octo
+export OCTO_BASE_URL=https://docs.example.com OCTO_TOKEN=<write-token>
+octo new --slug demo --title "Demo" --html-file demo.html --open  # save + open the draft
+octo version-add --slug demo --html-file demo2.html    # iterate the draft
+octo publish demo                                      # promote draft → immutable v1
+octo share demo                                        # mint a read+comment ?code= link
+octo pull demo                                          # merge server comments to disk
+octo doctor                                            # check the CLI + the server
+octo update                                             # self-update from GitHub Releases
 ```
 
-Config resolves from `OCTO_BASE_URL` / `OCTO_TOKEN` / `OCTO_DIR` / `OCTO_PORT`
+Config resolves from `OCTO_BASE_URL` / `OCTO_TOKEN` / `OCTO_CODE` / `OCTO_DIR`
 (the legacy `TDOC_*` names are still read as a fallback), then `~/.octo/config.json`.
 Prebuilt binaries for macOS/Linux/Windows are attached to each
 [GitHub Release](https://github.com/Mininglamp-OSS/octo-doc/releases); `octo update`
@@ -117,10 +120,12 @@ Highlights:
 | `DATABASE_URL` | _(required)_ | PostgreSQL connection string |
 | `PG_POOL_MAX` | `10` | max connections **per pool**; the app keeps two (queries + advisory locks), so total ≤ `2×` this |
 | `S3_BUCKET` / `S3_ENDPOINT` | `octo-doc` / _(AWS)_ | blob store (MinIO/R2: set endpoint + `S3_FORCE_PATH_STYLE=1`) |
-| `WRITE_TOKEN` | _(bootstrap)_ | static write token; else POST `/v1/admin/bootstrap` |
-| `PRIVATE` | `false` | require the token for reads too |
+| `WRITE_TOKEN` | _(bootstrap)_ | static write token = author; else POST `/v1/admin/bootstrap` |
 | `FRAME_ANCESTORS` | `'none'` | CSP embedding policy for rendered docs |
 | `MAX_HTML_BYTES` | `5242880` | per-document size cap |
+
+Docs are **private by default** — access is per-document via share codes, not a
+global flag (see [docs/AUTH.md](docs/AUTH.md)).
 
 ## Commands
 
@@ -136,7 +141,7 @@ octo-doc health      # local healthcheck (used by the container)
 The agent client binary (`cmd/octo`) — see [Agent skill](#agent-skill):
 
 ```bash
-octo new | preview | publish | pull | unpublish | list | fork | version-add | reply | doctor | update
+octo new | publish | share | pull | unpublish | list | fork | version-add | comment | react | reply | doctor | update
 ```
 
 ## Development

@@ -36,8 +36,8 @@ dependency-free leaf and `platform` as cross-cutting support.
 - `internal/platform/` — cross-cutting support: `log` (slog), typed `apperr`,
   `sluglock`.
 - `assets/overlay.js` — browser code, embedded via `go:embed`, served verbatim.
-- `cmd/octo/` — the agent client CLI (separate binary; see Entrypoint). Reuses
-  `assets.OverlayJS` + `core.InjectOverlayCfg` for its local preview.
+- `cmd/octo/` — the agent client CLI (separate binary; see Entrypoint).
+  Remote-first: authors against a running server; no local preview.
 
 ## Gotchas (these are enforced — don't fight them)
 
@@ -60,8 +60,9 @@ dependency-free leaf and `platform` as cross-cutting support.
 
 12-factor via env (`.env.example`). Parsed once in `internal/config`; no other
 package reads the environment for app settings. Key vars: `DATABASE_URL`,
-`S3_BUCKET`/`S3_ENDPOINT`/`S3_*`, `WRITE_TOKEN` (write auth), `PRIVATE`,
-`ALLOW_BOOTSTRAP`, `REPO_URL`. (GitHub OAuth was removed — no `GITHUB_*` vars.)
+`S3_BUCKET`/`S3_ENDPOINT`/`S3_*`, `WRITE_TOKEN` (author auth), `ALLOW_BOOTSTRAP`,
+`REPO_URL`. (No `GITHUB_*` — OAuth removed. No `PRIVATE` — docs are private by
+default; access is per-doc via share codes, see `docs/AUTH.md`.)
 
 ## Entrypoint
 
@@ -70,15 +71,25 @@ Two binaries:
 - `cmd/octo-doc` — the **server**. Subcommands: `serve` (default), `migrate`,
   `bootstrap`, `health`. Loads full server config (DB + S3) on every command
   except `health`.
-- `cmd/octo` — the **agent client** CLI (`new`, `preview`, `publish`, `pull`,
-  `unpublish`, `list`, `fork`, `version-add`, `reply`, `doctor`, `update`). Links
-  no DB/S3; imports `assets.OverlayJS` + `internal/core` so its local preview
-  renders byte-identically to the server (no overlay mirror). Config: `OCTO_*`
-  env (legacy `TDOC_*` fallback) + `~/.octo/config.json`. Version stamped via
-  `-ldflags "-X main.version=…"`; `make build-octo` / `make release-octo`.
+- `cmd/octo` — the **agent client** CLI (`new`, `publish`, `share`, `pull`,
+  `unpublish`, `list`, `fork`, `version-add`, `comment`, `react`, `reply`,
+  `doctor`, `update`). Links no DB/S3. **Remote-first**: `new` saves a
+  server-side draft, `publish` promotes it to an immutable version — no local
+  preview. Config: `OCTO_*` env (legacy `TDOC_*` fallback) + `~/.octo/config.json`.
+  Version stamped via `-ldflags "-X main.version=…"`; `make build-octo` /
+  `make release-octo`.
+
+## Access control
+
+Documents are **private by default**: the write token is the author; a per-doc
+share **code** grants read+comment. Browsers carry the code as `?code=` → HttpOnly
+cookie; agents/CLI send it as `Authorization: Bearer`. See `docs/AUTH.md`. The
+draft slot (`docs/<hash>/draft/…`, meta `Extra["share"]`) is author-only and never
+enters the immutable version numbering until `promote`.
 
 ## API
 
 Public surface is the versioned `/v1` envelope API conforming to the OCTO spec
-(`/v1/docs`, `/v1/comments`, `/v1/reactions`, `/v1/agent/replies`,
-`/v1/admin/bootstrap`). The legacy `/api/*` routes were removed.
+(`/v1/docs` incl. `/draft` + `/draft/promote` + `/share`, `/v1/comments`,
+`/v1/reactions`, `/v1/agent/replies`, `/v1/admin/bootstrap`). The legacy `/api/*`
+routes were removed.

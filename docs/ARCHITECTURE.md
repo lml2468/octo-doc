@@ -134,43 +134,56 @@ kernel keeps its `created` field internally and is remapped to `created_at` at
 the transport DTO boundary. The `/d/:slug/v/:version` document URLs are not part
 of `/v1` — they return browser HTML, not the JSON envelope.
 
-### Public reads (no auth unless `PRIVATE=1`)
+### Reads (capability-gated — private by default)
+
+Documents are private by default. Each read resolves a capability from the request
+(write token = author, per-doc share code = reader; else none → **404**, existence
+hidden). Browsers present the code as `?code=` once and it is exchanged for an
+HttpOnly cookie; agents/CLI send it as `Authorization: Bearer`. See docs/AUTH.md.
 
 | Method | Path | Description |
 | ------ | ---- | ----------- |
-| `GET`  | `/v1/ping` | `{ data: { ok, service: "tdoc" } }` health/identity marker |
-| `GET`  | `/healthz` | `{ data: { ok } }` liveness for orchestrators (unversioned) |
-| `GET\|HEAD` | `/d/:slug/v/:version` | rendered doc with overlay injected (HTML) |
-| `GET`  | `/d/:slug/v/:version/export` | doc + comment banner, `Content-Disposition: attachment` |
-| `GET`  | `/d/:slug/v/:version/fork` | doc + comments, overlay in read-only fork mode |
-| `GET`  | `/v1/docs/:slug/versions` | `{ data: { slug, title, versions: [{n, created_at}] } }` |
-| `GET`  | `/v1/comments?slug=&version=` | `{ data: [...], pagination }` folded snapshot (`version=all` for full history) |
-| `GET`  | `/` | neutral landing page (no catalog) |
+| `GET`  | `/v1/ping` | `{ data: { ok, service: "octo-doc" } }` health/identity marker (unauthed) |
+| `GET`  | `/healthz` | `{ data: { ok } }` liveness for orchestrators (unversioned, unauthed) |
+| `GET\|HEAD` | `/d/:slug/v/:version` | rendered doc with overlay injected (reader) |
+| `GET\|HEAD` | `/d/:slug/draft` | rendered draft, overlay in draft mode (**author only**) |
+| `GET`  | `/d/:slug/v/:version/export` | doc + comment banner, `Content-Disposition: attachment` (reader) |
+| `GET`  | `/d/:slug/v/:version/fork` | doc + comments, overlay in read-only fork mode (reader) |
+| `GET`  | `/v1/docs/:slug/versions` | `{ data: { slug, title, versions: [{n, created_at}] } }` (reader) |
+| `GET`  | `/v1/comments?slug=&version=` | `{ data: [...], pagination }` folded snapshot (reader; `version=all` for full history) |
+| `GET`  | `/` | neutral landing page (no catalog, unauthed) |
 | `GET`  | `/me` | owner-only doc catalog (redirects others) |
 
-### Comment mutations (anonymous)
+### Comment mutations (reader capability required)
 
 | Method | Path | Description |
 | ------ | ---- | ----------- |
 | `POST`   | `/v1/comments` | create a comment or reply |
-| `PATCH`  | `/v1/comments` | re-anchor (author/owner only once a session exists) |
-| `DELETE` | `/v1/comments?slug=&id=&version=` | soft-delete (author/owner only once a session exists) |
+| `PATCH`  | `/v1/comments` | re-anchor |
+| `DELETE` | `/v1/comments?slug=&id=&version=` | soft-delete |
 | `POST`   | `/v1/reactions` | toggle an emoji reaction |
 
-Comments are anonymous: there is no built-in login provider, so these endpoints
-require no session. The author/owner checks on PATCH/DELETE are a no-op while
-anonymous (unowned comments) and activate automatically once a future Octo
-unified login populates viewer sessions.
+Commenting requires at least a **reader** capability (the doc's share code, or the
+author write token) — a default-private doc cannot be commented on anonymously.
+Comment identity is still anonymous (no login provider); the author/owner checks on
+PATCH/DELETE are the seam a future Octo unified login activates.
 
-### Write endpoints (Bearer token required)
+### Author endpoints (write token, or the author cookie in a browser)
 
 | Method | Path | Description |
 | ------ | ---- | ----------- |
-| `POST`   | `/v1/docs` | publish (multipart `file=@doc.html, slug=` **or** JSON `{slug, version, html, meta, comments}`); auto-increments version when omitted |
+| `POST`   | `/v1/docs` | publish directly (JSON `{slug, version, html, meta, comments}` or multipart); auto-increments version when omitted |
+| `PUT`    | `/v1/docs/:slug/draft` | save/overwrite the mutable draft slot |
+| `POST`   | `/v1/docs/:slug/draft/promote` | promote the draft to a new immutable version |
+| `POST`   | `/v1/docs/:slug/share` | mint/rotate the per-doc read+comment code → `{ code, url }` |
+| `DELETE` | `/v1/docs/:slug/share` | revoke the share code |
 | `POST`   | `/v1/agent/replies` | agent posts a reply + verdict (✅/🟡/❓) |
 | `DELETE` | `/v1/docs/:slug` | delete all versions + comments |
 | `DELETE` | `/v1/comments?slug=&all=1` | wipe all comments for a slug |
 | `POST`   | `/v1/admin/bootstrap` | mint the first write token (then 409s) |
+
+Author endpoints accept the write token as `Authorization: Bearer` (CLI) or, for
+the browser Publish/Share buttons, the author credential via the per-doc cookie.
 
 ### Viewer sessions
 

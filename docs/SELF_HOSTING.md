@@ -150,7 +150,8 @@ start) is safe to re-run.
 - [ ] **`COOKIE_SECURE=true`** (default) — cookies only over HTTPS.
 - [ ] **`FRAME_ANCESTORS`** — keep `'none'` unless you intentionally embed docs.
 - [ ] **Set `WRITE_TOKEN`** explicitly and `ALLOW_BOOTSTRAP=false` once set up.
-- [ ] **`PRIVATE=1`** if reads should require the token too.
+- [ ] **Docs are private by default** — access is per-document via share codes
+      (`octo share`), not a global flag. See [AUTH.md](./AUTH.md).
 - [ ] **Backups** — `pg_dump` the metadata + S3 versioning/lifecycle (or
       `aws s3 sync`) for the blobs. See [DESIGN.md](./DESIGN.md#backup--restore).
 - [ ] **Rate limits** — tune `RATE_LIMIT_MAX` / `RATE_LIMIT_WINDOW_MS` for your

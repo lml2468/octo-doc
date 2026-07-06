@@ -259,6 +259,34 @@ func (s *Store) DeleteDoc(_ context.Context, slug string) error {
 	return nil
 }
 
+// draftKey is the mutable draft slot. The "draft" suffix is not a number, so
+// ListVersions's atoi skips it — it never appears as a version.
+func draftKey(slug string) string { return slug + "\x00draft" }
+
+// PutDraft implements storage.BlobStore.
+func (s *Store) PutDraft(_ context.Context, slug string, html string) (int64, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.blobs[draftKey(slug)] = html
+	return int64(len(html)), nil
+}
+
+// GetDraft implements storage.BlobStore.
+func (s *Store) GetDraft(_ context.Context, slug string) (string, bool, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	h, ok := s.blobs[draftKey(slug)]
+	return h, ok, nil
+}
+
+// DeleteDraft implements storage.BlobStore.
+func (s *Store) DeleteDraft(_ context.Context, slug string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.blobs, draftKey(slug))
+	return nil
+}
+
 // small int<->string helpers to avoid strconv churn in hot paths
 func itoa(n int) string {
 	if n == 0 {

@@ -115,6 +115,91 @@ func (s *Server) handlePublish(w http.ResponseWriter, r *http.Request) error {
 	return nil
 }
 
+// handleSaveDraft writes the mutable draft slot (PUT /v1/docs/{slug}/draft).
+// Write-auth gated. The body is the same shape as publish, minus version.
+func (s *Server) handleSaveDraft(w http.ResponseWriter, r *http.Request) error {
+	slug, err := requireSlug(chi.URLParam(r, "slug"))
+	if err != nil {
+		return err
+	}
+	body, err := s.readPublishBody(w, r)
+	if err != nil {
+		return err
+	}
+	if body.HTML == "" {
+		return apperr.Validation("html (file) required", "html_required")
+	}
+	res, err := s.docs.SaveDraft(r.Context(), slug, body.HTML, body.Title)
+	if err != nil {
+		return err
+	}
+	writeData(w, 200, res)
+	return nil
+}
+
+// handlePromote promotes the draft to a new immutable version
+// (POST /v1/docs/{slug}/draft/promote). Write-auth gated.
+func (s *Server) handlePromote(w http.ResponseWriter, r *http.Request) error {
+	slug, err := requireSlug(chi.URLParam(r, "slug"))
+	if err != nil {
+		return err
+	}
+	// Optional {title} override.
+	var raw struct {
+		Title string `json:"title"`
+	}
+	if r.Body != nil {
+		_ = json.NewDecoder(io.LimitReader(r.Body, 1<<16)).Decode(&raw)
+	}
+	res, err := s.docs.Promote(r.Context(), slug, raw.Title)
+	if err != nil {
+		return err
+	}
+	writeData(w, 200, res)
+	return nil
+}
+
+// handleRenderDraft renders the draft slot (GET/HEAD /d/{slug}/draft) with the
+// overlay in "draft" mode. Write-auth gated — a draft is author-only until promoted.
+func (s *Server) handleRenderDraft(w http.ResponseWriter, r *http.Request) error {
+	slug, err := requireSlug(chi.URLParam(r, "slug"))
+	if err != nil {
+		return err
+	}
+	data, err := s.docs.GetDraft(r.Context(), slug)
+	if err != nil {
+		return err
+	}
+	if data == nil {
+		return apperr.NotFound("Not found: " + slug + " draft")
+	}
+	session, err := s.auth.GetSession(r.Context(), sessionCookie(r))
+	if err != nil {
+		return err
+	}
+	// Draft mode: the overlay shows a Publish affordance (promote) instead of
+	// Share/Fork. Version 0 signals "not yet a committed version".
+	html, err := core.InjectOverlayCfg(data.HTML, s.overlayJS, core.OverlayConfig{
+		Slug:           slug,
+		Version:        0,
+		Identity:       identityFromSession(session),
+		IsOwner:        s.auth.IsOwner(session),
+		AuthConfigured: s.auth.LoginEnabled(),
+		Mode:           "draft",
+		Versions:       toVersionRefs(data.Versions, 0),
+	})
+	if err != nil {
+		return err
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if r.Method == http.MethodHead {
+		w.WriteHeader(200)
+		return nil
+	}
+	_, _ = io.WriteString(w, html)
+	return nil
+}
+
 func (s *Server) handleVersions(w http.ResponseWriter, r *http.Request) error {
 	slug, err := requireSlug(chi.URLParam(r, "slug"))
 	if err != nil {

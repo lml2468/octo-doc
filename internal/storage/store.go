@@ -84,6 +84,14 @@ type BlobStore interface {
 	// ListVersions returns the versions present for a slug, ascending.
 	ListVersions(ctx context.Context, slug string) ([]int, error)
 	DeleteDoc(ctx context.Context, slug string) error
+
+	// Draft is a single mutable, overwritable slot per slug, stored outside the
+	// versioned key namespace so it never appears in ListVersions. It holds the
+	// work-in-progress HTML before it is promoted to an immutable version.
+	PutDraft(ctx context.Context, slug string, html string) (size int64, err error)
+	GetDraft(ctx context.Context, slug string) (string, bool, error)
+	DeleteDraft(ctx context.Context, slug string) error
+
 	// Health verifies the backend is reachable (readiness probe).
 	Health(ctx context.Context) error
 }

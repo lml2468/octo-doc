@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"maps"
 	"time"
 
 	"github.com/Mininglamp-OSS/octo-doc/internal/core"
@@ -153,6 +154,155 @@ type VersionList struct {
 	Slug     string               `json:"slug"`
 	Title    string               `json:"title"`
 	Versions []storage.VersionRef `json:"versions"`
+}
+
+// DraftResult is the result of saving a draft.
+type DraftResult struct {
+	Slug string `json:"slug"`
+	URL  string `json:"url"`
+	Size int64  `json:"size"`
+	AIDs int    `json:"aids"`
+}
+
+// SaveDraft stamps and writes the mutable draft slot for a slug, creating the
+// meta record if the slug is new (draft-only docs have an empty Versions list).
+// The draft never enters the immutable version numbering until Promote.
+func (s *DocService) SaveDraft(ctx context.Context, slug, html, title string) (*DraftResult, error) {
+	if html == "" {
+		return nil, apperr.Validation("html required", "html_required")
+	}
+	if int64(len(html)) > s.maxBytes {
+		return nil, apperr.PayloadTooLarge(fmt.Sprintf("document exceeds %d bytes", s.maxBytes), "html_too_large")
+	}
+	stamped := core.StampAids(html)
+	var result *DraftResult
+	err := s.lock.With(ctx, slug, func() error {
+		size, perr := s.blobs.PutDraft(ctx, slug, stamped.HTML)
+		if perr != nil {
+			return apperr.Upstream("draft write failed", "draft_write_failed", perr)
+		}
+		if merr := s.setDraftMeta(ctx, slug, title); merr != nil {
+			return merr
+		}
+		result = &DraftResult{
+			Slug: slug,
+			URL:  fmt.Sprintf("%s/d/%s/draft", s.baseURL, slug),
+			Size: size,
+			AIDs: len(stamped.AIDs),
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+// GetDraft fetches the draft HTML + version list for rendering, or nil if absent.
+func (s *DocService) GetDraft(ctx context.Context, slug string) (*RenderData, error) {
+	html, ok, err := s.blobs.GetDraft(ctx, slug)
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return nil, nil
+	}
+	meta, err := s.meta.GetMeta(ctx, slug)
+	if err != nil {
+		return nil, err
+	}
+	var versions []storage.VersionRef
+	if meta != nil {
+		versions = meta.Versions
+	}
+	return &RenderData{HTML: html, Versions: versions}, nil
+}
+
+// Promote turns the current draft into a new immutable version via the normal
+// publish path (monotonic maxV+1), then clears the draft blob + meta marker. It
+// holds the per-slug lock across the whole sequence so it can't race a publish.
+func (s *DocService) Promote(ctx context.Context, slug, title string) (*PublishResult, error) {
+	var result *PublishResult
+	err := s.lock.With(ctx, slug, func() error {
+		html, ok, gerr := s.blobs.GetDraft(ctx, slug)
+		if gerr != nil {
+			return gerr
+		}
+		if !ok {
+			return apperr.NotFound("no draft to publish for " + slug)
+		}
+		stamped := core.StampAids(html)
+		r, perr := s.publishLocked(ctx, PublishInput{Slug: slug, HTML: html, Title: title}, stamped)
+		if perr != nil {
+			return perr
+		}
+		if derr := s.blobs.DeleteDraft(ctx, slug); derr != nil {
+			return apperr.Upstream("draft clear failed", "draft_clear_failed", derr)
+		}
+		if merr := s.clearDraftMeta(ctx, slug); merr != nil {
+			return merr
+		}
+		result = r
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+// setDraftMeta records a draft marker in the meta Extra catch-all, creating the
+// meta record if the slug is new. It leaves Versions untouched.
+func (s *DocService) setDraftMeta(ctx context.Context, slug, title string) error {
+	prev, err := s.meta.GetMeta(ctx, slug)
+	if err != nil {
+		return err
+	}
+	if prev == nil {
+		prev = &storage.DocMeta{Slug: slug, Title: slug, Versions: []storage.VersionRef{}}
+	}
+	metaTitle := prev.Title
+	if title != "" {
+		metaTitle = title
+	}
+	if metaTitle == "" {
+		metaTitle = slug
+	}
+	extra := map[string]any{}
+	maps.Copy(extra, prev.Extra)
+	extra["draft"] = map[string]any{"updated_at": time.Now().UTC().Format(time.RFC3339)}
+	return s.meta.PutMeta(ctx, slug, storage.DocMeta{
+		Slug:     slug,
+		Title:    metaTitle,
+		Versions: prev.Versions,
+		Extra:    extra,
+	})
+}
+
+// clearDraftMeta removes the draft marker from meta (no-op if none / no meta).
+func (s *DocService) clearDraftMeta(ctx context.Context, slug string) error {
+	prev, err := s.meta.GetMeta(ctx, slug)
+	if err != nil || prev == nil {
+		return err
+	}
+	if _, has := prev.Extra["draft"]; !has {
+		return nil
+	}
+	extra := map[string]any{}
+	for k, v := range prev.Extra {
+		if k != "draft" {
+			extra[k] = v
+		}
+	}
+	if len(extra) == 0 {
+		extra = nil
+	}
+	return s.meta.PutMeta(ctx, slug, storage.DocMeta{
+		Slug:     prev.Slug,
+		Title:    prev.Title,
+		Versions: prev.Versions,
+		Extra:    extra,
+	})
 }
 
 // ListVersions lists versions for a slug (meta-derived, falling back to blobs).

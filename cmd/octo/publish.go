@@ -77,17 +77,20 @@ func publishDoc(ctx context.Context, cfg config, slug string, progress io.Writer
 	latest := meta.latestVersion()
 
 	_, _ = fmt.Fprintf(progress, "[octo] publishing %s to %s\n", slug, cfg.BaseURL)
-	pm := &publishMeta{Title: meta.Title, Versions: meta.Versions}
+	// Full meta (title + version history) rides only the latest upload; older
+	// uploads carry title only. The server rebuilds the version list from blobs
+	// and honors just the title, so re-sending the whole Versions slice V times
+	// would be O(V²) wasted bytes for identical server state — the same reason
+	// comments are attached only to the latest version below.
+	fullMeta := &publishMeta{Title: meta.Title, Versions: meta.Versions}
+	titleMeta := &publishMeta{Title: meta.Title}
 
 	var olderFailed []int
 	var lastResp *publishResp
 	for _, vr := range versions {
-		// The server merges comments idempotently by id, so only the latest upload
-		// needs to carry the full thread — sending it on every version would be
-		// O(versions × comments) wasted bytes for identical server state.
-		var vComments []comment
+		pm, vComments := titleMeta, []comment(nil)
 		if vr.N == latest {
-			vComments = comments
+			pm, vComments = fullMeta, comments
 		}
 		resp, upErr := st.uploadVersion(ctx, cl, slug, vr.N, pm, vComments)
 		if vr.N == latest {

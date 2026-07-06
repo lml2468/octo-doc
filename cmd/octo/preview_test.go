@@ -36,6 +36,17 @@ func seedDoc(t *testing.T, st *store, htmlBody string) {
 	}
 }
 
+// postJSON sends a JSON POST (satisfying the CSRF content-type guard) to the
+// preview handler and returns the recorder. Shared by the mutation tests so the
+// Content-Type header can't drift between them.
+func postJSON(h http.Handler, path, body string) *httptest.ResponseRecorder {
+	rr := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	h.ServeHTTP(rr, req)
+	return rr
+}
+
 // TestRenderInjectsCanonicalOverlay proves the preview render uses the exact same
 // core.InjectOverlayCfg + assets.OverlayJS the server uses — the whole reason the
 // mirror can be retired. We reproduce the server's call for the same doc in
@@ -84,14 +95,7 @@ func TestCommentCRUDFlow(t *testing.T) {
 	h := ps.routes()
 
 	// Create requires the JSON content-type CSRF guard.
-	post := func(path, body string) *httptest.ResponseRecorder {
-		rr := httptest.NewRecorder()
-		req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(body))
-		req.Header.Set("Content-Type", "application/json")
-		h.ServeHTTP(rr, req)
-		return rr
-	}
-	rr := post("/v1/comments", `{"slug":"doc","version":1,"text":"hello"}`)
+	rr := postJSON(h, "/v1/comments", `{"slug":"doc","version":1,"text":"hello"}`)
 	if rr.Code != 200 || !strings.Contains(rr.Body.String(), `"created_at"`) {
 		t.Fatalf("create failed: %d %s", rr.Code, rr.Body.String())
 	}
@@ -145,19 +149,15 @@ func TestAgentReplySetsStatusEmoji(t *testing.T) {
 	seedDoc(t, ps.store, "<html><body>x</body></html>")
 	h := ps.routes()
 	// Seed a comment.
-	rr := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/v1/comments", strings.NewReader(`{"slug":"doc","version":1,"text":"q"}`))
-	req.Header.Set("Content-Type", "application/json")
-	h.ServeHTTP(rr, req)
+	if rr := postJSON(h, "/v1/comments", `{"slug":"doc","version":1,"text":"q"}`); rr.Code != 200 {
+		t.Fatalf("seed comment failed: %d", rr.Code)
+	}
 	list, _ := ps.store.readComments("doc")
 	cid := list[0].ID
 
 	// Agent applies it → parent status applied, ✅ reaction from tdoc-agent.
-	rr = httptest.NewRecorder()
-	req = httptest.NewRequest(http.MethodPost, "/v1/agent/replies",
-		strings.NewReader(`{"slug":"doc","parent_id":"`+cid+`","text":"done","status":"applied"}`))
-	req.Header.Set("Content-Type", "application/json")
-	h.ServeHTTP(rr, req)
+	rr := postJSON(h, "/v1/agent/replies",
+		`{"slug":"doc","parent_id":"`+cid+`","text":"done","status":"applied"}`)
 	if rr.Code != 200 {
 		t.Fatalf("agent reply failed: %d %s", rr.Code, rr.Body.String())
 	}
@@ -189,18 +189,11 @@ func TestCommentIDsUniqueSameInstant(t *testing.T) {
 	ps := newTestServer(t)
 	seedDoc(t, ps.store, "<html><body>x</body></html>")
 	h := ps.routes()
-	post := func() {
-		rr := httptest.NewRecorder()
-		req := httptest.NewRequest(http.MethodPost, "/v1/comments", strings.NewReader(`{"slug":"doc","version":1,"text":"x"}`))
-		req.Header.Set("Content-Type", "application/json")
-		h.ServeHTTP(rr, req)
-		if rr.Code != 200 {
-			t.Fatalf("create failed: %d", rr.Code)
-		}
-	}
 	seen := map[string]bool{}
 	for range 50 {
-		post()
+		if rr := postJSON(h, "/v1/comments", `{"slug":"doc","version":1,"text":"x"}`); rr.Code != 200 {
+			t.Fatalf("create failed: %d", rr.Code)
+		}
 	}
 	list, _ := ps.store.readComments("doc")
 	for _, c := range list {
@@ -221,10 +214,7 @@ func TestPublishRouteWired(t *testing.T) {
 	ps := newTestServer(t)
 	ps.cfg = config{Dir: ps.store.dir} // no BaseURL → publish must fail cleanly
 	seedDoc(t, ps.store, "<html><body>x</body></html>")
-	rr := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/v1/publish", strings.NewReader(`{"slug":"doc"}`))
-	req.Header.Set("Content-Type", "application/json")
-	ps.routes().ServeHTTP(rr, req)
+	rr := postJSON(ps.routes(), "/v1/publish", `{"slug":"doc"}`)
 	if rr.Code == http.StatusNotFound {
 		t.Fatal("/v1/publish fell through to 404 — route not wired")
 	}

@@ -546,19 +546,17 @@ func nowISO() string { return time.Now().UTC().Format("2006-01-02T15:04:05.000Z"
 func newCommentID() string { return "c_" + idStamp() }
 func newReplyID() string   { return "r_" + idStamp() }
 
-// idStamp is the shared time+random tail of an id: compact timestamp + "_" + 8 hex.
+// idStamp is the shared time+random tail of an id: compact timestamp + "_" + 8
+// hex. The random suffix is what guarantees uniqueness; the timestamp is a
+// human-readable prefix. A numeric time layout yields the digits directly.
 func idStamp() string {
-	digits := make([]byte, 0, 20)
-	for _, c := range nowISO() {
-		if c >= '0' && c <= '9' {
-			digits = append(digits, byte(c))
-		}
-	}
+	stamp := time.Now().UTC().Format("20060102150405.000")
+	stamp = strings.Replace(stamp, ".", "", 1) // drop the sole '.' → 17 digits
 	var rnd [4]byte
 	if _, err := rand.Read(rnd[:]); err != nil {
 		panic("octo: crypto/rand failed: " + err.Error())
 	}
-	return string(digits) + "_" + hex.EncodeToString(rnd[:])
+	return stamp + "_" + hex.EncodeToString(rnd[:])
 }
 
 // findComment returns the index of a top-level comment by id, or -1.

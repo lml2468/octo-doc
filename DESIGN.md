@@ -10,9 +10,9 @@ colors:
   primaryHover: "#1245d0"
   ink: "#1a1a1a"
   inkStrong: "#111111"
-  ink2: "#444444"
+  inkSoft: "#444444"
   muted: "#888888"
-  muted2: "#666666"
+  mutedDark: "#666666"
   faint: "#aaaaaa"
   barText: "#555555"
   surface: "#ffffff"
@@ -280,7 +280,7 @@ A small, consistent radius set:
 - **Do** use `pill` radius exclusively for floating affordances (FAB, pills) and
   `md` for everything else. **Don't** mix radii within one control group.
 - **Do** give every interactive control a `--octo-focus-ring` on `:focus-visible`,
-  and use `{colors.muted2}` (not `{colors.muted}`) for text at 12px or smaller so
+  and use `{colors.mutedDark}` (not `{colors.muted}`) for text at 12px or smaller so
   it clears WCAG AA. **Don't** ship chrome that's invisible to keyboard users or
   fails contrast at small sizes.
 - **Do** fully reset a chrome element's box with `!important` when it floats over

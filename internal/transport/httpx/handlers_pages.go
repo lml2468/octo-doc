@@ -44,7 +44,7 @@ const pageTokens = `
     --octo-ink: #1a1a1a;
     --octo-ink-strong: #111;
     --octo-muted: #888;
-    --octo-muted-2: #666;
+    --octo-muted-dark: #666;
     --octo-surface: #fff;
     --octo-surface-subtle: #f5f6f8;
     --octo-border: #e5e5e7;

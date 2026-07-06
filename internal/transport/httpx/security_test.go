@@ -11,9 +11,16 @@ import (
 	"github.com/Mininglamp-OSS/octo-doc/internal/platform/log"
 	"github.com/Mininglamp-OSS/octo-doc/internal/platform/sluglock"
 	"github.com/Mininglamp-OSS/octo-doc/internal/service"
+	"github.com/Mininglamp-OSS/octo-doc/internal/storage"
 	"github.com/Mininglamp-OSS/octo-doc/internal/storage/memory"
 	"github.com/Mininglamp-OSS/octo-doc/internal/transport/httpx"
 )
+
+// capCookie builds the per-doc capability cookie header value the way the server
+// names it (octo_cap_<hashslug>), so tests can present a cookie credential.
+func capCookie(slug, value string) string {
+	return "octo_cap_" + storage.HashSlug(slug) + "=" + value
+}
 
 var errUnhealthy = errors.New("store down")
 
@@ -131,6 +138,47 @@ func TestCodeCookieExchange(t *testing.T) {
 	setCookie := rec.Header().Get("Set-Cookie")
 	if setCookie == "" || !contains(setCookie, "HttpOnly") {
 		t.Errorf("expected an HttpOnly capability cookie, got %q", setCookie)
+	}
+}
+
+// TestAuthorMutationsViaCookie verifies author-only mutations (share, draft
+// promote) accept the write token via the per-doc cookie, not just the Bearer
+// header — the path a browser Publish/Share button takes.
+func TestAuthorMutationsViaCookie(t *testing.T) {
+	h := newTestServer(t, nil)
+	auth := map[string]string{"Authorization": "Bearer test-token", "Content-Type": "application/json"}
+	_ = do(t, h, http.MethodPost, "/v1/docs", auth,
+		`{"slug":"br","html":"<html><body><p>hi</p></body></html>"}`)
+
+	// The author's write token, delivered as a cookie (as a browser would after
+	// the ?code=<write-token> exchange), authorizes share.
+	cookie := capCookie("br", "test-token")
+	rec := do(t, h, http.MethodPost, "/v1/docs/br/share", map[string]string{"Cookie": cookie}, "")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("share via cookie = %d; want 200: %s", rec.Code, rec.Body.String())
+	}
+
+	// A save-draft + promote via cookie must also work (browser Publish button).
+	rec = do(t, h, http.MethodPut, "/v1/docs/br/draft",
+		map[string]string{"Cookie": cookie, "Content-Type": "application/json"},
+		`{"html":"<html><body><h1>draft</h1></body></html>"}`)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("draft save via cookie = %d; want 200: %s", rec.Code, rec.Body.String())
+	}
+	rec = do(t, h, http.MethodPost, "/v1/docs/br/draft/promote", map[string]string{"Cookie": cookie}, "")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("promote via cookie = %d; want 200: %s", rec.Code, rec.Body.String())
+	}
+
+	// A reader code cookie must NOT authorize author mutations.
+	sh := do(t, h, http.MethodPost, "/v1/docs/br/share", map[string]string{"Authorization": "Bearer test-token"}, "")
+	var share map[string]any
+	_ = json.Unmarshal(sh.Body.Bytes(), &share)
+	readerCode, _ := share["data"].(map[string]any)["code"].(string)
+	readerCookie := capCookie("br", readerCode)
+	rec = do(t, h, http.MethodPost, "/v1/docs/br/draft/promote", map[string]string{"Cookie": readerCookie}, "")
+	if rec.Code == http.StatusOK {
+		t.Error("a reader code must not authorize promote")
 	}
 }
 

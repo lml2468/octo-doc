@@ -50,6 +50,20 @@ func (s *Server) codeFromRequest(r *http.Request, slug string) string {
 // without the query param (so the code leaves the address bar). Otherwise it
 // continues to the handler.
 func (s *Server) requireDocReadHTML(next http.HandlerFunc) http.HandlerFunc {
+	return s.docHTMLGate(service.CapReader, next)
+}
+
+// requireDocAuthorHTML is the author-only HTML gate (draft view). It uses the same
+// ?code= → cookie → 302 exchange, so the write token can arrive as ?code= in a
+// browser (opened by `octo new --open`) and then ride as a cookie — the only way
+// a browser can present the author credential.
+func (s *Server) requireDocAuthorHTML(next http.HandlerFunc) http.HandlerFunc {
+	return s.docHTMLGate(service.CapAuthor, next)
+}
+
+// docHTMLGate resolves the capability for the path {slug}, requires at least min,
+// performs the ?code=→cookie→302 exchange, else 404s (existence hidden).
+func (s *Server) docHTMLGate(min service.Capability, next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		slug, err := requireSlug(chi.URLParam(r, "slug"))
 		if err != nil {
@@ -62,12 +76,13 @@ func (s *Server) requireDocReadHTML(next http.HandlerFunc) http.HandlerFunc {
 			writeErr(w, s.logger, err)
 			return
 		}
-		if cap == service.CapNone {
+		if cap < min {
 			// Hide existence — same 404 the old PRIVATE gate returned.
 			writeErr(w, s.logger, apperr.NotFound("Not found"))
 			return
 		}
-		// Exchange a ?code= (reader) for a cookie and drop it from the URL.
+		// Exchange a ?code= credential for a cookie and drop it from the URL, so
+		// the secret (reader code OR write token) leaves the address bar.
 		if r.URL.Query().Get("code") != "" && bearerToken(r) == "" {
 			setCapCookie(w, slug, cred, s.cfg.CookieSecure)
 			clean := *r.URL
@@ -117,4 +132,29 @@ func (s *Server) requireDocCap(r *http.Request, slug string) error {
 		return apperr.NotFound("Not found")
 	}
 	return nil
+}
+
+// requireDocAuthor is chi middleware for author-only mutations whose slug is in
+// the path (share, draft save/promote, delete). Unlike requireWriteAuth it accepts
+// the author credential via Bearer OR the per-doc cookie, so the overlay's
+// Publish/Share buttons work in a browser (cookie) as well as the CLI (Bearer).
+func (s *Server) requireDocAuthor(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		slug, err := requireSlug(chi.URLParam(r, "slug"))
+		if err != nil {
+			writeErr(w, s.logger, err)
+			return
+		}
+		cap, err := s.auth.CapabilityFor(r.Context(), slug, s.codeFromRequest(r, slug))
+		if err != nil {
+			writeErr(w, s.logger, err)
+			return
+		}
+		if cap != service.CapAuthor {
+			// A reader (or nobody) must not learn that author-only ops exist here.
+			writeErr(w, s.logger, apperr.NotFound("Not found"))
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
 }

@@ -25,6 +25,9 @@
   const isPublished = mode === 'published';
   const isFork = mode === 'fork';
   const isLocal = mode === 'local';
+  // Draft mode: an author previewing an unpublished doc on the server. The CTA is
+  // "Publish" (promote the draft to an immutable version), not Share.
+  const isDraft = mode === 'draft';
   // Fork mode renders the doc read-only with comments mirrored from the
   // embedded #tdoc-fork-comments JSON. No /api calls, no auth, no publish.
   // The original published slug is in cfg.originalSlug so we can label it.
@@ -727,15 +730,16 @@
       </div>
     </div>`;
 
-  const primaryCtaHtml = isFork ? '' : (isPublished
-    ? `<button id="tdoc-share-btn" class="primary" title="Share link" aria-label="Share">
+  // Primary CTA: published → Share (mint a code link); draft/local → Publish.
+  const shareCtaHtml = `<button id="tdoc-share-btn" class="primary" title="Share link" aria-label="Share">
          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
          <span>Share</span>
-       </button>`
-    : `<button id="tdoc-publish-btn" class="primary" title="Publish to your octo-doc server" aria-label="Publish">
+       </button>`;
+  const publishCtaHtml = `<button id="tdoc-publish-btn" class="primary" title="Publish to your octo-doc server" aria-label="Publish">
          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5"/><polyline points="5 12 12 5 19 12"/></svg>
          <span>Publish</span>
-       </button>`);
+       </button>`;
+  const primaryCtaHtml = isFork ? '' : (isPublished ? shareCtaHtml : publishCtaHtml);
 
   // Fork / Save-as live in the ⋯ menu on narrow viewports.
   const forkBtnHtml = isPublished
@@ -750,7 +754,7 @@
       <button class="tdoc-secondary-toggle" id="tdoc-more-btn" aria-label="More" title="More">⋯</button>
       <div class="tdoc-secondary-menu" id="tdoc-secondary-menu">
         ${isPublished ? '<button data-action="share">Share</button><button data-action="fork">Fork</button>' : ''}
-        ${isLocal ? '<button data-action="publish">Publish</button>' : ''}
+        ${(isLocal || isDraft) ? '<button data-action="publish">Publish</button>' : ''}
         ${isFork ? '<button data-action="saveas">Save copy</button>' : ''}
         <button data-action="repo">octo-doc on GitHub</button>
       </div>
@@ -850,6 +854,10 @@
     const pb = document.getElementById('tdoc-publish-btn');
     if (pb) pb.onclick = (e) => { e.stopPropagation(); showPublishModal(); };
   }
+  if (isDraft) {
+    const pb = document.getElementById('tdoc-publish-btn');
+    if (pb) pb.onclick = (e) => { e.stopPropagation(); showPromoteModal(); };
+  }
   function triggerForkDownload(slug, version) {
     const a = document.createElement('a');
     a.href = `/d/${encodeURIComponent(slug)}/v/${version}/export?download=1`;
@@ -906,7 +914,7 @@
       if (b.dataset.action === 'repo') window.open('https://github.com/lml2468/octo-doc', '_blank', 'noopener');
       if (b.dataset.action === 'fork') forkAndDownload();
       if (b.dataset.action === 'share') showShareModal();
-      if (b.dataset.action === 'publish') showPublishModal();
+      if (b.dataset.action === 'publish') { isDraft ? showPromoteModal() : showPublishModal(); }
       if (b.dataset.action === 'saveas') triggerForkDownload(slug, version);
     };
   });
@@ -1891,31 +1899,113 @@
   }
   function showShareModal() {
     closeAuxModal();
-    const url = `${location.origin}/d/${encodeURIComponent(slug)}/v/${version}`;
     const bg = document.createElement('div');
     bg.className = 'tdoc-modal-bg';
     bg.id = 'tdoc-aux-modal';
     bg.innerHTML = `
       <div class="tdoc-modal">
         <h3>Share this doc</h3>
-        <div class="code" id="tdoc-share-url" style="font-size:14px;letter-spacing:0;text-align:left;cursor:copy;">${escapeHtml(url)}</div>
-        <div class="actions" style="justify-content:flex-start;gap:8px;margin-top:0;margin-bottom:10px;">
-          <button class="primary" id="tdoc-share-copy">Copy link</button>
+        <p class="muted" style="margin:0 0 10px;">Generate a link that lets anyone read and comment — no account needed.</p>
+        <div class="status" id="tdoc-share-status" style="display:none;margin-bottom:10px;"></div>
+        <div id="tdoc-share-result" style="display:none;">
+          <div class="code" id="tdoc-share-url" style="font-size:14px;letter-spacing:0;text-align:left;cursor:copy;"></div>
+          <div class="actions" style="justify-content:flex-start;gap:8px;margin-top:0;margin-bottom:10px;">
+            <button class="primary" id="tdoc-share-copy">Copy link</button>
+          </div>
+          <p class="muted" style="font-size:12px;">Anyone with this link can read and comment. Generate a new link to rotate it (old links stop working).</p>
         </div>
-        <p class="muted">Anyone with this link can read and comment.</p>
-        <div class="divider">
-          <p class="danger" style="margin:0 0 6px;"><b>Unpublish</b></p>
-          <p class="muted" style="margin:0 0 6px;font-size:12px;">Unpublish requires the upload token, which only lives on your laptop. Run this locally:</p>
-          <div class="code" style="font-size:13px;letter-spacing:0;text-align:left;cursor:copy;" id="tdoc-share-unpub">/tdoc unpublish ${escapeHtml(slug)}</div>
+        <div class="actions">
+          <button id="tdoc-share-close">Close</button>
+          <button class="primary" id="tdoc-share-go">Generate link</button>
         </div>
-        <div class="actions"><button id="tdoc-share-close">Close</button></div>
       </div>`;
     document.body.appendChild(bg);
     document.getElementById('tdoc-share-close').onclick = closeAuxModal;
-    document.getElementById('tdoc-share-copy').onclick = () => navigator.clipboard?.writeText(url);
-    document.getElementById('tdoc-share-url').onclick = () => navigator.clipboard?.writeText(url);
-    document.getElementById('tdoc-share-unpub').onclick = (e) => {
-      navigator.clipboard?.writeText(e.currentTarget.textContent);
+    document.getElementById('tdoc-share-go').onclick = async () => {
+      const status = document.getElementById('tdoc-share-status');
+      const go = document.getElementById('tdoc-share-go');
+      status.style.display = 'block';
+      status.textContent = 'Generating…';
+      go.disabled = true;
+      try {
+        const r = await fetch(`/v1/docs/${encodeURIComponent(slug)}/share`, { method: 'POST' });
+        const data = await r.json();
+        if (!r.ok || data.error) {
+          status.textContent = 'Failed: ' + errMsg(data, r.status);
+          go.disabled = false;
+          return;
+        }
+        const url = data.data.url;
+        status.style.display = 'none';
+        const result = document.getElementById('tdoc-share-result');
+        result.style.display = 'block';
+        const urlEl = document.getElementById('tdoc-share-url');
+        urlEl.textContent = url;
+        urlEl.onclick = () => navigator.clipboard?.writeText(url);
+        document.getElementById('tdoc-share-copy').onclick = () => navigator.clipboard?.writeText(url);
+        go.textContent = 'Rotate link';
+        go.disabled = false;
+      } catch (e) {
+        status.textContent = 'Failed: ' + e.message;
+        go.disabled = false;
+      }
+    };
+  }
+
+  // Draft mode: promote the current draft to an immutable published version.
+  function showPromoteModal() {
+    closeAuxModal();
+    const bg = document.createElement('div');
+    bg.className = 'tdoc-modal-bg';
+    bg.id = 'tdoc-aux-modal';
+    bg.innerHTML = `
+      <div class="tdoc-modal">
+        <h3>Publish this draft</h3>
+        <p class="muted">This freezes the current draft as a new immutable version with a permanent URL. The draft stays editable for the next round.</p>
+        <div class="status" id="tdoc-pub-status" style="display:none;margin-top:10px;"></div>
+        <div id="tdoc-pub-result" style="display:none;margin-top:10px;">
+          <div class="code" id="tdoc-pub-url" style="font-size:14px;letter-spacing:0;text-align:left;"></div>
+          <div class="actions" style="justify-content:flex-start;gap:8px;">
+            <button class="primary" id="tdoc-pub-copy">Copy link</button>
+            <button id="tdoc-pub-open">View →</button>
+          </div>
+        </div>
+        <div class="actions">
+          <button id="tdoc-pub-cancel">Cancel</button>
+          <button class="primary" id="tdoc-pub-go">Publish</button>
+        </div>
+      </div>`;
+    document.body.appendChild(bg);
+    document.getElementById('tdoc-pub-cancel').onclick = closeAuxModal;
+    document.getElementById('tdoc-pub-go').onclick = async () => {
+      const status = document.getElementById('tdoc-pub-status');
+      const go = document.getElementById('tdoc-pub-go');
+      status.style.display = 'block';
+      status.textContent = 'Publishing…';
+      go.disabled = true;
+      try {
+        const r = await fetch(`/v1/docs/${encodeURIComponent(slug)}/draft/promote`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}',
+        });
+        const data = await r.json();
+        if (!r.ok || data.error) {
+          status.textContent = 'Failed: ' + errMsg(data, r.status);
+          go.disabled = false;
+          return;
+        }
+        const url = data.data.url;
+        status.style.display = 'none';
+        const result = document.getElementById('tdoc-pub-result');
+        result.style.display = 'block';
+        document.getElementById('tdoc-pub-url').textContent = url;
+        document.getElementById('tdoc-pub-copy').onclick = () => navigator.clipboard?.writeText(url);
+        document.getElementById('tdoc-pub-open').onclick = () => window.open(url, '_blank');
+        document.getElementById('tdoc-pub-go').style.display = 'none';
+        document.getElementById('tdoc-pub-cancel').textContent = 'Done';
+      } catch (e) {
+        status.textContent = 'Failed: ' + e.message;
+        go.disabled = false;
+      }
     };
   }
 

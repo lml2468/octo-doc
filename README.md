@@ -47,11 +47,26 @@ Full guide: **[docs/SELF_HOSTING.md](docs/SELF_HOSTING.md)** ($5 VPS in 15 min).
 | **Artifacts** | each commentable element is stamped `data-tdoc-aid="<hash>"` so comments anchor by identity, not DOM position — **byte-identical to upstream** |
 | **Auth** | Bearer token for writes; reads public by default (`PRIVATE=1` to lock) |
 | **Storage** | PostgreSQL (metadata) + S3-compatible (blobs) behind two interfaces |
+| **Scaling** | stateless app; run N replicas behind a load balancer — per-slug writes serialize via PostgreSQL advisory locks |
 
 Architecture, data model, and the full API spec:
 **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**. Design rationale, threat model,
 backup/upgrade: **[docs/DESIGN.md](docs/DESIGN.md)**. How the Go port preserves
 byte-equivalence with upstream tdoc: **[docs/PORTING.md](docs/PORTING.md)**.
+
+## Running multiple instances
+
+The app holds no local state, so you can run as many replicas as you like behind
+a load balancer — they share the same PostgreSQL and S3. Concurrent writes to the
+**same** document (publishing a new version, or a comment's read-modify-write) are
+serialized **across instances** by a per-slug **PostgreSQL advisory lock**, so two
+replicas can't resolve to the same version number or clobber each other's blob.
+The first-token `bootstrap` is guarded the same way, so it stays one-shot cluster-wide.
+
+Operationally there's nothing to configure — it's on by default. Just size the
+database: each instance opens **two** connection pools (one for queries, one for
+the advisory locks), so plan for up to `2 × PG_POOL_MAX × replicas` connections
+against Postgres and set its `max_connections` accordingly.
 
 ## Agent skill
 
@@ -76,6 +91,7 @@ Highlights:
 | Var | Default | Purpose |
 | --- | ------- | ------- |
 | `DATABASE_URL` | _(required)_ | PostgreSQL connection string |
+| `PG_POOL_MAX` | `10` | max connections **per pool**; the app keeps two (queries + advisory locks), so total ≤ `2×` this |
 | `S3_BUCKET` / `S3_ENDPOINT` | `octo-doc` / _(AWS)_ | blob store (MinIO/R2: set endpoint + `S3_FORCE_PATH_STYLE=1`) |
 | `WRITE_TOKEN` | _(bootstrap)_ | static write token; else POST `/v1/admin/bootstrap` |
 | `PRIVATE` | `false` | require the token for reads too |

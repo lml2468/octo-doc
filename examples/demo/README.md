@@ -34,9 +34,17 @@ This serves the app at **http://localhost:18080** with the write token
 ## Run
 
 ```bash
-./examples/demo/seed.sh            # publish v1 + v2 and seed the review thread
+./examples/demo/seed.sh            # publish v1/v2/v3 and seed the review threads
 ./examples/demo/seed.sh --reset    # wipe this slug's comments first, then re-seed
 ```
+
+> **Why a script and not the `octo` CLI?** `seed.sh` fabricates *reader-side*
+> state — anchored human comments, threaded replies, emoji reactions — which the
+> author-side CLI deliberately does not produce (those are actions readers take in
+> the browser overlay, not publish operations). So the demo talks to the raw `/v1`
+> API directly with `curl`, which also keeps it dependency-free (no CLI install)
+> and runnable against any octo-doc server. Publishing a document, by contrast, is
+> exactly what `octo publish` is for.
 
 Configuration via env (all optional):
 

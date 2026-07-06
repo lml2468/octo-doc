@@ -211,3 +211,41 @@ func (c *client) agentReply(ctx context.Context, req agentReplyReq) error {
 	_, err := c.do(ctx, http.MethodPost, "/v1/agent/replies", req)
 	return err
 }
+
+// commentReq is the POST /v1/comments request body. A parent_id makes it a reply;
+// an anchor binds a top-level comment to specific text. Reads/comments are public,
+// so no token is required.
+type commentReq struct {
+	Slug     string       `json:"slug"`
+	Text     string       `json:"text"`
+	Version  int          `json:"version,omitempty"`
+	ParentID string       `json:"parent_id,omitempty"`
+	Anchor   *core.Anchor `json:"anchor,omitempty"`
+}
+
+// createComment posts a human comment (or a reply, if ParentID is set) and returns
+// the new id.
+func (c *client) createComment(ctx context.Context, req commentReq) (string, error) {
+	data, err := c.do(ctx, http.MethodPost, "/v1/comments", req)
+	if err != nil {
+		return "", err
+	}
+	var out struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(data, &out); err != nil {
+		return "", err
+	}
+	return out.ID, nil
+}
+
+// react toggles an emoji reaction on a comment (public endpoint, keyed server-side
+// to the anonymous viewer).
+func (c *client) react(ctx context.Context, slug, commentID, emoji string, version int) error {
+	body := map[string]any{"slug": slug, "comment_id": commentID, "emoji": emoji}
+	if version > 0 {
+		body["version"] = version
+	}
+	_, err := c.do(ctx, http.MethodPost, "/v1/reactions", body)
+	return err
+}

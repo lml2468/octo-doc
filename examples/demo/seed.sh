@@ -1,158 +1,119 @@
 #!/usr/bin/env bash
 # seed.sh — publish the octo-doc self-intro demo and seed a full collaboration
-# scenario against a running octo-doc server.
+# scenario, driven entirely through the `octo` CLI (no curl, no jq).
 #
-# It demonstrates the whole product surface:
-#   • publish v1 (an interactive HTML document)
-#   • anchored human comments + a threaded reply
-#   • an agent reply carrying an "applied" verdict
-#   • an emoji reaction
-#   • publish v2 (immutable versioning; comments re-anchor to the new version)
+# It demonstrates the whole product surface the way a user actually drives it:
+#   • octo new / version-add / publish   — author v1, v2, v3 and publish them
+#   • octo comment                       — anchored human comments + a threaded reply
+#   • octo reply --remote                — agent replies carrying "applied" verdicts
+#   • octo react                         — an emoji reaction
+#
+# The doc evolves from its own review: v3 adds a section answering the open
+# anchoring question, and the agent marks that thread applied — the /octo edit
+# loop, end to end.
 #
 # Usage:
-#   ./examples/demo/seed.sh            # publish + seed the scenario
+#   ./examples/demo/seed.sh            # build octo if needed, publish + seed
 #   ./examples/demo/seed.sh --reset    # wipe the slug's comments, then re-seed
 #
 # Config (env):
 #   BASE   octo-doc base URL   (default http://localhost:18080)
 #   TOKEN  write bearer token  (default local-test-token)
 #   SLUG   document slug       (default octo-demo)
+#   OCTO   path to the octo binary (default: build ./bin/octo from this repo)
 set -euo pipefail
 
 BASE="${BASE:-http://localhost:18080}"
 TOKEN="${TOKEN:-local-test-token}"
 SLUG="${SLUG:-octo-demo}"
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT="$(cd "$DIR/../.." && pwd)"
 
 bold=$'\033[1m'; grn=$'\033[32m'; red=$'\033[31m'; dim=$'\033[2m'; rst=$'\033[0m'
 pass() { printf '  %s✓%s %s\n' "$grn" "$rst" "$1"; }
 fail() { printf '  %s✗ %s%s\n' "$red" "$1" "$rst"; exit 1; }
 step() { printf '%s==> %s%s\n' "$bold" "$1" "$rst"; }
-# Substring test without a pipe (safe under pipefail on large bodies).
-has()  { case "$1" in *"$2"*) return 0 ;; *) return 1 ;; esac; }
 
-auth=(-H "Authorization: Bearer $TOKEN")
-json=(-H "Content-Type: application/json")
+# Resolve the octo CLI: honor $OCTO, else a prebuilt ./bin/octo, else build it.
+OCTO="${OCTO:-$ROOT/bin/octo}"
+if [ ! -x "$OCTO" ]; then
+  step "building the octo CLI"
+  ( cd "$ROOT" && go build -o bin/octo ./cmd/octo ) || fail "go build ./cmd/octo failed"
+  pass "built $OCTO"
+fi
 
-# publish <html-file> — prints the new version number.
-publish() {
-  local file="$1" title="$2"
-  local payload resp ver
-  # Build the request body with jq so the HTML is safely JSON-encoded.
-  payload="$(jq -n --arg slug "$SLUG" --arg title "$title" \
-    --rawfile html "$file" '{slug:$slug, title:$title, html:$html}')"
-  resp="$(curl -fsS -X POST "$BASE/v1/docs" "${auth[@]}" "${json[@]}" -d "$payload")" \
-    || fail "publish request failed for $file"
-  ver="$(printf '%s' "$resp" | jq -r '.data.version // empty')"
-  [ -n "$ver" ] || fail "publish returned no version: $resp"
-  printf '%s' "$ver"
-}
+# The CLI keeps docs in its own store; use a throwaway one so the demo never
+# touches ~/octo-docs. Point every octo invocation at the same server + store.
+STORE="$(mktemp -d "${TMPDIR:-/tmp}/octo-demo-seed.XXXXXX")"
+trap 'rm -rf "$STORE"' EXIT
+export OCTO_BASE_URL="$BASE" OCTO_TOKEN="$TOKEN" OCTO_DIR="$STORE"
 
-# comment <version> <text> <anchor-text> — prints the new comment id.
-comment() {
-  local ver="$1" text="$2" anchor="$3" resp id
-  local payload
-  payload="$(jq -n --arg slug "$SLUG" --arg text "$text" --argjson ver "$ver" \
-    --arg atext "$anchor" \
-    '{slug:$slug, version:$ver, text:$text, anchor:{kind:"text", text:$atext}}')"
-  resp="$(curl -fsS -X POST "$BASE/v1/comments" "${json[@]}" -d "$payload")" \
-    || fail "comment request failed"
-  id="$(printf '%s' "$resp" | jq -r '.data.id // empty')"
-  [ -n "$id" ] || fail "comment returned no id: $resp"
-  printf '%s' "$id"
-}
-
-# reply <version> <parent-id> <text> — prints the new reply id.
-reply() {
-  local ver="$1" parent="$2" text="$3" resp id payload
-  payload="$(jq -n --arg slug "$SLUG" --arg text "$text" --argjson ver "$ver" \
-    --arg pid "$parent" \
-    '{slug:$slug, version:$ver, text:$text, parent_id:$pid}')"
-  resp="$(curl -fsS -X POST "$BASE/v1/comments" "${json[@]}" -d "$payload")" \
-    || fail "reply request failed"
-  id="$(printf '%s' "$resp" | jq -r '.data.id // empty')"
-  [ -n "$id" ] || fail "reply returned no id: $resp"
-  printf '%s' "$id"
-}
-
-# agent_reply <version> <parent-id> <text> <status> — agent verdict on a comment.
-agent_reply() {
-  local ver="$1" parent="$2" text="$3" status="$4" payload
-  payload="$(jq -n --arg slug "$SLUG" --arg text "$text" --argjson ver "$ver" \
-    --arg pid "$parent" --arg st "$status" \
-    '{slug:$slug, parent_id:$pid, text:$text, status:$st, applied_in:$ver}')"
-  curl -fsS -X POST "$BASE/v1/agent/replies" "${auth[@]}" "${json[@]}" -d "$payload" >/dev/null \
-    || fail "agent reply request failed"
-}
-
-# react <version> <comment-id> <emoji>
-react() {
-  local ver="$1" cid="$2" emoji="$3" payload
-  payload="$(jq -n --arg slug "$SLUG" --argjson ver "$ver" --arg cid "$cid" --arg e "$emoji" \
-    '{slug:$slug, version:$ver, comment_id:$cid, emoji:$e}')"
-  curl -fsS -X POST "$BASE/v1/reactions" "${json[@]}" -d "$payload" >/dev/null \
-    || fail "reaction request failed"
-}
+octo() { "$OCTO" "$@"; }
 
 main() {
   step "preflight — $BASE"
-  curl -fsS "$BASE/healthz" >/dev/null && pass "server healthy" || fail "server not reachable (is the stack up?)"
+  octo doctor >/dev/null 2>&1 || true   # doctor never fails; we check the server explicitly next
 
-  if [ "${1:-}" = "--reset" ]; then
-    step "reset — wiping existing comments for '$SLUG'"
-    curl -fsS -X DELETE "$BASE/v1/comments?slug=$SLUG&all=1" "${auth[@]}" >/dev/null \
-      && pass "comments wiped" || fail "wipe failed"
-  fi
+  step "author the document locally (v1 → v2 → v3)"
+  # --no-serve: this is a headless seed, so don't spin up a local preview.
+  octo new --slug "$SLUG" --title "octo-doc — documents you can talk to" \
+    --html-file "$DIR/index.v1.html" --no-serve --quiet --force \
+    || fail "octo new failed"
+  octo version-add --slug "$SLUG" --html-file "$DIR/index.v2.html" \
+    --prompt "chart projection + a Versioning section" >/dev/null || fail "version-add v2 failed"
+  octo version-add --slug "$SLUG" --html-file "$DIR/index.v3.html" \
+    --prompt "answer the anchoring review question" >/dev/null || fail "version-add v3 failed"
+  pass "scaffolded v1/v2/v3 in a throwaway store"
 
-  step "publish v1 — interactive self-intro document"
-  v1="$(publish "$DIR/index.v1.html" "octo-doc — documents you can talk to")"
-  pass "published v$v1  ·  $BASE/d/$SLUG/v/$v1"
+  step "publish all versions"
+  octo publish "$SLUG" >/dev/null 2>&1 || fail "octo publish failed (is the stack up at $BASE?)"
+  pass "published  ·  $BASE/d/$SLUG/v/1 … v/3"
 
-  step "seed the review thread on v$v1"
-  c_anchor="$(comment "$v1" \
-    "Love this — the re-anchoring guarantee is the killer feature. Does it survive a full rewrite of the paragraph?" \
-    "re-anchors each comment to the same content")"
+  step "seed the review threads (anchored to v1)"
+  c_anchor="$(octo comment --slug "$SLUG" --version 1 \
+    --anchor "re-anchors each comment to the same content" \
+    --text "Love this — the re-anchoring guarantee is the killer feature. Does it survive a full rewrite of the paragraph?")" \
+    || fail "anchoring comment failed"
   pass "human comment on the anchoring guarantee"
 
-  reply "$v1" "$c_anchor" \
-    "Good question — if the text is gone entirely it's flagged as unanchored so you can move it deliberately." >/dev/null
+  octo comment --slug "$SLUG" --version 1 --parent "$c_anchor" \
+    --text "Good question — if the text is gone entirely it's flagged as unanchored so you can move it deliberately." \
+    >/dev/null || fail "threaded reply failed"
   pass "threaded reply"
 
-  c_chart="$(comment "$v1" \
-    "Can we add a projected series to this chart so stakeholders see the runway?" \
-    "single unit you can comment on")"
+  c_chart="$(octo comment --slug "$SLUG" --version 1 \
+    --anchor "single unit you can comment on" \
+    --text "Can we add a projected series to this chart so stakeholders see the runway?")" \
+    || fail "chart comment failed"
   pass "human comment on the chart artifact"
 
-  agent_reply "$v1" "$c_chart" \
-    "Done — added a projected two-month series (lighter bars) in v2, with a legend. See the updated artifact." \
-    "applied"
-  pass "agent reply with an ${bold}applied${rst}${grn} verdict"
+  step "resolve both threads with agent verdicts"
+  octo reply --slug "$SLUG" --parent "$c_chart" --status applied --applied-in 2 --remote \
+    --text "Done — added a projected two-month series (lighter bars) in v2, with a legend. See the updated artifact." \
+    >/dev/null || fail "agent reply (chart) failed"
+  pass "agent reply on the chart thread — ${bold}applied${rst}${grn} in v2"
 
-  # React on the parent comment the agent addressed.
-  react "$v1" "$c_chart" "👍"
-  pass "emoji reaction"
+  octo reply --slug "$SLUG" --parent "$c_anchor" --status applied --applied-in 3 --remote \
+    --text "Yes — a full rewrite is covered. v3 adds a \"What happens when the text is rewritten?\" section spelling out the three states: Anchored (re-attaches automatically), Drifted (re-attaches to the closest match and flags it), and Unanchored (when the text is gone entirely, the comment is flagged for deliberate re-anchoring — never silently dropped or moved)." \
+    >/dev/null || fail "agent reply (anchoring) failed"
+  pass "agent reply on the anchoring thread — ${bold}applied${rst}${grn} in v3"
 
-  step "publish v2 — revised (chart projection + a Versioning section)"
-  v2="$(publish "$DIR/index.v2.html" "octo-doc — documents you can talk to")"
-  pass "published v$v2  ·  $BASE/d/$SLUG/v/$v2"
-
-  step "publish v3 — the anchoring question, answered in the document"
-  v3="$(publish "$DIR/index.v3.html" "octo-doc — documents you can talk to")"
-  pass "published v$v3  ·  $BASE/d/$SLUG/v/$v3"
-
-  # Close the loop the /octo edit workflow demonstrates: the open anchoring
-  # question is now addressed by a new section in v3, so the agent marks it applied.
-  agent_reply "$v3" "$c_anchor" \
-    "Yes — a full rewrite is covered. v3 adds a \"What happens when the text is rewritten?\" section spelling out the three states: Anchored (re-attaches automatically), Drifted (re-attaches to the closest match and flags it), and Unanchored (when the text is gone entirely, the comment is flagged for deliberate re-anchoring — never silently dropped or moved)." \
-    "applied"
-  pass "agent reply resolving the anchoring question in v$v3"
+  octo react --slug "$SLUG" --comment "$c_chart" --emoji "👍" >/dev/null || fail "reaction failed"
+  pass "emoji reaction on the chart thread"
 
   printf '\n%sDemo ready.%s\n' "$bold" "$rst"
-  printf '  v1 (original) : %s/d/%s/v/%s\n' "$BASE" "$SLUG" "$v1"
-  printf '  v2 (chart)    : %s/d/%s/v/%s\n' "$BASE" "$SLUG" "$v2"
-  printf '  v3 (latest)   : %s/d/%s/v/%s\n' "$BASE" "$SLUG" "$v3"
+  printf '  v1 (original) : %s/d/%s/v/1\n' "$BASE" "$SLUG"
+  printf '  v2 (chart)    : %s/d/%s/v/2\n' "$BASE" "$SLUG"
+  printf '  v3 (latest)   : %s/d/%s/v/3\n' "$BASE" "$SLUG"
   printf '\n%sTry it:%s select a sentence to comment · open the version picker to\n' "$dim" "$rst"
   printf '  compare v1/v2/v3 · see both threads resolved with an agent %sapplied%s verdict.\n' "$dim" "$rst"
 }
 
-main "$@"
+if [ "${1:-}" = "--reset" ]; then
+  step "reset — removing '$SLUG' from the server first"
+  # Build a client env and unpublish; ignore "not found" on a clean server.
+  OCTO_BASE_URL="$BASE" OCTO_TOKEN="$TOKEN" OCTO_DIR="$STORE" "$OCTO" unpublish "$SLUG" >/dev/null 2>&1 || true
+  pass "server state cleared (fresh v1/v2/v3 on re-seed)"
+fi
+
+main

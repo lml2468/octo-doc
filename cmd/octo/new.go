@@ -28,6 +28,7 @@ func cmdNew(args []string) error {
 		prompt    = fs.String("prompt", "", "prompt-of-record stored in meta.json")
 		publish   = fs.Bool("publish", false, "also publish after scaffolding")
 		open      = fs.Bool("open", false, "open the URL in the default browser")
+		noServe   = fs.Bool("no-serve", false, "don't start the local preview (for headless/seed use)")
 		quiet     = fs.Bool("quiet", false, "suppress informational output")
 		force     = fs.Bool("force", false, "overwrite an existing slug")
 	)
@@ -135,11 +136,15 @@ func cmdNew(args []string) error {
 	}
 	info("scaffolded %s (v1)", docDir)
 
-	// Ensure the local preview server is up so the printed URL is live.
-	if err := previewStart(cfg); err != nil {
-		return fmt.Errorf("doc scaffolded at %s but preview not serving: %w", docDir, err)
-	}
+	// Ensure the local preview server is up so the printed URL is live — unless
+	// --no-serve (headless / seed use, where a preview would be a pointless side
+	// effect and a port to fight over).
 	localURLStr := fmt.Sprintf("http://localhost:%d/d/%s/v/1", cfg.Port, *slug)
+	if !*noServe {
+		if err := previewStart(cfg); err != nil {
+			return fmt.Errorf("doc scaffolded at %s but preview not serving: %w", docDir, err)
+		}
+	}
 
 	// Optional publish (non-fatal on failure — the local doc still stands).
 	publishedURL := ""
@@ -160,8 +165,11 @@ func cmdNew(args []string) error {
 		openBrowser(target)
 	}
 
-	// Output contract: last line(s) are URLs callers can capture.
-	fmt.Println(localURLStr)
+	// Output contract: last line(s) are URLs callers can capture. With --no-serve
+	// there is no live local URL to hand back, so print only a published one (if any).
+	if !*noServe {
+		fmt.Println(localURLStr)
+	}
 	if publishedURL != "" {
 		fmt.Println(publishedURL)
 	}

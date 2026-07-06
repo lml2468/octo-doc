@@ -136,11 +136,23 @@ main() {
   v2="$(publish "$DIR/index.v2.html" "octo-doc — documents you can talk to")"
   pass "published v$v2  ·  $BASE/d/$SLUG/v/$v2"
 
+  step "publish v3 — the anchoring question, answered in the document"
+  v3="$(publish "$DIR/index.v3.html" "octo-doc — documents you can talk to")"
+  pass "published v$v3  ·  $BASE/d/$SLUG/v/$v3"
+
+  # Close the loop the /octo edit workflow demonstrates: the open anchoring
+  # question is now addressed by a new section in v3, so the agent marks it applied.
+  agent_reply "$v3" "$c_anchor" \
+    "Yes — a full rewrite is covered. v3 adds a \"What happens when the text is rewritten?\" section spelling out the three states: Anchored (re-attaches automatically), Drifted (re-attaches to the closest match and flags it), and Unanchored (when the text is gone entirely, the comment is flagged for deliberate re-anchoring — never silently dropped or moved)." \
+    "applied"
+  pass "agent reply resolving the anchoring question in v$v3"
+
   printf '\n%sDemo ready.%s\n' "$bold" "$rst"
   printf '  v1 (original) : %s/d/%s/v/%s\n' "$BASE" "$SLUG" "$v1"
-  printf '  v2 (latest)   : %s/d/%s/v/%s\n' "$BASE" "$SLUG" "$v2"
+  printf '  v2 (chart)    : %s/d/%s/v/%s\n' "$BASE" "$SLUG" "$v2"
+  printf '  v3 (latest)   : %s/d/%s/v/%s\n' "$BASE" "$SLUG" "$v3"
   printf '\n%sTry it:%s select a sentence to comment · open the version picker to\n' "$dim" "$rst"
-  printf '  compare v1/v2 · see the agent %sapplied%s verdict + 👍 on the chart thread.\n' "$dim" "$rst"
+  printf '  compare v1/v2/v3 · see both threads resolved with an agent %sapplied%s verdict.\n' "$dim" "$rst"
 }
 
 main "$@"

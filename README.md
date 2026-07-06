@@ -72,16 +72,40 @@ against Postgres and set its `max_connections` accordingly.
 
 The companion **[octo-doc-skill](https://github.com/lml2468/octo-doc-skill)** repo
 holds the Claude Code / Codex skill that turns a prompt into a self-contained
-interactive HTML doc and publishes it here:
+interactive HTML doc and publishes it here. The skill is a thin authoring layer
+over the **`octo` client CLI** (built from this repo — see below):
 
 ```bash
-export TDOC_BASE_URL="https://docs.example.com"
-export TDOC_TOKEN="$(octo-doc bootstrap)"   # or POST /v1/admin/bootstrap
-/tdoc new "an interactive explainer of compound interest"
-/tdoc publish my-explainer                   # → https://docs.example.com/d/my-explainer/v/1
+export OCTO_BASE_URL="https://docs.example.com"
+export OCTO_TOKEN="$(octo-doc bootstrap)"   # or POST /v1/admin/bootstrap
+/octo new "an interactive explainer of compound interest"
+/octo publish my-explainer                   # → https://docs.example.com/d/my-explainer/v/1
 ```
 
-The skill is agent-side tooling and ships separately from this server.
+### The `octo` client CLI
+
+`cmd/octo` is a second, self-contained binary: the agent-side client. It scaffolds
+docs on disk, serves a local preview with the **same** overlay the server injects,
+and publishes to a remote octo-doc server over the `/v1` API. It links no database
+or blob store — only the pure `core` kernel and the embedded `overlay.js` — so a
+local preview renders byte-identically to the published doc **without a mirrored
+copy of the overlay**.
+
+```bash
+make build-octo                              # build bin/octo
+octo new --slug demo --title "Demo" --html-file demo.html
+octo preview start                           # local preview at :7878
+octo publish demo                            # upload every version to $OCTO_BASE_URL
+octo pull demo                               # merge server comments back to disk
+octo doctor                                  # check local deps + the server
+octo update                                  # self-update from GitHub Releases
+```
+
+Config resolves from `OCTO_BASE_URL` / `OCTO_TOKEN` / `OCTO_DIR` / `OCTO_PORT`
+(the legacy `TDOC_*` names are still read as a fallback), then `~/.octo/config.json`.
+Prebuilt binaries for macOS/Linux/Windows are attached to each
+[GitHub Release](https://github.com/Mininglamp-OSS/octo-doc/releases); `octo update`
+downloads and checksum-verifies the matching one.
 
 ## Configuration
 
@@ -100,11 +124,19 @@ Highlights:
 
 ## Commands
 
+The server binary (`cmd/octo-doc`):
+
 ```bash
 octo-doc serve       # run the HTTP server (default)
 octo-doc migrate     # apply the database schema (idempotent)
 octo-doc bootstrap   # mint and print the first write token
 octo-doc health      # local healthcheck (used by the container)
+```
+
+The agent client binary (`cmd/octo`) — see [Agent skill](#agent-skill):
+
+```bash
+octo new | preview | publish | pull | unpublish | list | fork | doctor | update
 ```
 
 ## Development
@@ -114,7 +146,9 @@ Go 1.26, [chi](https://github.com/go-chi/chi) router, [pgx](https://github.com/j
 **transport → service → storage** with a dependency-free `core` kernel.
 
 ```bash
-make build        # build bin/octo-doc
+make build        # build bin/octo-doc (server)
+make build-octo   # build bin/octo (agent client)
+make release-octo # cross-compile octo for all platforms + SHA256SUMS
 make test         # all tests (pg/s3 suites skip without OCTO_TEST_* env)
 make test-race    # tests under the race detector
 make cover        # coverage summary

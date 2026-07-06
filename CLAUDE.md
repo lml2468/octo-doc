@@ -36,6 +36,8 @@ dependency-free leaf and `platform` as cross-cutting support.
 - `internal/platform/` — cross-cutting support: `log` (slog), typed `apperr`,
   `sluglock`.
 - `assets/overlay.js` — browser code, embedded via `go:embed`, served verbatim.
+- `cmd/octo/` — the agent client CLI (separate binary; see Entrypoint). Reuses
+  `assets.OverlayJS` + `core.InjectOverlayCfg` for its local preview.
 
 ## Gotchas (these are enforced — don't fight them)
 
@@ -63,8 +65,17 @@ package reads the environment for app settings. Key vars: `DATABASE_URL`,
 
 ## Entrypoint
 
-`cmd/octo-doc` with subcommands: `serve` (default), `migrate`, `bootstrap`,
-`health`.
+Two binaries:
+
+- `cmd/octo-doc` — the **server**. Subcommands: `serve` (default), `migrate`,
+  `bootstrap`, `health`. Loads full server config (DB + S3) on every command
+  except `health`.
+- `cmd/octo` — the **agent client** CLI (`new`, `preview`, `publish`, `pull`,
+  `unpublish`, `list`, `fork`, `version-add`, `reply`, `doctor`, `update`). Links
+  no DB/S3; imports `assets.OverlayJS` + `internal/core` so its local preview
+  renders byte-identically to the server (no overlay mirror). Config: `OCTO_*`
+  env (legacy `TDOC_*` fallback) + `~/.octo/config.json`. Version stamped via
+  `-ldflags "-X main.version=…"`; `make build-octo` / `make release-octo`.
 
 ## API
 

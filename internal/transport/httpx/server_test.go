@@ -86,7 +86,7 @@ func TestPublishTitleFromMeta(t *testing.T) {
 	if rec.Code != 200 {
 		t.Fatalf("publish = %d: %s", rec.Code, rec.Body.String())
 	}
-	rec = do(t, h, http.MethodGet, "/v1/docs/titled/versions", nil, "")
+	rec = do(t, h, http.MethodGet, "/v1/docs/titled/versions", map[string]string{"Authorization": "Bearer test-token"}, "")
 	if !strings.Contains(rec.Body.String(), `"title":"From Meta"`) {
 		t.Fatalf("title from meta not applied: %s", rec.Body.String())
 	}
@@ -100,7 +100,7 @@ func TestRenderAlwaysPublishedMode(t *testing.T) {
 	auth := map[string]string{"Authorization": "Bearer test-token", "Content-Type": "application/json"}
 	_ = do(t, h, http.MethodPost, "/v1/docs", auth,
 		`{"slug":"m","version":1,"html":"<html><body><h1>x</h1></body></html>","meta":{"title":"M"}}`)
-	body := do(t, h, http.MethodGet, "/d/m/v/1", nil, "").Body.String()
+	body := do(t, h, http.MethodGet, "/d/m/v/1", map[string]string{"Authorization": "Bearer test-token"}, "").Body.String()
 	if !strings.Contains(body, `"mode":"published"`) {
 		t.Errorf("expected published mode in: %s", body[strings.Index(body, "__TDOC__"):min(strings.Index(body, "__TDOC__")+120, len(body))])
 	}
@@ -109,16 +109,26 @@ func TestRenderAlwaysPublishedMode(t *testing.T) {
 	}
 }
 
-func TestAnonymousCommentAllowed(t *testing.T) {
-	// With no login provider, an unauthenticated POST /v1/comments must succeed.
+func TestCommentRequiresCapability(t *testing.T) {
+	// Default-private: a comment with no credential is rejected (404, existence
+	// hidden). A share code (or the write token) is required to comment.
 	h := newTestServer(t, nil)
 	auth := map[string]string{"Authorization": "Bearer test-token", "Content-Type": "application/json"}
 	_ = do(t, h, http.MethodPost, "/v1/docs", auth,
 		`{"slug":"anon","version":1,"html":"<html><body><p>hello world</p></body></html>"}`)
+
+	// No credential → rejected.
 	rec := do(t, h, http.MethodPost, "/v1/comments", map[string]string{"Content-Type": "application/json"},
 		`{"slug":"anon","text":"nice","version":1,"anchor":{"kind":"text","text":"hello"}}`)
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("anonymous comment = %d; want 404 (needs a capability)", rec.Code)
+	}
+
+	// The author (write token) can comment.
+	rec = do(t, h, http.MethodPost, "/v1/comments", auth,
+		`{"slug":"anon","text":"nice","version":1,"anchor":{"kind":"text","text":"hello"}}`)
 	if rec.Code != 200 {
-		t.Fatalf("anonymous comment = %d: %s", rec.Code, rec.Body.String())
+		t.Fatalf("author comment = %d: %s", rec.Code, rec.Body.String())
 	}
 }
 
@@ -139,8 +149,8 @@ func TestPublishRenderLifecycle(t *testing.T) {
 		t.Fatalf("publish body = %v", pub)
 	}
 
-	// Render injects overlay + stamps aids.
-	rec = do(t, h, http.MethodGet, "/d/hello/v/1", nil, "")
+	// Render injects overlay + stamps aids (author reads it).
+	rec = do(t, h, http.MethodGet, "/d/hello/v/1", map[string]string{"Authorization": "Bearer test-token"}, "")
 	if rec.Code != 200 {
 		t.Fatalf("render = %d", rec.Code)
 	}
@@ -164,8 +174,8 @@ func TestPublishRenderLifecycle(t *testing.T) {
 		t.Fatalf("v2 version = %v", pub)
 	}
 
-	// Versions endpoint lists both.
-	rec = do(t, h, http.MethodGet, "/v1/docs/hello/versions", nil, "")
+	// Versions endpoint lists both (author reads).
+	rec = do(t, h, http.MethodGet, "/v1/docs/hello/versions", map[string]string{"Authorization": "Bearer test-token"}, "")
 	if rec.Code != 200 || !strings.Contains(rec.Body.String(), `"n":2`) {
 		t.Fatalf("versions = %d: %s", rec.Code, rec.Body.String())
 	}
@@ -194,16 +204,16 @@ func TestDraftLifecycle(t *testing.T) {
 		}
 	}
 
-	// The draft is NOT a version — versions endpoint has none yet.
-	rec = do(t, h, http.MethodGet, "/v1/docs/dr/versions", nil, "")
+	// The draft is NOT a version — versions endpoint has none yet (author reads).
+	rec = do(t, h, http.MethodGet, "/v1/docs/dr/versions", map[string]string{"Authorization": "Bearer test-token"}, "")
 	if strings.Contains(rec.Body.String(), `"n":1`) {
 		t.Fatalf("draft leaked into versions: %s", rec.Body.String())
 	}
 
-	// Draft render is author-only (write auth) and runs in draft mode.
+	// Draft render is author-only. No credential → 404 (existence hidden).
 	rec = do(t, h, http.MethodGet, "/d/dr/draft", nil, "")
-	if rec.Code != 401 {
-		t.Fatalf("unauthenticated draft render = %d; want 401", rec.Code)
+	if rec.Code != 401 && rec.Code != 404 {
+		t.Fatalf("unauthenticated draft render = %d; want 401/404", rec.Code)
 	}
 	rec = do(t, h, http.MethodGet, "/d/dr/draft", map[string]string{"Authorization": "Bearer test-token"}, "")
 	if rec.Code != 200 {
@@ -227,8 +237,8 @@ func TestDraftLifecycle(t *testing.T) {
 		t.Fatalf("promote body = %v; want version 1", pub)
 	}
 
-	// v1 is now public + committed; the draft slot is cleared.
-	if rec = do(t, h, http.MethodGet, "/d/dr/v/1", nil, ""); rec.Code != 200 {
+	// v1 is now committed; the author reads it, and the draft slot is cleared.
+	if rec = do(t, h, http.MethodGet, "/d/dr/v/1", map[string]string{"Authorization": "Bearer test-token"}, ""); rec.Code != 200 {
 		t.Fatalf("published v1 render = %d", rec.Code)
 	}
 	rec = do(t, h, http.MethodGet, "/d/dr/draft", map[string]string{"Authorization": "Bearer test-token"}, "")
@@ -249,8 +259,8 @@ func TestCommentLifecycle(t *testing.T) {
 	_ = do(t, h, http.MethodPost, "/v1/docs", auth,
 		`{"slug":"doc","html":"<html><body><p>hello world</p></body></html>"}`)
 
-	// Create a comment (anonymous/local mode).
-	rec := do(t, h, http.MethodPost, "/v1/comments", map[string]string{"Content-Type": "application/json"},
+	// Create a comment (author credential).
+	rec := do(t, h, http.MethodPost, "/v1/comments", auth,
 		`{"slug":"doc","text":"nice","version":1,"anchor":{"kind":"text","text":"hello"}}`)
 	if rec.Code != 200 {
 		t.Fatalf("create comment = %d: %s", rec.Code, rec.Body.String())
@@ -264,7 +274,7 @@ func TestCommentLifecycle(t *testing.T) {
 	}
 
 	// List shows it, wrapped in the data/pagination envelope.
-	rec = do(t, h, http.MethodGet, "/v1/comments?slug=doc&version=1", nil, "")
+	rec = do(t, h, http.MethodGet, "/v1/comments?slug=doc&version=1", map[string]string{"Authorization": "Bearer test-token"}, "")
 	if rec.Code != 200 || !strings.Contains(rec.Body.String(), "nice") {
 		t.Fatalf("list = %d: %s", rec.Code, rec.Body.String())
 	}
@@ -273,7 +283,7 @@ func TestCommentLifecycle(t *testing.T) {
 	}
 
 	// React.
-	rec = do(t, h, http.MethodPost, "/v1/reactions", map[string]string{"Content-Type": "application/json"},
+	rec = do(t, h, http.MethodPost, "/v1/reactions", auth,
 		`{"slug":"doc","comment_id":"`+id+`","emoji":"👍","version":1}`)
 	if rec.Code != 200 {
 		t.Fatalf("react = %d: %s", rec.Code, rec.Body.String())
@@ -287,7 +297,7 @@ func TestCommentLifecycle(t *testing.T) {
 	}
 
 	// Delete.
-	rec = do(t, h, http.MethodDelete, "/v1/comments?slug=doc&id="+id+"&version=1", nil, "")
+	rec = do(t, h, http.MethodDelete, "/v1/comments?slug=doc&id="+id+"&version=1", map[string]string{"Authorization": "Bearer test-token"}, "")
 	if rec.Code != 200 {
 		t.Fatalf("delete = %d: %s", rec.Code, rec.Body.String())
 	}
@@ -298,10 +308,11 @@ func TestForkExport(t *testing.T) {
 	auth := map[string]string{"Authorization": "Bearer test-token", "Content-Type": "application/json"}
 	_ = do(t, h, http.MethodPost, "/v1/docs", auth,
 		`{"slug":"f","html":"<html><body><p>content here</p></body></html>"}`)
-	_ = do(t, h, http.MethodPost, "/v1/comments", map[string]string{"Content-Type": "application/json"},
+	_ = do(t, h, http.MethodPost, "/v1/comments", auth,
 		`{"slug":"f","text":"note","version":1,"anchor":{"kind":"text","text":"content"}}`)
 
-	rec := do(t, h, http.MethodGet, "/d/f/v/1/export", nil, "")
+	rd := map[string]string{"Authorization": "Bearer test-token"}
+	rec := do(t, h, http.MethodGet, "/d/f/v/1/export", rd, "")
 	if rec.Code != 200 {
 		t.Fatalf("export = %d", rec.Code)
 	}
@@ -312,7 +323,7 @@ func TestForkExport(t *testing.T) {
 		t.Error("fork comments JSON missing")
 	}
 
-	rec = do(t, h, http.MethodGet, "/d/f/v/1/fork", nil, "")
+	rec = do(t, h, http.MethodGet, "/d/f/v/1/fork", rd, "")
 	if !strings.Contains(rec.Body.String(), "window.__TDOC__") {
 		t.Error("fork should boot overlay")
 	}

@@ -55,6 +55,8 @@ func run(args []string) error {
 		return cmdPull(rest)
 	case "unpublish":
 		return cmdUnpublish(rest)
+	case "share":
+		return cmdShare(rest)
 	case "list":
 		return cmdList(rest)
 	case "fork":
@@ -94,6 +96,7 @@ commands:
   publish      upload a local doc's versions to an octo-doc server
   pull         merge server comments into the local comments.json
   unpublish    delete a published doc from the server
+  share        mint/rotate a read+comment share link for a doc
   list         list local docs
   fork         copy a local doc under a new slug
   version-add  append a new version to a local doc

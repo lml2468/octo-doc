@@ -24,7 +24,6 @@ func TestLoadDefaults(t *testing.T) {
 
 func TestLoadOverrides(t *testing.T) {
 	t.Setenv("PORT", "9999")
-	t.Setenv("PRIVATE", "yes")
 	t.Setenv("RATE_LIMIT_MAX", "0")
 	t.Setenv("BASE_URL", "https://x.example.com/")
 	cfg, err := Load()
@@ -33,9 +32,6 @@ func TestLoadOverrides(t *testing.T) {
 	}
 	if cfg.Port != 9999 {
 		t.Errorf("port = %d", cfg.Port)
-	}
-	if !cfg.Private {
-		t.Error("PRIVATE=yes should parse true")
 	}
 	if cfg.RateLimitMax != 0 {
 		t.Errorf("rate max = %d", cfg.RateLimitMax)

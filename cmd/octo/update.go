@@ -125,7 +125,12 @@ func latestRelease(ctx context.Context) (*ghRelease, error) {
 	return &rel, nil
 }
 
-// download fetches a URL's full body into memory.
+// maxDownloadBytes caps a release-asset download so a redirected/hostile URL
+// can't exhaust memory before the checksum gate runs. A cross-compiled octo
+// binary is well under this.
+const maxDownloadBytes = 256 << 20
+
+// download fetches a URL's full body into memory, bounded by maxDownloadBytes.
 func download(ctx context.Context, url string) ([]byte, error) {
 	req, _ := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	resp, err := http.DefaultClient.Do(req)
@@ -136,7 +141,14 @@ func download(ctx context.Context, url string) ([]byte, error) {
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("download %s: HTTP %d", url, resp.StatusCode)
 	}
-	return io.ReadAll(resp.Body)
+	b, err := io.ReadAll(io.LimitReader(resp.Body, maxDownloadBytes+1))
+	if err != nil {
+		return nil, err
+	}
+	if len(b) > maxDownloadBytes {
+		return nil, fmt.Errorf("download %s: exceeds %d bytes", url, maxDownloadBytes)
+	}
+	return b, nil
 }
 
 // verifyChecksum confirms bin's sha256 matches the SHA256SUMS entry for assetName.
@@ -191,6 +203,23 @@ func replaceSelf(newBin []byte) error {
 	}
 	if err := os.Chmod(tmpName, 0o755); err != nil {
 		return err
+	}
+	// On Windows a running .exe is locked, so os.Rename(new, self) fails with
+	// "Access is denied." Move the running binary aside first, then rename the new
+	// one into place; the old file can be unlinked on the next run. On Unix,
+	// rename-over is atomic and this extra step is harmless.
+	if runtime.GOOS == "windows" {
+		old := self + ".old"
+		_ = os.Remove(old) // clear a leftover from a prior update
+		if err := os.Rename(self, old); err != nil {
+			return err
+		}
+		if err := os.Rename(tmpName, self); err != nil {
+			// Best-effort rollback so the user isn't left without a binary.
+			_ = os.Rename(old, self)
+			return err
+		}
+		return nil
 	}
 	return os.Rename(tmpName, self)
 }

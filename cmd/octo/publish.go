@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 )
 
@@ -42,37 +43,56 @@ func cmdPublish(args []string) error {
 	}
 	slug := args[0]
 	cfg := loadConfig()
+	url, err := publishDoc(context.Background(), cfg, slug, os.Stderr)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("\nPublished: %s\n", url)
+	return nil
+}
+
+// publishDoc uploads all of a local doc's versions to the configured server and
+// returns the published URL of the latest version. Progress is written to
+// progress (may be io.Discard). It is shared by the `publish` command and the
+// preview server's /v1/publish endpoint so both take the identical code path.
+func publishDoc(ctx context.Context, cfg config, slug string, progress io.Writer) (string, error) {
 	st := newStore(cfg.Dir)
 	if !st.exists(slug) {
-		return fmt.Errorf("no local doc at %s. Create it with `octo new`", st.slugDir(slug))
+		return "", fmt.Errorf("no local doc at %s. Create it with `octo new`", st.slugDir(slug))
 	}
 	cl, err := requireServer(cfg, true)
 	if err != nil {
-		return err
+		return "", err
 	}
 	meta, err := st.readMeta(slug)
 	if err != nil {
-		return err
+		return "", err
 	}
 	comments, err := st.readComments(slug)
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	versions := meta.sortedVersions()
 	latest := meta.latestVersion()
-	ctx := context.Background()
 
-	fmt.Fprintf(os.Stderr, "[octo] publishing %s to %s\n", slug, cfg.BaseURL)
+	_, _ = fmt.Fprintf(progress, "[octo] publishing %s to %s\n", slug, cfg.BaseURL)
 	pm := &publishMeta{Title: meta.Title, Versions: meta.Versions}
 
 	var olderFailed []int
 	var lastResp *publishResp
 	for _, vr := range versions {
-		resp, upErr := st.uploadVersion(ctx, cl, slug, vr.N, pm, comments)
+		// The server merges comments idempotently by id, so only the latest upload
+		// needs to carry the full thread — sending it on every version would be
+		// O(versions × comments) wasted bytes for identical server state.
+		var vComments []comment
+		if vr.N == latest {
+			vComments = comments
+		}
+		resp, upErr := st.uploadVersion(ctx, cl, slug, vr.N, pm, vComments)
 		if vr.N == latest {
 			if upErr != nil {
-				return fmt.Errorf("latest v%d failed: %w — aborting", latest, upErr)
+				return "", fmt.Errorf("latest v%d failed: %w — aborting", latest, upErr)
 			}
 			lastResp = resp
 			continue
@@ -82,18 +102,18 @@ func cmdPublish(args []string) error {
 		}
 	}
 	if len(olderFailed) > 0 {
-		fmt.Fprintf(os.Stderr, "[octo] WARNING: older version(s) failed: %v — re-run to retry.\n", olderFailed)
+		_, _ = fmt.Fprintf(progress, "[octo] WARNING: older version(s) failed: %v — re-run to retry.\n", olderFailed)
 	}
 	url := fmt.Sprintf("%s/d/%s/v/%d", cfg.BaseURL, slug, latest)
 	if lastResp != nil && lastResp.URL != "" {
 		url = lastResp.URL
 	}
-	fmt.Printf("\nPublished: %s\n", url)
-	return nil
+	return url, nil
 }
 
-// uploadVersion sends one version's HTML (+ meta + comments) to POST /v1/docs.
-// Comments are re-sent every time; the server merges them idempotently by id.
+// uploadVersion sends one version's HTML (+ meta + optional comments) to POST
+// /v1/docs. Comments are attached only for the latest version (the caller passes
+// nil otherwise); the server merges them idempotently by id.
 func (s *store) uploadVersion(ctx context.Context, cl *client, slug string, v int, pm *publishMeta, comments []comment) (*publishResp, error) {
 	html, err := os.ReadFile(s.htmlPath(slug, v))
 	if err != nil {

@@ -8,6 +8,9 @@ import (
 	"regexp"
 	"sort"
 	"strconv"
+
+	// Aliased because the local `config` type would shadow the package name.
+	configpkg "github.com/Mininglamp-OSS/octo-doc/internal/config"
 )
 
 // The on-disk doc store, rooted at cfg.Dir:
@@ -21,19 +24,14 @@ import (
 // server persists, mapping only the created/created_at timestamp field at the
 // wire boundary.
 
-// slugRE validates a slug for both the filesystem path and the URL. It matches
-// the preview server's safeSlug guard exactly (path-traversal defense).
-var slugRE = regexp.MustCompile(`^[a-zA-Z0-9_-]{1,64}$`)
-
 // kebabRE is the stricter form required when creating a doc: lowercase kebab.
 var kebabRE = regexp.MustCompile(`^[a-z0-9]([a-z0-9-]*[a-z0-9])?$`)
 
-// safeSlug returns the slug if it is safe to map to a path, else "".
+// safeSlug returns the slug if it is safe to map to a path, else "". It delegates
+// to config.SafeSlug so the client's path-traversal guard can never drift from
+// the server's slug rule — a security-relevant check kept in one place.
 func safeSlug(slug string) string {
-	if slugRE.MatchString(slug) {
-		return slug
-	}
-	return ""
+	return configpkg.SafeSlug(slug)
 }
 
 // versionRef is one entry in a doc's version history (meta.json schema; uses

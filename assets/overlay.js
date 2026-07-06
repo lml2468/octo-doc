@@ -94,9 +94,9 @@
     --octo-primary-hover: #1245d0;
     --octo-ink: #1a1a1a;
     --octo-ink-strong: #111;
-    --octo-ink-2: #444;
+    --octo-ink-soft: #444;
     --octo-muted: #888;
-    --octo-muted-2: #666;
+    --octo-muted-dark: #666;
     --octo-faint: #aaa;
     --octo-bar-text: #555;
     /* Surfaces + lines */
@@ -404,7 +404,7 @@
   .tdoc-agent-status-partial { background: var(--octo-warn-bg); color: var(--octo-warn-fg); }
   .tdoc-agent-status-question { background: var(--octo-ask-bg); color: var(--octo-ask-fg); }
   .tdoc-margin-comment .text { color: var(--octo-ink-strong); line-height: 1.45; word-wrap: break-word; }
-  .tdoc-margin-comment .meta { font-size: 11px; color: var(--octo-muted-2); margin-top: 8px; display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+  .tdoc-margin-comment .meta { font-size: 11px; color: var(--octo-muted-dark); margin-top: 8px; display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
   .tdoc-margin-comment .meta > span:first-child { flex: 1 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .tdoc-margin-comment .del { cursor: pointer; color: var(--octo-danger); }
   .tdoc-margin-comment .del:hover { text-decoration: underline; }
@@ -417,7 +417,7 @@
 
   /* Reactions + emoji picker */
   .tdoc-reactions { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; align-items: center; }
-  .tdoc-react-chip { position: relative; display: inline-flex; align-items: center; gap: 4px; font: 12px system-ui; background: var(--octo-surface-subtle); border: 1px solid var(--octo-border); border-radius: var(--octo-radius-pill); padding: 2px 8px; cursor: pointer; color: var(--octo-ink-2); transition: background .12s, border-color .12s; }
+  .tdoc-react-chip { position: relative; display: inline-flex; align-items: center; gap: 4px; font: 12px system-ui; background: var(--octo-surface-subtle); border: 1px solid var(--octo-border); border-radius: var(--octo-radius-pill); padding: 2px 8px; cursor: pointer; color: var(--octo-ink-soft); transition: background .12s, border-color .12s; }
   .tdoc-react-chip:hover { background: var(--octo-surface-hover); }
   .tdoc-react-chip.mine { background: var(--octo-mine-bg); border-color: var(--octo-primary); color: var(--octo-primary); }
   /* Agent reactions get a tinted background so users can scan a long doc
@@ -469,7 +469,7 @@
   .tdoc-reply .author .login { font-weight: 600; font-size: 12px; color: var(--octo-ink-strong); }
   .tdoc-reply .author .anon { color: var(--octo-muted); font-style: italic; font-size: 12px; }
   .tdoc-reply .text { color: var(--octo-ink); font-size: 13px; line-height: 1.4; word-wrap: break-word; }
-  .tdoc-reply .meta { font-size: 11px; color: var(--octo-muted-2); margin-top: 4px; display: flex; justify-content: space-between; }
+  .tdoc-reply .meta { font-size: 11px; color: var(--octo-muted-dark); margin-top: 4px; display: flex; justify-content: space-between; }
   .tdoc-reply .del { cursor: pointer; color: var(--octo-danger); }
   .tdoc-reply .del:hover { text-decoration: underline; }
   .tdoc-reply-form { display: none; margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--octo-hairline); }
@@ -478,7 +478,7 @@
   .tdoc-reply-form textarea::placeholder { color: var(--octo-muted); }
   .tdoc-reply-form textarea:focus { border-color: var(--octo-primary); box-shadow: var(--octo-focus-ring); }
   .tdoc-reply-form-foot { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; }
-  .tdoc-reply-form-foot .hint { color: var(--octo-muted-2); font-size: 11px; }
+  .tdoc-reply-form-foot .hint { color: var(--octo-muted-dark); font-size: 11px; }
   .tdoc-reply-form-foot .tdoc-reply-submit { background: var(--octo-primary); color: var(--octo-surface); border: none; border-radius: var(--octo-radius-md); padding: 6px 14px; font: 12px system-ui; font-weight: 600; cursor: pointer; box-shadow: 0 1px 2px rgba(22,82,240,0.2); transition: background .12s, box-shadow .12s; }
   .tdoc-reply-form-foot .tdoc-reply-submit:hover { background: var(--octo-primary-hover); box-shadow: 0 2px 8px rgba(22,82,240,0.28); }
 
@@ -547,14 +547,14 @@
   .tdoc-popup { position: absolute; background: var(--octo-surface); color: var(--octo-ink); border: 1px solid var(--octo-border); border-radius: var(--octo-radius-lg); padding: 14px; width: 320px; box-shadow: var(--octo-shadow-menu); z-index: 999998; font: 13px system-ui, sans-serif; }
   .tdoc-popup .head { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 10px; }
   /* Anchor preview as a subtle chip so it reads as "commenting on this". */
-  .tdoc-popup .head .h { flex: 1 1 auto; min-width: 0; background: var(--octo-surface-subtle); color: var(--octo-ink-2); font-size: 12px; padding: 3px 8px; border-radius: var(--octo-radius-sm); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tdoc-popup .head .h { flex: 1 1 auto; min-width: 0; background: var(--octo-surface-subtle); color: var(--octo-ink-soft); font-size: 12px; padding: 3px 8px; border-radius: var(--octo-radius-sm); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .tdoc-popup .head .x { flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; cursor: pointer; color: var(--octo-muted); border-radius: var(--octo-radius-sm); font-size: 16px; line-height: 1; transition: background .12s, color .12s; }
   .tdoc-popup .head .x:hover { background: var(--octo-surface-subtle); color: var(--octo-ink); }
   .tdoc-popup textarea { width: 100%; min-height: 72px; background: var(--octo-surface); color: var(--octo-ink); border: 1px solid var(--octo-border); border-radius: var(--octo-radius-md); padding: 9px 10px; font: inherit; line-height: 1.45; resize: vertical; box-sizing: border-box; outline: none; transition: border-color .12s, box-shadow .12s; }
   .tdoc-popup textarea::placeholder { color: var(--octo-muted); }
   .tdoc-popup textarea:focus { border-color: var(--octo-primary); box-shadow: var(--octo-focus-ring); }
   .tdoc-popup .foot { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; }
-  .tdoc-popup .hint { color: var(--octo-muted-2); font-size: 11px; }
+  .tdoc-popup .hint { color: var(--octo-muted-dark); font-size: 11px; }
   .tdoc-popup .submit { background: var(--octo-primary); border: none; color: var(--octo-surface); padding: 7px 16px; border-radius: var(--octo-radius-md); cursor: pointer; font: inherit; font-weight: 600; box-shadow: 0 1px 2px rgba(22,82,240,0.2); transition: background .12s, box-shadow .12s; }
   .tdoc-popup .submit:hover { background: var(--octo-primary-hover); box-shadow: 0 2px 8px rgba(22,82,240,0.28); }
   .tdoc-popup .submit:disabled { opacity: 0.5; cursor: not-allowed; box-shadow: none; }
@@ -564,9 +564,9 @@
   .tdoc-modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,0.55); z-index: 1000000; display: flex; align-items: center; justify-content: center; font: 14px system-ui, sans-serif; }
   .tdoc-modal { background: var(--octo-surface); color: var(--octo-ink-strong); border-radius: var(--octo-radius-xl); padding: 28px; width: 460px; box-shadow: 0 20px 60px rgba(0,0,0,0.3); }
   .tdoc-modal h3 { margin: 0 0 8px; font-size: 20px; }
-  .tdoc-modal p { margin: 0 0 14px; color: var(--octo-ink-2); line-height: 1.5; }
+  .tdoc-modal p { margin: 0 0 14px; color: var(--octo-ink-soft); line-height: 1.5; }
   .tdoc-modal .code { background: var(--octo-ink-panel); color: var(--octo-surface); padding: 18px; border-radius: var(--octo-radius-lg); font: 24px ui-monospace, "SF Mono", Menlo, monospace; letter-spacing: 0.15em; text-align: center; margin: 0 0 14px; user-select: all; cursor: copy; }
-  .tdoc-modal .step { display: flex; gap: 10px; margin-bottom: 8px; color: var(--octo-ink-2); }
+  .tdoc-modal .step { display: flex; gap: 10px; margin-bottom: 8px; color: var(--octo-ink-soft); }
   .tdoc-modal .step .n { width: 22px; height: 22px; border-radius: 50%; background: var(--octo-primary); color: var(--octo-surface); display: inline-flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600; flex-shrink: 0; }
   .tdoc-modal .actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; }
   .tdoc-modal button { padding: 8px 16px; border-radius: var(--octo-radius-md); font: inherit; cursor: pointer; border: 1px solid #ccc; background: var(--octo-surface); }
@@ -574,7 +574,7 @@
   .tdoc-modal button.primary:hover { background: var(--octo-primary-hover); }
   .tdoc-modal .status { color: var(--octo-muted); font-size: 13px; }
   /* Modal helper classes used by Publish/Share so dark-mode can override. */
-  .tdoc-modal .muted { color: var(--octo-muted-2); font-size: 13px; }
+  .tdoc-modal .muted { color: var(--octo-muted-dark); font-size: 13px; }
   .tdoc-modal .divider { border-top: 1px solid var(--octo-hairline); padding-top: 12px; margin-top: 12px; }
   .tdoc-modal .danger { color: var(--octo-danger); font-size: 13px; }
   .tdoc-modal code { background: var(--octo-surface-subtle); padding: 1px 5px; border-radius: 3px; }
@@ -631,9 +631,9 @@
   }
 
   /* Footer */
-  .tdoc-footer { margin-top: 80px; padding: 20px 16px 28px; font: 12px system-ui, sans-serif; color: var(--octo-muted-2); text-align: center; border-top: 1px solid var(--octo-hairline); box-sizing: border-box; max-width: 100%; }
+  .tdoc-footer { margin-top: 80px; padding: 20px 16px 28px; font: 12px system-ui, sans-serif; color: var(--octo-muted-dark); text-align: center; border-top: 1px solid var(--octo-hairline); box-sizing: border-box; max-width: 100%; }
   .tdoc-footer .tdoc-footer-row { display: inline-flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: center; row-gap: 4px; }
-  .tdoc-footer a { color: var(--octo-muted-2); text-decoration: none; }
+  .tdoc-footer a { color: var(--octo-muted-dark); text-decoration: none; }
   .tdoc-footer a:hover { color: var(--octo-primary); text-decoration: underline; }
   .tdoc-footer .sep { color: #ccc; }
   @media (max-width: 700px) { .tdoc-footer .tdoc-footer-row { flex-direction: column; gap: 4px; } .tdoc-footer .sep { display: none; } }

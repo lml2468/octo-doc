@@ -28,23 +28,31 @@ docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.local.yml u
 ```
 
 This serves the app at **http://localhost:18080** with the write token
-`local-test-token` (see `docs/SELF_HOSTING.md` for production setup). `jq` and
-`curl` must be on your PATH.
+`local-test-token` (see `docs/SELF_HOSTING.md` for production setup).
+
+`seed.sh` drives everything through the **`octo` CLI** — it builds `./bin/octo`
+from this repo on first run (so a Go toolchain is the only extra prerequisite),
+then uses it for every step. No `curl` or `jq` required.
 
 ## Run
 
 ```bash
-./examples/demo/seed.sh            # publish v1/v2/v3 and seed the review threads
-./examples/demo/seed.sh --reset    # wipe this slug's comments first, then re-seed
+./examples/demo/seed.sh            # author + publish v1/v2/v3 and seed the threads
+./examples/demo/seed.sh --reset    # remove the doc from the server first, then re-seed
 ```
 
-> **Why a script and not the `octo` CLI?** `seed.sh` fabricates *reader-side*
-> state — anchored human comments, threaded replies, emoji reactions — which the
-> author-side CLI deliberately does not produce (those are actions readers take in
-> the browser overlay, not publish operations). So the demo talks to the raw `/v1`
-> API directly with `curl`, which also keeps it dependency-free (no CLI install)
-> and runnable against any octo-doc server. Publishing a document, by contrast, is
-> exactly what `octo publish` is for.
+Every step runs through `octo`, exactly as a user would drive it:
+
+| Step | Command |
+|------|---------|
+| author v1, add v2/v3 | `octo new` · `octo version-add` |
+| publish all versions | `octo publish` |
+| anchored comments + a reply | `octo comment` (`--anchor`, `--parent`) |
+| agent verdicts | `octo reply --remote --status applied` |
+| reaction | `octo react` |
+
+The docs are authored into a throwaway store (`OCTO_DIR` is a temp dir), so the
+demo never touches your `~/octo-docs`.
 
 Configuration via env (all optional):
 
@@ -64,8 +72,8 @@ Demo ready.
 ```
 
 > Publishing is **immutable and append-only** — each publish creates a new
-> version. Re-running without `--reset` will add v4, v5, … Use `--reset` to keep a
-> clean v1/v2/v3 demo.
+> version. `--reset` removes the doc from the server first, so a re-seed always
+> yields a clean v1/v2/v3 (without it, re-running would append v4, v5, …).
 
 ## What to try
 
@@ -90,7 +98,8 @@ Demo ready.
 | `index.v1.html` | The interactive self-intro document (version 1)        |
 | `index.v2.html` | The revised document (version 2: projection + versioning section) |
 | `index.v3.html` | The revised document (version 3: anchoring-states section answering the review question) |
-| `seed.sh`       | Publishes all three versions and seeds the review scenario |
+| `seed.sh`       | Authors, publishes, and seeds the whole scenario via the `octo` CLI |
 
-Both HTML files are fully self-contained (inline CSS + JS, no external assets),
-so they render offline and stay within the overlay's content-security policy.
+All three HTML files are fully self-contained (inline CSS + JS, no external
+assets), so they render offline and stay within the overlay's content-security
+policy.

@@ -61,6 +61,10 @@ func run(args []string) error {
 		return cmdFork(rest)
 	case "version-add":
 		return cmdVersionAdd(rest)
+	case "comment":
+		return cmdComment(rest)
+	case "react":
+		return cmdReact(rest)
 	case "reply":
 		return cmdReply(rest)
 	case "doctor":
@@ -93,6 +97,8 @@ commands:
   list         list local docs
   fork         copy a local doc under a new slug
   version-add  append a new version to a local doc
+  comment      post a human comment or reply to a doc
+  react        toggle an emoji reaction on a comment
   reply        post an agent reply to a comment (local or remote)
   doctor       health-check local deps + the configured server
   update       self-update from GitHub Releases

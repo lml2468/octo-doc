@@ -14,7 +14,6 @@ import (
 
 	"github.com/Mininglamp-OSS/octo-doc/assets"
 	"github.com/Mininglamp-OSS/octo-doc/internal/config"
-	"github.com/Mininglamp-OSS/octo-doc/internal/platform/sluglock"
 	"github.com/Mininglamp-OSS/octo-doc/internal/service"
 	"github.com/Mininglamp-OSS/octo-doc/internal/storage/postgres"
 	s3store "github.com/Mininglamp-OSS/octo-doc/internal/storage/s3"
@@ -41,10 +40,10 @@ func buildServices(ctx context.Context, cfg *config.Config) (deps *httpx.Deps, c
 		_ = meta.Close()
 		return nil, nil, err
 	}
-	locker := sluglock.NewMemory()
+	locker := meta.Locker()
 	comments := service.NewCommentService(meta, locker)
 	docs := service.NewDocService(blobs, meta, comments, locker, cfg.BaseURL, cfg.MaxHTMLBytes)
-	auth := service.NewAuthService(meta, cfg)
+	auth := service.NewAuthService(meta, cfg, locker)
 	health := func(hctx context.Context) error {
 		if e := meta.Health(hctx); e != nil {
 			return e
@@ -127,7 +126,7 @@ func bootstrap(cfg *config.Config) error {
 		return err
 	}
 	defer func() { _ = meta.Close() }()
-	auth := service.NewAuthService(meta, cfg)
+	auth := service.NewAuthService(meta, cfg, meta.Locker())
 	token, err := auth.Bootstrap(ctx)
 	if err != nil {
 		return err

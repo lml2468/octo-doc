@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/Mininglamp-OSS/octo-doc/internal/config"
+	"github.com/Mininglamp-OSS/octo-doc/internal/platform/sluglock"
 	"github.com/Mininglamp-OSS/octo-doc/internal/service"
 	"github.com/Mininglamp-OSS/octo-doc/internal/storage/memory"
 )
@@ -16,7 +17,7 @@ import (
 
 func TestCreateSessionRoundTrip(t *testing.T) {
 	store := memory.New()
-	auth := service.NewAuthService(store, &config.Config{})
+	auth := service.NewAuthService(store, &config.Config{}, sluglock.NewMemory())
 	ctx := context.Background()
 
 	avatar := "https://example.com/a.png"
@@ -43,7 +44,7 @@ func TestCreateSessionRoundTrip(t *testing.T) {
 
 func TestCreateSessionDefaultsNameToLogin(t *testing.T) {
 	store := memory.New()
-	auth := service.NewAuthService(store, &config.Config{})
+	auth := service.NewAuthService(store, &config.Config{}, sluglock.NewMemory())
 	sid, err := auth.CreateSession(context.Background(), "bob", "", nil)
 	if err != nil {
 		t.Fatal(err)
@@ -56,7 +57,7 @@ func TestCreateSessionDefaultsNameToLogin(t *testing.T) {
 
 func TestIsOwnerMatchesConfiguredOwner(t *testing.T) {
 	store := memory.New()
-	auth := service.NewAuthService(store, &config.Config{Owner: "Alice"})
+	auth := service.NewAuthService(store, &config.Config{Owner: "Alice"}, sluglock.NewMemory())
 	ctx := context.Background()
 
 	sid, _ := auth.CreateSession(ctx, "alice", "Alice", nil) // case-insensitive
@@ -76,7 +77,7 @@ func TestIsOwnerMatchesConfiguredOwner(t *testing.T) {
 }
 
 func TestLoginDisabledByDefault(t *testing.T) {
-	auth := service.NewAuthService(memory.New(), &config.Config{})
+	auth := service.NewAuthService(memory.New(), &config.Config{}, sluglock.NewMemory())
 	if auth.LoginEnabled() {
 		t.Error("no login provider is configured; LoginEnabled must be false")
 	}

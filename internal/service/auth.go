@@ -29,9 +29,11 @@ type AuthService struct {
 	lock sluglock.Locker
 }
 
-// NewAuthService constructs an AuthService.
-func NewAuthService(meta storage.MetadataStore, cfg *config.Config) *AuthService {
-	return &AuthService{meta: meta, cfg: cfg, lock: sluglock.NewMemory()}
+// NewAuthService constructs an AuthService. The locker serializes the one-shot
+// bootstrap check-and-set; pass the shared (distributed) locker so bootstrap is
+// atomic across app instances, not just within one process.
+func NewAuthService(meta storage.MetadataStore, cfg *config.Config, lock sluglock.Locker) *AuthService {
+	return &AuthService{meta: meta, cfg: cfg, lock: lock}
 }
 
 // IsValidWriteToken does a constant-time check that token is the static or a

@@ -57,7 +57,7 @@ func TestFullLifecycle(t *testing.T) {
 	locker := sluglock.NewMemory()
 	comments := service.NewCommentService(pg, locker)
 	docs := service.NewDocService(blobs, pg, comments, locker, "", cfg.MaxHTMLBytes)
-	auth := service.NewAuthService(pg, cfg)
+	auth := service.NewAuthService(pg, cfg, locker)
 	h := httpx.New(httpx.Deps{Config: cfg, Logger: log.New("silent"), Docs: docs, Comments: comments, Auth: auth, OverlayJS: assets.OverlayJS}).Handler()
 
 	srv := httptest.NewServer(h)

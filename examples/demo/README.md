@@ -1,104 +1,92 @@
 # octo-doc demo
 
-A self-contained, reproducible showcase of everything octo-doc does. The demo
-document is *about* octo-doc and is *served by* octo-doc — you review the product
-inside the product.
+A self-contained showcase of everything octo-doc does. The demo document is
+*about* octo-doc and is *served by* octo-doc — you review the product inside the
+product. The three `index.v*.html` files are ready-to-publish authoring sources;
+you drive the flow yourself with the `octo` CLI, exactly as an agent would.
 
 It exercises the full surface:
 
-- **Interactive HTML artifacts** — the doc renders a live SVG adoption chart with
-  a Monthly/Cumulative toggle (vanilla JS, no dependencies).
-- **Immutable versioning** — published as **v1**, revised as **v2** (the chart
-  gains a projected series; a "Versioning" section is added), then **v3** (a new
-  section answers the open anchoring question). Every version keeps a permanent URL.
-- **Anchored comments** — comments stick to the exact phrase/artifact they refer
-  to, and **re-anchor across versions** when you republish.
-- **Threaded replies + agent verdicts** — a human comment, a threaded reply, and
-  **agent replies carrying `applied` verdicts** on both threads.
-- **Comment-driven editing** — the open "does it survive a full rewrite?" question
-  is resolved *in the document* by v3's new section, the loop `/octo edit` models.
-- **Reactions** — a 👍 on the chart thread.
+- **Interactive HTML artifacts** — a live SVG adoption chart with a
+  Monthly/Cumulative toggle (vanilla JS, no dependencies).
+- **Remote-first drafts → immutable versions** — `octo new` saves a mutable draft;
+  `octo publish` freezes it as **v1**; iterate and publish again for **v2**, **v3**.
+- **Default-private + share codes** — a fresh doc is author-only; `octo share`
+  mints a read+comment `?code=` link anyone can open.
+- **Anchored comments that re-anchor across versions**, threaded replies, and
+  **agent verdicts** (`applied` / `partial` / `question`), plus emoji reactions.
+- **Comment-driven editing** — v3 adds a section that answers a reviewer's
+  "does it survive a full rewrite?" question, the loop `octo` models.
 
 ## Prerequisites
 
-A running octo-doc server. The simplest path is the local Docker stack:
+A running octo-doc server + the `octo` CLI. The simplest path is the local stack:
 
 ```bash
 docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.local.yml up -d --build --wait
+make build-octo   # builds ./bin/octo
+
+export OCTO_BASE_URL=http://localhost:18080
+export OCTO_TOKEN=local-test-token          # the local stack's write token = author
 ```
 
-This serves the app at **http://localhost:18080** with the write token
-`local-test-token` (see `docs/SELF_HOSTING.md` for production setup).
+The app serves at **http://localhost:18080** (see `docs/SELF_HOSTING.md` for
+production, and `docs/AUTH.md` for the capability/code model).
 
-`seed.sh` drives everything through the **`octo` CLI** — it builds `./bin/octo`
-from this repo on first run (so a Go toolchain is the only extra prerequisite),
-then uses it for every step. No `curl` or `jq` required.
-
-## Run
+## Walkthrough
 
 ```bash
-./examples/demo/seed.sh            # author + publish v1/v2/v3 and seed the threads
-./examples/demo/seed.sh --reset    # remove the doc from the server first, then re-seed
+D=examples/demo
+OCTO=./bin/octo
+
+# 1) Create the doc as a private draft, then publish it (v1).
+$OCTO new --slug octo-demo --title "octo-doc — documents you can talk to" \
+  --html-file $D/index.v1.html
+$OCTO publish octo-demo                       # → /d/octo-demo/v/1
+
+# 2) Iterate: chart projection + a Versioning section → v2.
+$OCTO version-add --slug octo-demo --html-file $D/index.v2.html
+$OCTO publish octo-demo                       # → /d/octo-demo/v/2
+
+# 3) Iterate again: a section answering the anchoring question → v3.
+$OCTO version-add --slug octo-demo --html-file $D/index.v3.html
+$OCTO publish octo-demo                       # → /d/octo-demo/v/3
+
+# 4) Share it — mint a read+comment link (the doc is private by default).
+$OCTO share octo-demo                         # prints .../d/octo-demo/v/3?code=<code>
 ```
 
-Every step runs through `octo`, exactly as a user would drive it:
+Open the printed `?code=` link in a browser: the code is exchanged for a cookie,
+the URL is cleaned, and the doc renders with the review overlay. Select any
+sentence to leave an anchored comment; open the version picker to compare v1/v2/v3.
 
-| Step | Command |
-|------|---------|
-| author v1, add v2/v3 | `octo new` · `octo version-add` |
-| publish all versions | `octo publish` |
-| anchored comments + a reply | `octo comment` (`--anchor`, `--parent`) |
-| agent verdicts | `octo reply --remote --status applied` |
-| reaction | `octo react` |
+To seed the review threads shown in the screenshots (a human comment + an agent
+`applied` reply + a 👍), use the CLI with the share code as the reader credential:
 
-The docs are authored into a throwaway store (`OCTO_DIR` is a temp dir), so the
-demo never touches your `~/octo-docs`.
+```bash
+CODE=$($OCTO share octo-demo | grep -o 'code=[^ ]*' | cut -d= -f2)
 
-Configuration via env (all optional):
+# A reader comment (code = read+comment capability), anchored to a phrase.
+CID=$(OCTO_CODE=$CODE $OCTO comment --slug octo-demo --version 3 \
+  --anchor "re-anchors each comment to the same content" \
+  --text "Does the guarantee survive a full rewrite of the paragraph?")
 
-| Var     | Default                     | Meaning                    |
-|---------|-----------------------------|----------------------------|
-| `BASE`  | `http://localhost:18080`    | octo-doc base URL          |
-| `TOKEN` | `local-test-token`          | write bearer token         |
-| `SLUG`  | `octo-demo`                 | document slug              |
-
-A clean run prints the three shareable URLs:
-
-```
-Demo ready.
-  v1 (original) : http://localhost:18080/d/octo-demo/v/1
-  v2 (chart)    : http://localhost:18080/d/octo-demo/v/2
-  v3 (latest)   : http://localhost:18080/d/octo-demo/v/3
+# The author resolves it (write token), and reacts.
+$OCTO reply --slug octo-demo --parent "$CID" --status applied --applied-in 3 \
+  --text "Yes — v3's new \"What happens when the text is rewritten?\" section covers it."
+OCTO_CODE=$CODE $OCTO react --slug octo-demo --comment "$CID" --emoji "👍" --version 3
 ```
 
-> Publishing is **immutable and append-only** — each publish creates a new
-> version. `--reset` removes the doc from the server first, so a re-seed always
-> yields a clean v1/v2/v3 (without it, re-running would append v4, v5, …).
-
-## What to try
-
-1. Open **v3** (`/d/octo-demo/v/3`) and read the document — it explains itself.
-2. **Select any sentence** to leave an anchored comment; the highlight marks the
-   exact words.
-3. Toggle the chart between **Monthly** and **Cumulative** — it redraws live.
-4. Open the **version picker** in the toolbar and switch to **v1**; note the
-   "you're viewing an older version" strip, and that the seeded comments appear on
-   every version because they re-anchored.
-5. Find the two review threads, both marked **`applied`**:
-   - the **chart thread** — a human asks for a projected series; the agent reply is
-     `applied`, with the projection now visible in v2's chart, and a 👍 on the thread.
-   - the **anchoring thread** — a human asks "does it survive a full rewrite?"; the
-     agent reply is `applied`, pointing at v3's new "What happens when the text is
-     rewritten?" section that answers it in the document itself.
+> Publishing is **immutable and append-only** — each `publish` promotes the current
+> draft to the next version. To start over, `octo unpublish octo-demo` and re-run.
 
 ## Files
 
 | File            | What it is                                             |
 |-----------------|--------------------------------------------------------|
 | `index.v1.html` | The interactive self-intro document (version 1)        |
-| `index.v2.html` | The revised document (version 2: projection + versioning section) |
-| `index.v3.html` | The revised document (version 3: anchoring-states section answering the review question) |
-| `seed.sh`       | Authors, publishes, and seeds the whole scenario via the `octo` CLI |
+| `index.v2.html` | Revised (v2: chart projection + a Versioning section)  |
+| `index.v3.html` | Revised (v3: anchoring-states section answering the review question) |
 
 All three HTML files are fully self-contained (inline CSS + JS, no external
 assets), so they render offline and stay within the overlay's content-security

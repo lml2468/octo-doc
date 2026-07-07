@@ -31,7 +31,7 @@
   // Author vs reader (carried outside the byte-frozen __TDOC__ config). Only the
   // author (write token) may mint/rotate a share code, so the Share CTA is shown
   // only to them — a reader clicking it would 404 on POST /share.
-  const isAuthor = !!(window.__TDOC_CAP__ && window.__TDOC_CAP__.isAuthor);
+  const isAuthor = !!(window.__ODOC_CAP__ && window.__ODOC_CAP__.isAuthor);
   // Fork mode renders the doc read-only with comments mirrored from the
   // embedded #tdoc-fork-comments JSON. No /api calls, no auth, no publish.
   // The original published slug is in cfg.originalSlug so we can label it.

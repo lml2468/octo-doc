@@ -288,7 +288,7 @@ func (s *Server) handleRender(w http.ResponseWriter, r *http.Request) error {
 	// (share code)? Both reach here through requireDocReadHTML, but only the author
 	// may mint/rotate a share code — so the overlay must hide the Share CTA from a
 	// reader (clicking it would 404). We carry the flag OUTSIDE core.OverlayConfig
-	// (which is byte-frozen) as a separate window.__TDOC_CAP__ marker.
+	// (which is byte-frozen) as a separate window.__ODOC_CAP__ marker.
 	cap, err := s.resolveCap(r, slug)
 	if err != nil {
 		return err
@@ -321,12 +321,12 @@ func (s *Server) handleRender(w http.ResponseWriter, r *http.Request) error {
 	return nil
 }
 
-// injectCapMarker adds window.__TDOC_CAP__ before the overlay script so the
+// injectCapMarker adds window.__ODOC_CAP__ before the overlay script so the
 // overlay can gate author-only UI (the Share/mint-code button) without touching
 // the byte-frozen core.OverlayConfig. It is injected right before the overlay's
 // own <script> so it is defined when the overlay boots.
 func injectCapMarker(html string, isAuthor bool) string {
-	marker := `<script>window.__TDOC_CAP__ = {isAuthor: ` + strconv.FormatBool(isAuthor) + `};</script>`
+	marker := `<script>window.__ODOC_CAP__ = {isAuthor: ` + strconv.FormatBool(isAuthor) + `};</script>`
 	// The overlay boot is the last "<script>" InjectOverlayCfg wrote; place the
 	// marker before the window.__TDOC__ config script so both precede the overlay.
 	const anchor = "<script>window.__TDOC__ = "

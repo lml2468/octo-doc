@@ -223,7 +223,7 @@ func TestFreshCodeBeatsStaleCookie(t *testing.T) {
 	}
 }
 
-// TestRenderCapMarkerReflectsViewer asserts the render injects window.__TDOC_CAP__
+// TestRenderCapMarkerReflectsViewer asserts the render injects window.__ODOC_CAP__
 // with isAuthor true only for the write-token holder, so the overlay hides the
 // author-only Share (mint-code) button from a reader.
 func TestRenderCapMarkerReflectsViewer(t *testing.T) {
@@ -241,7 +241,7 @@ func TestRenderCapMarkerReflectsViewer(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("author render = %d", rec.Code)
 	}
-	if !contains(rec.Body.String(), `window.__TDOC_CAP__ = {isAuthor: true}`) {
+	if !contains(rec.Body.String(), `window.__ODOC_CAP__ = {isAuthor: true}`) {
 		t.Error("author render should carry isAuthor: true")
 	}
 
@@ -250,7 +250,7 @@ func TestRenderCapMarkerReflectsViewer(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("reader render = %d: %s", rec.Code, rec.Body.String())
 	}
-	if !contains(rec.Body.String(), `window.__TDOC_CAP__ = {isAuthor: false}`) {
+	if !contains(rec.Body.String(), `window.__ODOC_CAP__ = {isAuthor: false}`) {
 		t.Error("reader render should carry isAuthor: false (Share button hidden)")
 	}
 }

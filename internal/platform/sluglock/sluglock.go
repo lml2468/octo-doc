@@ -1,6 +1,6 @@
-// Package sluglock provides per-slug write serialization — the in-process
-// equivalent of the upstream Cloudflare Durable Object. It makes a slug's
-// read-modify-write of its comment list atomic within one process.
+// Package sluglock provides per-slug write serialization — an in-process keyed
+// mutex. It makes a slug's read-modify-write of its comment list atomic within
+// one process.
 //
 // The interface admits a future distributed implementation (e.g. a PostgreSQL
 // advisory lock) for multi-instance deployments without changing callers.

@@ -1,7 +1,7 @@
 # Porting notes: TypeScript → Go
 
 octo-doc's domain kernel (`internal/core`) is a verbatim-equivalent port of the
-upstream Cloudflare Worker's logic (originally TypeScript). The success criterion
+upstream tdoc logic (originally TypeScript). The success criterion
 is **byte-equivalence**: the same input HTML must produce the same stamped output,
 and the same event log must fold to the same snapshot. This document records how
 that equivalence is guaranteed and the subtle traps the port had to clear.
@@ -90,6 +90,6 @@ does not, and historically excluded U+FEFF). Golden case: `stamp/unicode-ws`.
   uses an atomic counter + high-resolution time. This only affects the uniqueness
   suffix of non-idempotent event ids, never the fold result (`DedupEvents` keys on
   the id; idempotent events keep their deterministic ids).
-- **Storage is PostgreSQL + S3 only.** The upstream KV/R2 split maps to
-  `MetadataStore` (pgx/JSONB) and `BlobStore` (aws-sdk-go-v2). The SQLite+FS
+- **Storage is PostgreSQL + S3 only.** Metadata lives in `MetadataStore`
+  (pgx/JSONB) and blobs in `BlobStore` (aws-sdk-go-v2). The SQLite+FS
   reference adapters were not ported.

@@ -1,6 +1,6 @@
 # octo-doc — agent guide
 
-Self-hosted, Cloudflare-free reimplementation of tdoc: prompt-native interactive
+Self-hosted reimplementation of tdoc: prompt-native interactive
 HTML docs with versioning + anchored comments. **Go 1.26**, chi router, PostgreSQL
 + S3-compatible storage. Full design in `docs/ARCHITECTURE.md` / `docs/DESIGN.md`;
 the TS→Go port strategy is in `docs/PORTING.md`.

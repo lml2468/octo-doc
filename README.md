@@ -1,21 +1,21 @@
 # octo-doc
 
 **Self-hosted, prompt-native interactive HTML documents** — with text- and
-artifact-anchored inline commenting and immutable versioning. A Cloudflare-free
-reimplementation of [tdoc](https://github.com/serenakeyitan/tdoc): same document
-model, same URLs, same [agent skill](https://github.com/lml2468/octo-doc-skill)
+artifact-anchored inline commenting and immutable versioning. A self-hosted,
+single-binary reimplementation of [tdoc](https://github.com/serenakeyitan/tdoc):
+same document model, same URLs, same [agent skill](https://github.com/lml2468/octo-doc-skill)
 contract — now a single static Go binary.
 
 > Credit to Serena Keyitan's **tdoc** and, upstream of that, Jesse Pollak's
-> *bdocs* concept. octo-doc keeps the product identical and removes the vendor
-> coupling: no Workers, no KV, no D1, no R2, no Durable Objects.
+> *bdocs* concept. octo-doc keeps the product identical and makes it something you
+> run yourself: a static binary backed by PostgreSQL and any S3-compatible store.
 
 ## Why
 
-tdoc is great but ties publishing to a Cloudflare account (`wrangler login`, R2,
-KV, a claimed subdomain, a DO migration). octo-doc gives you the same product as
-a plain HTTP server you own: one static binary, PostgreSQL for metadata, and any
-S3-compatible store for blobs. `docker compose up -d` and you're live.
+octo-doc gives you prompt-native, commentable documents as a plain HTTP server
+you own: one static binary, PostgreSQL for metadata, and any S3-compatible store
+for blobs. `docker compose up -d` and you're live — no managed platform, no
+vendor account.
 
 ## Quick start
 

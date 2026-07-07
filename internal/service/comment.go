@@ -10,8 +10,8 @@ import (
 )
 
 // CommentService is the serialized owner of per-slug comment mutations. All
-// writes for a slug run under a per-slug lock, making read→apply→write atomic
-// (the role the Cloudflare Durable Object played). Reads fold the stored log.
+// writes for a slug run under a per-slug lock, making read→apply→write atomic.
+// Reads fold the stored log.
 type CommentService struct {
 	meta storage.MetadataStore
 	lock sluglock.Locker

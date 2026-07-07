@@ -284,6 +284,15 @@ func (s *Server) handleRender(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
+	// Is this viewer the author (write token via Bearer or cookie) or a reader
+	// (share code)? Both reach here through requireDocReadHTML, but only the author
+	// may mint/rotate a share code — so the overlay must hide the Share CTA from a
+	// reader (clicking it would 404). We carry the flag OUTSIDE core.OverlayConfig
+	// (which is byte-frozen) as a separate window.__TDOC_CAP__ marker.
+	cap, err := s.resolveCap(r, slug)
+	if err != nil {
+		return err
+	}
 	// A doc rendered by this server is, by definition, published — so the overlay
 	// always runs in "published" mode (Share/Fork, never a Publish button; that
 	// belongs to the local preview server). AuthConfigured reflects whether a
@@ -302,6 +311,7 @@ func (s *Server) handleRender(w http.ResponseWriter, r *http.Request) error {
 	if err != nil {
 		return err
 	}
+	html = injectCapMarker(html, cap == service.CapAuthor)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if r.Method == http.MethodHead {
 		w.WriteHeader(200)
@@ -309,6 +319,21 @@ func (s *Server) handleRender(w http.ResponseWriter, r *http.Request) error {
 	}
 	_, _ = io.WriteString(w, html)
 	return nil
+}
+
+// injectCapMarker adds window.__TDOC_CAP__ before the overlay script so the
+// overlay can gate author-only UI (the Share/mint-code button) without touching
+// the byte-frozen core.OverlayConfig. It is injected right before the overlay's
+// own <script> so it is defined when the overlay boots.
+func injectCapMarker(html string, isAuthor bool) string {
+	marker := `<script>window.__TDOC_CAP__ = {isAuthor: ` + strconv.FormatBool(isAuthor) + `};</script>`
+	// The overlay boot is the last "<script>" InjectOverlayCfg wrote; place the
+	// marker before the window.__TDOC__ config script so both precede the overlay.
+	const anchor = "<script>window.__TDOC__ = "
+	if i := strings.Index(html, anchor); i >= 0 {
+		return html[:i] + marker + "\n" + html[i:]
+	}
+	return html + marker
 }
 
 func (s *Server) handleForkExport(w http.ResponseWriter, r *http.Request) error {

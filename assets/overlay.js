@@ -28,6 +28,10 @@
   // Draft mode: an author previewing an unpublished doc on the server. The CTA is
   // "Publish" (promote the draft to an immutable version), not Share.
   const isDraft = mode === 'draft';
+  // Author vs reader (carried outside the byte-frozen __TDOC__ config). Only the
+  // author (write token) may mint/rotate a share code, so the Share CTA is shown
+  // only to them — a reader clicking it would 404 on POST /share.
+  const isAuthor = !!(window.__TDOC_CAP__ && window.__TDOC_CAP__.isAuthor);
   // Fork mode renders the doc read-only with comments mirrored from the
   // embedded #tdoc-fork-comments JSON. No /api calls, no auth, no publish.
   // The original published slug is in cfg.originalSlug so we can label it.
@@ -739,7 +743,7 @@
          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5"/><polyline points="5 12 12 5 19 12"/></svg>
          <span>Publish</span>
        </button>`;
-  const primaryCtaHtml = isFork ? '' : (isPublished ? shareCtaHtml : publishCtaHtml);
+  const primaryCtaHtml = isFork ? '' : (isPublished ? (isAuthor ? shareCtaHtml : '') : publishCtaHtml);
 
   // Fork / Save-as live in the ⋯ menu on narrow viewports.
   const forkBtnHtml = isPublished
@@ -753,7 +757,7 @@
     <div class="tdoc-menu-wrap">
       <button class="tdoc-secondary-toggle" id="tdoc-more-btn" aria-label="More" title="More">⋯</button>
       <div class="tdoc-secondary-menu" id="tdoc-secondary-menu">
-        ${isPublished ? '<button data-action="share">Share</button><button data-action="fork">Fork</button>' : ''}
+        ${isPublished ? `${isAuthor ? '<button data-action="share">Share</button>' : ''}<button data-action="fork">Fork</button>` : ''}
         ${(isLocal || isDraft) ? '<button data-action="publish">Publish</button>' : ''}
         ${isFork ? '<button data-action="saveas">Save copy</button>' : ''}
         <button data-action="repo">octo-doc on GitHub</button>

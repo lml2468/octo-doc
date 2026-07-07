@@ -24,7 +24,6 @@ services:
       BASE_URL: ${BASE_URL:-}
       WRITE_TOKEN: ${WRITE_TOKEN:-}
       ALLOW_BOOTSTRAP: ${ALLOW_BOOTSTRAP:-true}
-      PRIVATE: ${PRIVATE:-false}
       FRAME_ANCESTORS: ${FRAME_ANCESTORS:-'none'}
       COOKIE_SECURE: ${COOKIE_SECURE:-true}
       LOG_LEVEL: ${LOG_LEVEL:-info}

@@ -3,6 +3,10 @@
 Thanks for your interest. This is a small, strict Go codebase; the bar is
 readability, correctness, and test coverage over cleverness.
 
+By participating, you agree to abide by our
+[Code of Conduct](CODE_OF_CONDUCT.md). To report a security issue, follow the
+[Security Policy](SECURITY.md) — please don't open a public issue.
+
 ## Prerequisites
 
 - Go 1.26+

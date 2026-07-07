@@ -177,7 +177,15 @@ e2e suites against real services, start PostgreSQL + MinIO and export the
 `OCTO_TEST_*` variables (see the `Makefile` defaults).
 
 See **[CONTRIBUTING.md](CONTRIBUTING.md)** before opening a pull request, and
-**[CHANGELOG.md](CHANGELOG.md)** for release notes.
+**[CHANGELOG.md](CHANGELOG.md)** for release notes. All participation is governed
+by our **[Code of Conduct](CODE_OF_CONDUCT.md)**.
+
+## Security
+
+Please report vulnerabilities privately — see the **[Security Policy](SECURITY.md)**.
+Do not open a public issue for security reports. Operator hardening guidance is in
+the [production checklist](docs/SELF_HOSTING.md), and the access-control model is
+documented in [docs/AUTH.md](docs/AUTH.md).
 
 ## Credits
 

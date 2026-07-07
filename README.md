@@ -20,7 +20,7 @@ vendor account.
 ## Quick start
 
 ```bash
-git clone https://github.com/Mininglamp-OSS/octo-doc && cd octo-doc
+git clone https://github.com/lml2468/octo-doc && cd octo-doc
 
 # Full stack (app + PostgreSQL + MinIO + Caddy auto-TLS):
 DOMAIN=docs.example.com docker compose -f deploy/docker-compose.yml up -d --wait
@@ -107,7 +107,7 @@ octo update                                             # self-update from GitHu
 Config resolves from `OCTO_BASE_URL` / `OCTO_TOKEN` / `OCTO_CODE` / `OCTO_DIR`,
 then `~/.octo/config.json`.
 Prebuilt binaries for macOS/Linux/Windows are attached to each
-[GitHub Release](https://github.com/Mininglamp-OSS/octo-doc/releases); `octo update`
+[GitHub Release](https://github.com/lml2468/octo-doc/releases); `octo update`
 downloads and checksum-verifies the matching one.
 
 ## Configuration

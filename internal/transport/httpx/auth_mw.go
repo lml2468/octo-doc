@@ -3,7 +3,7 @@ package httpx
 import (
 	"net/http"
 
-	"github.com/Mininglamp-OSS/octo-doc/internal/platform/apperr"
+	"github.com/lml2468/octo-doc/internal/platform/apperr"
 )
 
 // requireWriteAuth is chi middleware enforcing a valid write token.

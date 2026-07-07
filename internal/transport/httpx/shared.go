@@ -1,8 +1,8 @@
 package httpx
 
 import (
-	"github.com/Mininglamp-OSS/octo-doc/internal/core"
-	"github.com/Mininglamp-OSS/octo-doc/internal/storage"
+	"github.com/lml2468/octo-doc/internal/core"
+	"github.com/lml2468/octo-doc/internal/storage"
 )
 
 // identityFromSession builds the overlay identity from a viewer session, or nil.

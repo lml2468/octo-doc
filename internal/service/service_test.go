@@ -5,10 +5,10 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/Mininglamp-OSS/octo-doc/internal/core"
-	"github.com/Mininglamp-OSS/octo-doc/internal/platform/sluglock"
-	"github.com/Mininglamp-OSS/octo-doc/internal/service"
-	"github.com/Mininglamp-OSS/octo-doc/internal/storage/memory"
+	"github.com/lml2468/octo-doc/internal/core"
+	"github.com/lml2468/octo-doc/internal/platform/sluglock"
+	"github.com/lml2468/octo-doc/internal/service"
+	"github.com/lml2468/octo-doc/internal/storage/memory"
 )
 
 func newDoc(t *testing.T) (*service.DocService, *service.CommentService) {

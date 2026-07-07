@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/Mininglamp-OSS/octo-doc/internal/core"
+	"github.com/lml2468/octo-doc/internal/core"
 )
 
 // cmdComment posts a human comment (or a reply, with --parent) to a doc on the

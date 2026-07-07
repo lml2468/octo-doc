@@ -1,8 +1,8 @@
 package httpx
 
 import (
-	"github.com/Mininglamp-OSS/octo-doc/internal/core"
-	"github.com/Mininglamp-OSS/octo-doc/internal/service"
+	"github.com/lml2468/octo-doc/internal/core"
+	"github.com/lml2468/octo-doc/internal/service"
 )
 
 // Transport DTOs for comment snapshots.

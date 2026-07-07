@@ -10,8 +10,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/Mininglamp-OSS/octo-doc/internal/config"
-	"github.com/Mininglamp-OSS/octo-doc/internal/platform/log"
+	"github.com/lml2468/octo-doc/internal/config"
+	"github.com/lml2468/octo-doc/internal/platform/log"
 )
 
 func main() {

@@ -10,10 +10,10 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"github.com/Mininglamp-OSS/octo-doc/internal/core"
-	"github.com/Mininglamp-OSS/octo-doc/internal/platform/apperr"
-	"github.com/Mininglamp-OSS/octo-doc/internal/service"
-	"github.com/Mininglamp-OSS/octo-doc/internal/storage"
+	"github.com/lml2468/octo-doc/internal/core"
+	"github.com/lml2468/octo-doc/internal/platform/apperr"
+	"github.com/lml2468/octo-doc/internal/service"
+	"github.com/lml2468/octo-doc/internal/storage"
 )
 
 // publishBody is the parsed publish input from JSON or multipart.

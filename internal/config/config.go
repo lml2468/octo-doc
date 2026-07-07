@@ -60,7 +60,7 @@ func Load() (*Config, error) {
 		Port:    envInt("PORT", 8080),
 		Host:    env("HOST", "0.0.0.0"),
 		BaseURL: strings.TrimRight(env("BASE_URL", ""), "/"),
-		RepoURL: env("REPO_URL", "https://github.com/Mininglamp-OSS/octo-doc"),
+		RepoURL: env("REPO_URL", "https://github.com/lml2468/octo-doc"),
 
 		DatabaseURL:      env("DATABASE_URL", env("PG_URL", "")),
 		PGPoolMax:        envInt("PG_POOL_MAX", 10),

@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Mininglamp-OSS/octo-doc/internal/core"
+	"github.com/lml2468/octo-doc/internal/core"
 )
 
 // client is a thin HTTP client for the octo-doc /v1 envelope API. It defines its

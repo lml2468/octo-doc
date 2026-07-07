@@ -4,9 +4,9 @@ import (
 	"context"
 	"time"
 
-	"github.com/Mininglamp-OSS/octo-doc/internal/core"
-	"github.com/Mininglamp-OSS/octo-doc/internal/platform/sluglock"
-	"github.com/Mininglamp-OSS/octo-doc/internal/storage"
+	"github.com/lml2468/octo-doc/internal/core"
+	"github.com/lml2468/octo-doc/internal/platform/sluglock"
+	"github.com/lml2468/octo-doc/internal/storage"
 )
 
 // CommentService is the serialized owner of per-slug comment mutations. All

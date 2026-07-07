@@ -16,7 +16,7 @@
           "anchor": {
             "kind": "element",
             "aid": "gone",
-            "selector": "[data-tdoc-aid=\"gone\"]",
+            "selector": "[data-odoc-aid=\"gone\"]",
             "label": "svg",
             "fingerprint": {
               "tag": "svg"

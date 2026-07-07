@@ -28,7 +28,7 @@ func decodeJSON(w http.ResponseWriter, r *http.Request, v any) error {
 }
 
 // sessionCookieName is the cookie that carries the viewer session id.
-const sessionCookieName = "tdoc_sid"
+const sessionCookieName = "odoc_sid"
 
 // sessionCookie reads the session cookie value, or "".
 func sessionCookie(r *http.Request) string {

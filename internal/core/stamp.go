@@ -7,7 +7,7 @@ import (
 	"unicode/utf16"
 )
 
-// Artifact identity (data-tdoc-aid) stamping, ported from stamp.ts.
+// Artifact identity (data-odoc-aid) stamping, ported from stamp.ts.
 //
 // The SAME input HTML must produce the SAME stamped output byte-for-byte. All
 // structural delimiters (<, >, tag names) are ASCII, so byte offsets land on the
@@ -53,7 +53,7 @@ type StampResult struct {
 // omits vertical tab and every Unicode space (U+00A0 nbsp, U+3000 ideographic,
 // U+2028/U+2029 line/paragraph separators, …). Using bare \s would collapse
 // whitespace differently from the upstream TS, changing the normalized string
-// fed to Cyrb53 and thus the data-tdoc-aid — breaking byte-equivalence on any
+// fed to Cyrb53 and thus the data-odoc-aid — breaking byte-equivalence on any
 // document containing non-ASCII whitespace. See docs/PORTING.md (trap 4).
 const jsSpace = `\t\n\v\f\r \x{00a0}\x{1680}\x{2000}-\x{200a}\x{2028}\x{2029}\x{202f}\x{205f}\x{3000}\x{feff}`
 
@@ -62,16 +62,16 @@ const jsSpace = `\t\n\v\f\r \x{00a0}\x{1680}\x{2000}-\x{200a}\x{2028}\x{2029}\x{
 const wsClass = `[` + jsSpace + `]`
 
 var (
-	dataTdocAttrRe  = regexp.MustCompile(wsClass + `data-tdoc-[\w-]+` + wsClass + `*=` + wsClass + `*"[^"]*"`)
-	dataTdocAidRe   = regexp.MustCompile(wsClass + `+data-tdoc-aid` + wsClass + `*=` + wsClass + `*"[^"]*"`)
-	dataTdocAidRe2  = regexp.MustCompile(wsClass + `data-tdoc-aid` + wsClass + `*=` + wsClass + `*"[^"]*"`)
+	dataOdocAttrRe  = regexp.MustCompile(wsClass + `data-odoc-[\w-]+` + wsClass + `*=` + wsClass + `*"[^"]*"`)
+	dataOdocAidRe   = regexp.MustCompile(wsClass + `+data-odoc-aid` + wsClass + `*=` + wsClass + `*"[^"]*"`)
+	dataOdocAidRe2  = regexp.MustCompile(wsClass + `data-odoc-aid` + wsClass + `*=` + wsClass + `*"[^"]*"`)
 	htmlCommentRe   = regexp.MustCompile(`(?s)<!--.*?-->`)
 	whitespaceRunRe = regexp.MustCompile(wsClass + `+`)
 	tagStripRe      = regexp.MustCompile(`<[^>]+>`)
 	selfCloseEndRe  = regexp.MustCompile(`/` + wsClass + `*$`)
 	voidTagRe       = regexp.MustCompile(`(?i)^(img|iframe)$`)
-	optInArtifactRe = regexp.MustCompile(`(?i)\bdata-tdoc-artifact\b`)
-	optInClassRe    = regexp.MustCompile(`(?i)class` + wsClass + `*=` + wsClass + `*"[^"]*\btdoc-artifact\b[^"]*"`)
+	optInArtifactRe = regexp.MustCompile(`(?i)\bdata-odoc-artifact\b`)
+	optInClassRe    = regexp.MustCompile(`(?i)class` + wsClass + `*=` + wsClass + `*"[^"]*\bodoc-artifact\b[^"]*"`)
 	probeTagRe      = regexp.MustCompile(`(?i)<([a-z][\w-]*)\b`)
 )
 
@@ -104,7 +104,7 @@ func aidFor(tag, innerHTML, openAttrs string) string {
 	}
 	intrinsics := strings.Join(parts, "|")
 	norm := htmlCommentRe.ReplaceAllString(innerHTML, "")
-	norm = dataTdocAttrRe.ReplaceAllString(norm, "")
+	norm = dataOdocAttrRe.ReplaceAllString(norm, "")
 	norm = whitespaceRunRe.ReplaceAllString(norm, " ")
 	norm = trimJSSpace(norm)
 	return Cyrb53(tag+"|"+intrinsics+"|"+norm, 0)
@@ -349,7 +349,7 @@ func utf16Slice(s string, n int) string {
 	return string(utf16.Decode(units[:n]))
 }
 
-// StampAids stamps data-tdoc-aid on every commentable artifact in rawHTML.
+// StampAids stamps data-odoc-aid on every commentable artifact in rawHTML.
 func StampAids(rawHTML string) StampResult {
 	headings := collectHeadings(rawHTML)
 	nearestHeadingAt := func(idx int) *string {
@@ -373,8 +373,8 @@ func StampAids(rawHTML string) StampResult {
 	aids := []StampedArtifact{}
 	elements := make([]stampElement, 0, len(harvested))
 	for _, e := range harvested {
-		cleanedAttrs := dataTdocAidRe.ReplaceAllString(e.attrs, "")
-		cleanedInner := dataTdocAidRe2.ReplaceAllString(e.innerHTML, "")
+		cleanedAttrs := dataOdocAidRe.ReplaceAllString(e.attrs, "")
+		cleanedInner := dataOdocAidRe2.ReplaceAllString(e.innerHTML, "")
 		aid := aidFor(e.tag, cleanedInner, cleanedAttrs)
 		aids = append(aids, StampedArtifact{
 			AID:     aid,
@@ -399,9 +399,9 @@ func StampAids(rawHTML string) StampResult {
 		}
 		var stampedOpen string
 		if e.isVoid {
-			stampedOpen = "<" + e.tag + e.cleanedAttrs + ` data-tdoc-aid="` + e.aid + `"` + selfClose + ">"
+			stampedOpen = "<" + e.tag + e.cleanedAttrs + ` data-odoc-aid="` + e.aid + `"` + selfClose + ">"
 		} else {
-			stampedOpen = "<" + e.tag + e.cleanedAttrs + ` data-tdoc-aid="` + e.aid + `">`
+			stampedOpen = "<" + e.tag + e.cleanedAttrs + ` data-odoc-aid="` + e.aid + `">`
 		}
 		out = out[:e.openStart] + stampedOpen + out[e.openEnd:]
 	}

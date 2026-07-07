@@ -140,7 +140,7 @@ func (s *store) writeWorkingCopy(slug, title, prompt string, html []byte) error 
 		return err
 	}
 	created := nowISO()
-	caller := envFirst("OCTO_NEW_CALLER", "TDOC_NEW_CALLER", "CLAUDE_SKILL_NAME")
+	caller := envFirst("OCTO_NEW_CALLER", "CLAUDE_SKILL_NAME")
 	if caller == "" {
 		caller = "unknown"
 	}

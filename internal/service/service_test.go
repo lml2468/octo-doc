@@ -67,7 +67,7 @@ func TestPublishStampsAndRenders(t *testing.T) {
 	if err != nil || data == nil {
 		t.Fatalf("render = %v, %v", data, err)
 	}
-	if !contains(data.HTML, "data-tdoc-aid") {
+	if !contains(data.HTML, "data-odoc-aid") {
 		t.Error("rendered HTML not stamped")
 	}
 }

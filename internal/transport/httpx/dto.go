@@ -9,7 +9,7 @@ import (
 //
 // core.CommentSnapshot uses the field name "created" and is byte-equivalence
 // locked (its JSON shape is asserted by golden fixtures ported from upstream
-// tdoc — see CLAUDE.md / docs/PORTING.md). The OCTO API contract (R3) requires
+// odoc — see CLAUDE.md / docs/PORTING.md). The OCTO API contract (R3) requires
 // timestamp fields to carry the "_at" suffix. We satisfy R3 at the wire boundary
 // by mapping the core snapshot into these DTOs, leaving core untouched.
 

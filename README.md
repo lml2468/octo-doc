@@ -44,7 +44,7 @@ Full guide: **[docs/SELF_HOSTING.md](docs/SELF_HOSTING.md)** ($5 VPS in 15 min).
 | **Document** | `slug` + monotonically increasing `version` → immutable HTML |
 | **URL** | `/d/<slug>/v/<version>` (preserved from tdoc) |
 | **Comments** | append-only event log; every version is a snapshot |
-| **Artifacts** | each commentable element is stamped `data-tdoc-aid="<hash>"` so comments anchor by identity, not DOM position — **byte-identical to upstream** |
+| **Artifacts** | each commentable element is stamped `data-odoc-aid="<hash>"` so comments anchor by identity, not DOM position — the aid **hash** stays byte-identical to upstream (only the attribute name is octo-doc-native) |
 | **Auth** | private by default: the write token = author; a per-doc share **code** grants read+comment. See [docs/AUTH.md](docs/AUTH.md) |
 | **Storage** | PostgreSQL (metadata) + S3-compatible (blobs) behind two interfaces |
 | **Scaling** | stateless app; run N replicas behind a load balancer — per-slug writes serialize via PostgreSQL advisory locks |
@@ -104,8 +104,8 @@ octo doctor                                            # check the CLI + the ser
 octo update                                             # self-update from GitHub Releases
 ```
 
-Config resolves from `OCTO_BASE_URL` / `OCTO_TOKEN` / `OCTO_CODE` / `OCTO_DIR`
-(the legacy `TDOC_*` names are still read as a fallback), then `~/.octo/config.json`.
+Config resolves from `OCTO_BASE_URL` / `OCTO_TOKEN` / `OCTO_CODE` / `OCTO_DIR`,
+then `~/.octo/config.json`.
 Prebuilt binaries for macOS/Linux/Windows are attached to each
 [GitHub Release](https://github.com/Mininglamp-OSS/octo-doc/releases); `octo update`
 downloads and checksum-verifies the matching one.

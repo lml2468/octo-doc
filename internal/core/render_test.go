@@ -60,7 +60,7 @@ func TestInjectOverlayCfg(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !contains(html, "window.__TDOC__ = ") || !contains(html, "console.log(1)") {
+	if !contains(html, "window.__ODOC__ = ") || !contains(html, "console.log(1)") {
 		t.Errorf("overlay not injected: %s", html)
 	}
 	if !contains(html, "</script>\n</body></html>") {

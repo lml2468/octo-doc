@@ -2,8 +2,10 @@
 
 If you ran upstream [tdoc](https://github.com/serenakeyitan/tdoc) on Cloudflare
 (Worker + KV + R2 + Durable Object), this moves your docs and comments to a
-self-hosted octo-doc with **zero data loss** and **byte-identical rendering**
-(the HTML was already `data-tdoc-aid`-stamped on the Worker; we re-store it as-is).
+self-hosted octo-doc with **zero data loss**. Comment anchors survive because the
+aid **hash** is a verbatim port; re-publishing re-stamps the artifacts with
+octo-doc's `data-odoc-aid` attribute (the Worker emitted `data-tdoc-aid` — same
+hash value, octo-doc-native name).
 
 ## What maps where
 
@@ -95,34 +97,35 @@ for slug in $(ls cf-dump/kv/meta | sed 's/\.json$//'); do
 done
 ```
 
-Because the HTML was already `data-tdoc-aid`-stamped on the Worker, re-publishing
-reproduces identical bytes (octo-doc's `StampAids` is a verbatim port — see
-[PORTING.md](./PORTING.md)). Passing an explicit `version` preserves the original
+The Worker stamped the HTML with `data-tdoc-aid`; octo-doc's `StampAids` re-stamps
+it as `data-odoc-aid` on re-publish, computing the **same** aid hash (a verbatim
+port — see [PORTING.md](./PORTING.md)), so comment anchors still resolve. Passing
+an explicit `version` preserves the original
 version numbers; the comment array is merged non-destructively on the first push.
 
 ## Step 3 — verify
 
 ```bash
 curl -sf localhost:8080/v1/docs/plaud-explainer/versions | jq
-curl -sf localhost:8080/d/plaud-explainer/v/1 | grep -c data-tdoc-aid
+curl -sf localhost:8080/d/plaud-explainer/v/1 | grep -c data-odoc-aid
 curl -sf "localhost:8080/v1/comments?slug=plaud-explainer&version=all" | jq '.data | length'
 ```
 
-Rendering is byte-identical because the imported HTML was already stamped on the
-Worker and octo-doc's `stampAids` is a verbatim port (re-publishing through
+Comment anchors are preserved because the aid hash is a verbatim port; the
+re-published HTML carries octo-doc's `data-odoc-aid` (re-publishing through
 `/v1/docs` would also produce the same bytes — see
 [ARCHITECTURE.md](./ARCHITECTURE.md#rendering-parity-byte-equivalent-output)).
 
 ## Step 4 — point clients at the new server
 
 ```bash
-export TDOC_BASE_URL="https://docs.example.com"
-export TDOC_TOKEN="<your write token>"
+export OCTO_BASE_URL="https://docs.example.com"
+export OCTO_TOKEN="<your write token>"
 # Old ~/.tdoc/published.json (Cloudflare) is no longer used; the new CLI reads
-# ~/.tdoc/config.json. You can delete published.json once you've verified.
+# ~/.octo/config.json. You can delete published.json once you've verified.
 ```
 
-Future `/tdoc publish`, `/tdoc pull`, `/tdoc edit` flows all target the new
+Future `octo publish`, `octo pull`, `octo edit` flows all target the new
 server with no further changes — the command surface is unchanged.
 
 ## What you can decommission

@@ -16,7 +16,7 @@ type OverlayIdentity struct {
 	Name      string  `json:"name,omitempty"`
 }
 
-// OverlayConfig is the boot config injected as window.__TDOC__ for the overlay.
+// OverlayConfig is the boot config injected as window.__ODOC__ for the overlay.
 type OverlayConfig struct {
 	Slug           string           `json:"slug"`
 	Version        int              `json:"version"`
@@ -48,7 +48,7 @@ func SafeJSONForScript(v any) (string, error) {
 	s := strings.TrimRight(buf.String(), "\n") // Encoder appends a newline
 	// Go's encoding/json always escapes U+2028/U+2029 (\u2028 / \u2029) even with
 	// SetEscapeHTML(false); JavaScript's JSON.stringify emits them raw. Restore the
-	// raw code points so the injected window.__TDOC__ bytes match upstream. (They
+	// raw code points so the injected window.__ODOC__ bytes match upstream. (They
 	// are valid inside a <script> JSON literal — only bare U+2028/9 in a JS string
 	// literal would be a hazard, which this is not.)
 	s = unescapeLineSep(s)
@@ -122,7 +122,7 @@ func InjectOverlayCfg(rawHTML, overlayJS string, cfg OverlayConfig) (string, err
 	if err != nil {
 		return "", err
 	}
-	inject := "<script>window.__TDOC__ = " + cfgJSON + ";</script>\n<script>" + overlayJS + "</script>"
+	inject := "<script>window.__ODOC__ = " + cfgJSON + ";</script>\n<script>" + overlayJS + "</script>"
 	if strings.Contains(rawHTML, "</body>") {
 		return strings.Replace(rawHTML, "</body>", inject+"\n</body>", 1), nil
 	}

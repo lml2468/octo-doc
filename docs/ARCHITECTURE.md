@@ -22,14 +22,14 @@ byte-for-byte. It is written in Go 1.26 and ships as a single static binary.
 
 ┌──────────────────────── octo-doc (self-hosted) ─────────────────────┐
 │                                                                       │
-│   tdoc-publish ──HTTP──▶  Go 1.26 app (chi router, static binary)     │
+│   octo publish ──HTTP──▶  Go 1.26 app (chi router, static binary)     │
 │   (Bearer token)             │                                         │
 │                              │  transport/ ─▶ service/ ─▶ storage/     │
 │                              │  (thin httpx) (logic)     (interfaces)  │
 │                              │                                          │
 │                              ├── internal/core/ (PORTED VERBATIM):     │
 │                              │     cyrb53.go         hash primitive      │
-│                              │     stamp.go          data-tdoc-aid       │
+│                              │     stamp.go          data-odoc-aid       │
 │                              │     fold.go           event-log fold       │
 │                              │     events.go         eid/dedup/migrate    │
 │                              │     ops.go            applyCommentOp        │
@@ -76,8 +76,9 @@ The success criterion *"相同输入下渲染字节级等价于上游 Workers"* 
 **porting the rendering-critical functions verbatim** into `internal/core/`
 rather than rewriting them:
 
-- `stampAids()` — stamps `data-tdoc-aid="<cyrb53 hash>"` on every commentable
-  artifact. Ported character-for-character from upstream worker.js. Verified by
+- `stampAids()` — stamps `data-odoc-aid="<cyrb53 hash>"` on every commentable
+  artifact. Ported character-for-character from upstream worker.js (the aid hash
+  is byte-identical; only the attribute name is octo-doc-native). Verified by
   `go test ./internal/core/` against the golden fixtures in `testdata/golden`
   ("byte-parity with the upstream Cloudflare worker") across ordinary and
   adversarial HTML.
@@ -207,7 +208,7 @@ advisory-lock implementation, documented in [DESIGN.md](./DESIGN.md).
 ## Request lifecycle (publish)
 
 ```
-tdoc-publish <slug>
+octo publish <slug>
   └─ POST /v1/docs  (Authorization: Bearer <token>, multipart or JSON)
        ├─ requireWriteAuth         constant-time token check
        ├─ size cap check           (MAX_HTML_BYTES, default 5 MiB)

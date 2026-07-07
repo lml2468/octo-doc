@@ -51,7 +51,7 @@ func (s *Server) handleAgentReply(w http.ResponseWriter, r *http.Request) error 
 	}
 	now := nowISO()
 	replyID := "r_" + compactDigits(now) + "_" + randHex4()
-	author := &core.Author{Kind: "agent", Login: "tdoc-agent", Name: "tdoc-agent"}
+	author := &core.Author{Kind: "agent", Login: "odoc-agent", Name: "odoc-agent"}
 
 	events := agentReplyEvents(replyID, author, body.Text, verdict, version, now)
 	respBody := map[string]any{
@@ -98,12 +98,12 @@ func agentReplyEvents(replyID string, author *core.Author, text string, verdict 
 		ai := version
 		events = append(events, core.CommentEvent{
 			Kind: "marked_applied", AtVersion: version, At: now,
-			AppliedIn: &ai, By: "tdoc-agent", AgentStatus: core.StatusApplied,
+			AppliedIn: &ai, By: "odoc-agent", AgentStatus: core.StatusApplied,
 		})
 	case core.StatusPartial, core.StatusQuestion:
 		events = append(events, core.CommentEvent{
 			Kind: "marked_open", AtVersion: version, At: now,
-			By: "tdoc-agent", AgentStatus: verdict,
+			By: "odoc-agent", AgentStatus: verdict,
 		})
 	}
 	return events

@@ -78,7 +78,7 @@ func TestFullLifecycle(t *testing.T) {
 
 	// Render — overlay + aids + persisted to S3.
 	body := getText(t, srv.URL+"/d/"+slug+"/v/1")
-	if !strings.Contains(body, "window.__TDOC__") || !strings.Contains(body, "data-tdoc-aid") {
+	if !strings.Contains(body, "window.__ODOC__") || !strings.Contains(body, "data-odoc-aid") {
 		t.Fatal("render missing overlay or aids")
 	}
 
@@ -90,7 +90,7 @@ func TestFullLifecycle(t *testing.T) {
 		`{"slug":"`+slug+`","parent_id":"`+cid+`","text":"done","status":"applied","applied_in":1}`)
 
 	list := getText(t, srv.URL+"/v1/comments?slug="+slug+"&version=1")
-	if !strings.Contains(list, `"status":"applied"`) || !strings.Contains(list, "tdoc-agent") {
+	if !strings.Contains(list, `"status":"applied"`) || !strings.Contains(list, "odoc-agent") {
 		t.Fatalf("agent reply not reflected: %s", list)
 	}
 	// Envelope compliance: list carries data + pagination + R3 created_at.

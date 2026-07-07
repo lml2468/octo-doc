@@ -170,7 +170,7 @@ func legacyToEvents(c *Comment) []CommentEvent {
 		ai := appliedIn
 		events = append(events, CommentEvent{
 			Kind: "marked_applied", AtVersion: appliedIn, At: at,
-			AppliedIn: &ai, By: "tdoc-agent", AgentStatus: StatusApplied,
+			AppliedIn: &ai, By: "odoc-agent", AgentStatus: StatusApplied,
 		})
 	}
 	events = appendLegacyReactions(events, c.Reactions, v, at)

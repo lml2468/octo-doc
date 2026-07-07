@@ -1,4 +1,4 @@
-// tdoc overlay — single-file design.
+// odoc overlay — single-file design.
 // Sections are demarcated with `// ========== Name ==========` headers so the
 // file reads like several concatenated modules. Each section depends only on
 // the ones above it (and on `state`). No section reaches sideways.
@@ -6,20 +6,20 @@
 // External contract preserved verbatim:
 //   - Endpoints: /v1/comments, /v1/reactions, /v1/auth/logout,
 //     /d/<slug>/v/<n>/export
-//   - Globals: window.__tdocCopyDocMd(includeComments), window.__tdocCopyCommentMd(id, btn)
-//   - Body classes: tdoc-has-comments, tdoc-narrow
+//   - Globals: window.__odocCopyDocMd(includeComments), window.__odocCopyCommentMd(id, btn)
+//   - Body classes: odoc-has-comments, odoc-narrow
 //   - Keyboard: ⌘/Ctrl-Enter submits, Esc cancels.
 //
 // Highlight rendering: CSS Custom Highlight API (CSS.highlights). One named
-// highlight `tdoc-pending` for the in-flight selection, and one
-// `tdoc-anchor-<id>` per saved comment. This replaces the legacy
+// highlight `odoc-pending` for the in-flight selection, and one
+// `odoc-anchor-<id>` per saved comment. This replaces the legacy
 // surroundContents/extractContents path that produced empty yellow bars when
 // the selection crossed block boundaries. A minimal single-textnode <span>
 // fallback runs on browsers without `CSS.highlights`.
 
 (function () {
   // ========== Config & DOM setup ==========
-  const cfg = window.__TDOC__ || {};
+  const cfg = window.__ODOC__ || {};
   const { slug, version } = cfg;
   const mode = cfg.mode || 'local';
   const isPublished = mode === 'published';
@@ -28,15 +28,15 @@
   // Draft mode: an author previewing an unpublished doc on the server. The CTA is
   // "Publish" (promote the draft to an immutable version), not Share.
   const isDraft = mode === 'draft';
-  // Author vs reader (carried outside the byte-frozen __TDOC__ config). Only the
+  // Author vs reader (carried outside the byte-frozen __ODOC__ config). Only the
   // author (write token) may mint/rotate a share code, so the Share CTA is shown
   // only to them — a reader clicking it would 404 on POST /share.
   const isAuthor = !!(window.__ODOC_CAP__ && window.__ODOC_CAP__.isAuthor);
   // Fork mode renders the doc read-only with comments mirrored from the
-  // embedded #tdoc-fork-comments JSON. No /api calls, no auth, no publish.
+  // embedded #odoc-fork-comments JSON. No /api calls, no auth, no publish.
   // The original published slug is in cfg.originalSlug so we can label it.
   let identity = cfg.identity || null;
-  let isOwner = !!cfg.isOwner; // true only for the configured TDOC_OWNER
+  let isOwner = !!cfg.isOwner; // true only for the configured ODOC_OWNER
   // Whether a login provider is configured server-side. When false, commenting is
   // anonymous (no sign-in UI, no gating). A future Octo unified login flips this
   // on and the existing identity/session paths light up unchanged.
@@ -54,7 +54,7 @@
   }
 
   // ========== UI selector registry ==========
-  // One source of truth for "is this part of the tdoc overlay UI?".
+  // One source of truth for "is this part of the odoc overlay UI?".
   //   UI_CONTAINERS — top-level overlay regions: bar, popups, comment column,
   //                   margin cards, modals, footer. Use these when finding the
   //                   doc's article element or stripping the overlay from a
@@ -62,18 +62,18 @@
   //   UI_ALL        — UI_CONTAINERS plus per-element decorations (anchor marks,
   //                   outlines, hover affordances, menus). Use this for event
   //                   delegation guards ("did the user click *our* chrome?").
-  const UI_CONTAINERS = '.tdoc-bar, .tdoc-oldver-strip, .tdoc-popup, .tdoc-margin-comment, .tdoc-modal-bg, #tdoc-comment-layer, .tdoc-footer, .tdoc-reanchor-banner';
-  const UI_ALL = UI_CONTAINERS + ', .tdoc-anchor-mark, .tdoc-element-outline, .tdoc-hover-outline, .tdoc-comment-pill, .tdoc-emoji-picker, .tdoc-secondary-menu';
+  const UI_CONTAINERS = '.odoc-bar, .odoc-oldver-strip, .odoc-popup, .odoc-margin-comment, .odoc-modal-bg, #odoc-comment-layer, .odoc-footer, .odoc-reanchor-banner';
+  const UI_ALL = UI_CONTAINERS + ', .odoc-anchor-mark, .odoc-element-outline, .odoc-hover-outline, .odoc-comment-pill, .odoc-emoji-picker, .odoc-secondary-menu';
   //   UI_TEXT       — every overlay element that carries its own visible text
   //                   AND lives outside the article (appended to <body>). Used
   //                   ONLY to exclude our chrome from the flattened text
   //                   projection, so saved anchor context never captures UI
   //                   strings (the FAB's "💬 0", the re-anchor banner, the
   //                   Comment pill, menus). This is UI_CONTAINERS plus the
-  //                   text-bearing body-level widgets — but NOT .tdoc-anchor-mark,
+  //                   text-bearing body-level widgets — but NOT .odoc-anchor-mark,
   //                   which wraps real document text (surroundContents) and must
   //                   stay in the projection.
-  const UI_TEXT = UI_CONTAINERS + ', .tdoc-fab, .tdoc-comment-pill, .tdoc-emoji-picker, .tdoc-secondary-menu';
+  const UI_TEXT = UI_CONTAINERS + ', .odoc-fab, .odoc-comment-pill, .odoc-emoji-picker, .odoc-secondary-menu';
 
   // ========== Geometry helpers ==========
   // Position `box` as an absolutely-positioned overlay around `el`, inflated
@@ -92,7 +92,7 @@
   const css = `
   /* ========== Design tokens ==========
      Single source of truth for the overlay's visual identity. Values mirror
-     DESIGN.md (repo root) — keep the two in sync. Every .tdoc-* chrome rule
+     DESIGN.md (repo root) — keep the two in sync. Every .odoc-* chrome rule
      below references these vars rather than hardcoding hex, so a rebrand is a
      one-block edit. */
   :root {
@@ -150,37 +150,37 @@
   /* Keyboard focus: one consistent ring across all interactive chrome, so
      tabbing through the overlay is visible and accessible. :focus-visible only
      shows it for keyboard users, not on mouse click. */
-  .tdoc-bar button:focus-visible, .tdoc-version-toggle:focus-visible,
-  .tdoc-chip:focus-visible, .tdoc-menu button:focus-visible,
-  .tdoc-secondary-menu button:focus-visible, .tdoc-version-menu button:focus-visible,
-  .tdoc-emoji-picker button:focus-visible, .tdoc-react-chip:focus-visible,
-  .tdoc-react-add:focus-visible, .tdoc-reanchor-btn:focus-visible,
-  .tdoc-reply-toggle:focus-visible, .tdoc-comment-pill:focus-visible,
-  .tdoc-fab:focus-visible, .tdoc-margin-comment .copy-md:focus-visible,
-  .tdoc-margin-comment .del:focus-visible, .tdoc-popup .submit:focus-visible,
-  .tdoc-popup .head .x:focus-visible, .tdoc-reply-submit:focus-visible,
-  .tdoc-modal button:focus-visible {
+  .odoc-bar button:focus-visible, .odoc-version-toggle:focus-visible,
+  .odoc-chip:focus-visible, .odoc-menu button:focus-visible,
+  .odoc-secondary-menu button:focus-visible, .odoc-version-menu button:focus-visible,
+  .odoc-emoji-picker button:focus-visible, .odoc-react-chip:focus-visible,
+  .odoc-react-add:focus-visible, .odoc-reanchor-btn:focus-visible,
+  .odoc-reply-toggle:focus-visible, .odoc-comment-pill:focus-visible,
+  .odoc-fab:focus-visible, .odoc-margin-comment .copy-md:focus-visible,
+  .odoc-margin-comment .del:focus-visible, .odoc-popup .submit:focus-visible,
+  .odoc-popup .head .x:focus-visible, .odoc-reply-submit:focus-visible,
+  .odoc-modal button:focus-visible {
     outline: none !important;
     box-shadow: var(--octo-focus-ring) !important;
   }
   /* Default: text is selectable everywhere in the document body, so users
      can highlight prose inside any container (including custom-div-wrapped
      artifacts like transcript panes). UI chrome opts out explicitly via
-     .tdoc-* selectors below. Media artifacts (img/svg/canvas/video) are
+     .odoc-* selectors below. Media artifacts (img/svg/canvas/video) are
      non-selectable by their nature so they don't need an exception. */
   body { padding-top: 49px !important; padding-bottom: 24px; -webkit-user-select: text; user-select: text; }
-  body .tdoc-bar, body .tdoc-bar *, body #tdoc-comment-layer, body #tdoc-comment-layer *, body .tdoc-hover-outline, body .tdoc-comment-pill, body .tdoc-emoji-picker, body .tdoc-secondary-menu, body .tdoc-anchor-mark.tdoc-anchor-mark-element, body .tdoc-drag-marquee, body .tdoc-modal, body .tdoc-modal * { -webkit-user-select: none !important; user-select: none !important; }
-  body .tdoc-modal .code, body .tdoc-modal textarea, body .tdoc-modal input { -webkit-user-select: text !important; user-select: text !important; }
+  body .odoc-bar, body .odoc-bar *, body #odoc-comment-layer, body #odoc-comment-layer *, body .odoc-hover-outline, body .odoc-comment-pill, body .odoc-emoji-picker, body .odoc-secondary-menu, body .odoc-anchor-mark.odoc-anchor-mark-element, body .odoc-drag-marquee, body .odoc-modal, body .odoc-modal * { -webkit-user-select: none !important; user-select: none !important; }
+  body .odoc-modal .code, body .odoc-modal textarea, body .odoc-modal input { -webkit-user-select: text !important; user-select: text !important; }
   /* Reserve the 320px comment column on the right. The article centers
      itself inside the remaining (viewport - 320px) space via margin auto
      (applied below in :where()). Adding a left padding keeps it from
      hugging the screen edge on wide windows. */
-  body.tdoc-has-comments:not(.tdoc-narrow) { padding-right: 320px !important; padding-left: 80px !important; }
-  body.tdoc-narrow { padding-right: 0 !important; }
+  body.odoc-has-comments:not(.odoc-narrow) { padding-right: 320px !important; padding-left: 80px !important; }
+  body.odoc-narrow { padding-right: 0 !important; }
   /* Center the article container in the reading column. :where() so any
      doc-defined margin wins. Applies only on wide layouts; narrow mode
      uses the full body width via the drawer. */
-  body:not(.tdoc-narrow) :where(body > .wrap, body > main, body > article, body > .content, body > .container) {
+  body:not(.odoc-narrow) :where(body > .wrap, body > main, body > article, body > .content, body > .container) {
     margin-left: auto !important;
     margin-right: auto !important;
   }
@@ -189,12 +189,12 @@
      edge. Scoped with :not(:has(wrapper)) so wrapped docs (handled above) aren't
      double-inset, and skipped when comments reserve the right column (that path
      already pads the body) or in narrow/drawer mode. */
-  body:not(.tdoc-has-comments):not(.tdoc-narrow):not(:has(> .wrap, > main, > article, > .content, > .container)) {
+  body:not(.odoc-has-comments):not(.odoc-narrow):not(:has(> .wrap, > main, > article, > .content, > .container)) {
     padding-left: max(24px, calc((100% - 720px) / 2)) !important;
     padding-right: max(24px, calc((100% - 720px) / 2)) !important;
     padding-top: 73px !important;
   }
-  body.tdoc-narrow:not(:has(> .wrap, > main, > article, > .content, > .container)) {
+  body.odoc-narrow:not(:has(> .wrap, > main, > article, > .content, > .container)) {
     padding-left: 20px !important;
     padding-right: 20px !important;
   }
@@ -204,7 +204,7 @@
      margins shrink with it; once they hit the article's min width, narrow-mode
      takes over and the drawer kicks in. */
   /* ========== Default doc template (single typography template) ==========
-     One canonical look for every tdoc doc: same font stack, sizes, spacing,
+     One canonical look for every odoc doc: same font stack, sizes, spacing,
      headings, lists, code, tables, quotes. Wrapped in :where() so a doc that
      truly needs a different aesthetic can override per element. Future
      templates would live alongside this block, switched by a body class. */
@@ -260,7 +260,7 @@
   }
   /* Doc imagery only — exclude overlay UI so icons inside the bar / chips /
      buttons / cards keep their inline layout instead of stacking to 16px tall. */
-  :where(body img, body svg, body canvas, body video):not(.tdoc-bar *):not(.tdoc-margin-comment *):not(.tdoc-popup *):not(.tdoc-modal-bg *):not(.tdoc-chip *):not(.tdoc-fab *):not(#tdoc-comment-layer *):not(.tdoc-footer *) { display: block; margin: 16px auto; border-radius: var(--octo-radius-md); }
+  :where(body img, body svg, body canvas, body video):not(.odoc-bar *):not(.odoc-margin-comment *):not(.odoc-popup *):not(.odoc-modal-bg *):not(.odoc-chip *):not(.odoc-fab *):not(#odoc-comment-layer *):not(.odoc-footer *) { display: block; margin: 16px auto; border-radius: var(--octo-radius-md); }
   /* Reading column for the doc container. :where() so a doc's own rule wins. */
   :where(body > .wrap, body > main, body > article, body > .content, body > .container) {
     max-width: 720px;
@@ -300,141 +300,141 @@
      No borders on individual buttons — uses hover background instead, so
      the bar reads as a clean strip rather than a row of chiclets.
      Light theme to match the doc body. */
-  .tdoc-bar { position: fixed; top: 0; left: 0; right: 0; height: 48px; background: var(--octo-surface); color: var(--octo-ink); display: flex; align-items: center; padding: 0 12px; font: 13px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; z-index: 999999; gap: 8px; border-bottom: 1px solid var(--octo-border); box-shadow: var(--octo-shadow-sm); }
-  .tdoc-bar-left { display: flex; align-items: center; gap: 6px; min-width: 0; flex-shrink: 1; }
-  .tdoc-bar-center { flex: 1 1 auto; display: flex; justify-content: center; min-width: 0; padding: 0 8px; }
-  .tdoc-bar-right { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
+  .odoc-bar { position: fixed; top: 0; left: 0; right: 0; height: 48px; background: var(--octo-surface); color: var(--octo-ink); display: flex; align-items: center; padding: 0 12px; font: 13px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; z-index: 999999; gap: 8px; border-bottom: 1px solid var(--octo-border); box-shadow: var(--octo-shadow-sm); }
+  .odoc-bar-left { display: flex; align-items: center; gap: 6px; min-width: 0; flex-shrink: 1; }
+  .odoc-bar-center { flex: 1 1 auto; display: flex; justify-content: center; min-width: 0; padding: 0 8px; }
+  .odoc-bar-right { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
 
   /* Workspace mark — token-driven o·d monogram (inline SVG). Clicks → /. */
-  .tdoc-bar-mark { display: inline-flex; align-items: center; justify-content: center; height: 30px; width: 30px; padding: 3px !important; border-radius: var(--octo-radius-md); background: transparent; cursor: pointer; flex-shrink: 0; border: none; transition: background .12s; }
-  .tdoc-bar-mark svg { width: 24px; height: 24px; display: block; }
-  .tdoc-bar-mark:hover { background: var(--octo-surface-subtle); }
+  .odoc-bar-mark { display: inline-flex; align-items: center; justify-content: center; height: 30px; width: 30px; padding: 3px !important; border-radius: var(--octo-radius-md); background: transparent; cursor: pointer; flex-shrink: 0; border: none; transition: background .12s; }
+  .odoc-bar-mark svg { width: 24px; height: 24px; display: block; }
+  .odoc-bar-mark:hover { background: var(--octo-surface-subtle); }
 
   /* Breadcrumb: workspace · slug · v3 — separated by " / ". */
-  .tdoc-bar .crumb { color: var(--octo-bar-text); font-weight: 500; padding: 4px 6px; border-radius: var(--octo-radius-md); max-width: 24ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .tdoc-bar .crumb-sep { color: var(--octo-faint); user-select: none; padding: 0 1px; }
-  .tdoc-bar .doc-title { color: var(--octo-ink); font-weight: 600; font-size: 14px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .odoc-bar .crumb { color: var(--octo-bar-text); font-weight: 500; padding: 4px 6px; border-radius: var(--octo-radius-md); max-width: 24ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .odoc-bar .crumb-sep { color: var(--octo-faint); user-select: none; padding: 0 1px; }
+  .odoc-bar .doc-title { color: var(--octo-ink); font-weight: 600; font-size: 14px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
   /* Default action button — icon and/or label, no border, hover bg only. */
-  .tdoc-bar button { background: transparent; border: none; color: var(--octo-bar-text); padding: 6px 8px; border-radius: var(--octo-radius-md); font: inherit; cursor: pointer; transition: background .12s, color .12s; display: inline-flex; align-items: center; gap: 6px; }
-  .tdoc-bar button:hover { background: var(--octo-surface-subtle); color: var(--octo-ink); }
-  .tdoc-bar button:disabled { opacity: 0.5; cursor: not-allowed; }
-  .tdoc-bar button svg { flex-shrink: 0; }
+  .odoc-bar button { background: transparent; border: none; color: var(--octo-bar-text); padding: 6px 8px; border-radius: var(--octo-radius-md); font: inherit; cursor: pointer; transition: background .12s, color .12s; display: inline-flex; align-items: center; gap: 6px; }
+  .odoc-bar button:hover { background: var(--octo-surface-subtle); color: var(--octo-ink); }
+  .odoc-bar button:disabled { opacity: 0.5; cursor: not-allowed; }
+  .odoc-bar button svg { flex-shrink: 0; }
 
   /* Primary CTA (Share / Publish) — filled blue button at the right. */
-  .tdoc-bar button.primary { background: var(--octo-primary); color: var(--octo-surface); padding: 7px 14px; font-weight: 600; box-shadow: 0 1px 2px rgba(22,82,240,0.2); }
-  .tdoc-bar button.primary:hover { background: var(--octo-primary-hover); color: var(--octo-surface); box-shadow: 0 2px 8px rgba(22,82,240,0.28); }
+  .odoc-bar button.primary { background: var(--octo-primary); color: var(--octo-surface); padding: 7px 14px; font-weight: 600; box-shadow: 0 1px 2px rgba(22,82,240,0.2); }
+  .odoc-bar button.primary:hover { background: var(--octo-primary-hover); color: var(--octo-surface); box-shadow: 0 2px 8px rgba(22,82,240,0.28); }
 
   /* Version picker chip — pill in the left breadcrumb. */
-  .tdoc-version-wrap { position: relative; display: inline-block; flex-shrink: 0; }
-  .tdoc-version-toggle { background: var(--octo-surface-subtle) !important; color: var(--octo-ink) !important; padding: 3px 10px !important; border-radius: var(--octo-radius-pill) !important; font: 12px ui-monospace, "SF Mono", Menlo, monospace !important; }
-  .tdoc-version-toggle:hover { background: var(--octo-surface-hover) !important; }
+  .odoc-version-wrap { position: relative; display: inline-block; flex-shrink: 0; }
+  .odoc-version-toggle { background: var(--octo-surface-subtle) !important; color: var(--octo-ink) !important; padding: 3px 10px !important; border-radius: var(--octo-radius-pill) !important; font: 12px ui-monospace, "SF Mono", Menlo, monospace !important; }
+  .odoc-version-toggle:hover { background: var(--octo-surface-hover) !important; }
 
   /* Dropdown menus — light surface to match the bar. */
-  .tdoc-menu, .tdoc-secondary-menu, .tdoc-version-menu { display: none; position: absolute; background: var(--octo-surface); border: 1px solid var(--octo-border); border-radius: var(--octo-radius-lg); padding: 4px; box-shadow: var(--octo-shadow-menu); z-index: 1000000; min-width: 160px; }
-  .tdoc-version-menu { top: calc(100% + 6px); left: 0; max-height: 60vh; overflow-y: auto; }
-  .tdoc-menu { top: calc(100% + 6px); right: 0; min-width: 180px; }
-  .tdoc-secondary-menu { top: calc(100% + 6px); right: 0; }
-  .tdoc-menu.open, .tdoc-secondary-menu.open, .tdoc-version-menu.open { display: block; }
-  .tdoc-menu button, .tdoc-secondary-menu button, .tdoc-version-menu button { display: block; width: 100%; text-align: left; padding: 7px 10px; border-radius: var(--octo-radius-sm); color: var(--octo-ink); font: 13px system-ui, sans-serif; }
-  .tdoc-version-menu button { font-family: ui-monospace, "SF Mono", Menlo, monospace; }
-  .tdoc-menu button:hover, .tdoc-secondary-menu button:hover, .tdoc-version-menu button:hover { background: var(--octo-surface-subtle); }
-  .tdoc-version-menu button.current { color: var(--octo-primary); font-weight: 600; }
+  .odoc-menu, .odoc-secondary-menu, .odoc-version-menu { display: none; position: absolute; background: var(--octo-surface); border: 1px solid var(--octo-border); border-radius: var(--octo-radius-lg); padding: 4px; box-shadow: var(--octo-shadow-menu); z-index: 1000000; min-width: 160px; }
+  .odoc-version-menu { top: calc(100% + 6px); left: 0; max-height: 60vh; overflow-y: auto; }
+  .odoc-menu { top: calc(100% + 6px); right: 0; min-width: 180px; }
+  .odoc-secondary-menu { top: calc(100% + 6px); right: 0; }
+  .odoc-menu.open, .odoc-secondary-menu.open, .odoc-version-menu.open { display: block; }
+  .odoc-menu button, .odoc-secondary-menu button, .odoc-version-menu button { display: block; width: 100%; text-align: left; padding: 7px 10px; border-radius: var(--octo-radius-sm); color: var(--octo-ink); font: 13px system-ui, sans-serif; }
+  .odoc-version-menu button { font-family: ui-monospace, "SF Mono", Menlo, monospace; }
+  .odoc-menu button:hover, .odoc-secondary-menu button:hover, .odoc-version-menu button:hover { background: var(--octo-surface-subtle); }
+  .odoc-version-menu button.current { color: var(--octo-primary); font-weight: 600; }
 
-  .tdoc-menu-wrap { position: relative; display: inline-block; }
+  .odoc-menu-wrap { position: relative; display: inline-block; }
   /* Overflow ⋯ button shows on narrow viewports. */
-  .tdoc-bar .tdoc-secondary-toggle { display: none; padding: 6px 10px; }
+  .odoc-bar .odoc-secondary-toggle { display: none; padding: 6px 10px; }
 
   /* Identity chip — avatar + name (name hides on narrow). */
-  .tdoc-chip { display: inline-flex; align-items: center; gap: 8px; padding: 3px 12px 3px 3px; background: var(--octo-surface-subtle); border-radius: var(--octo-radius-pill); cursor: pointer; color: var(--octo-ink); font: inherit; border: none; }
-  .tdoc-chip:hover { background: var(--octo-surface-hover); }
-  .tdoc-chip img { width: 26px; height: 26px; border-radius: 50%; }
-  .tdoc-chip .name { font-size: 13px; font-weight: 500; }
-  .tdoc-chip.signin { padding: 7px 14px; background: var(--octo-primary); color: var(--octo-surface); font-weight: 600; }
-  .tdoc-chip.signin:hover { background: var(--octo-primary-hover); }
+  .odoc-chip { display: inline-flex; align-items: center; gap: 8px; padding: 3px 12px 3px 3px; background: var(--octo-surface-subtle); border-radius: var(--octo-radius-pill); cursor: pointer; color: var(--octo-ink); font: inherit; border: none; }
+  .odoc-chip:hover { background: var(--octo-surface-hover); }
+  .odoc-chip img { width: 26px; height: 26px; border-radius: 50%; }
+  .odoc-chip .name { font-size: 13px; font-weight: 500; }
+  .odoc-chip.signin { padding: 7px 14px; background: var(--octo-primary); color: var(--octo-surface); font-weight: 600; }
+  .odoc-chip.signin:hover { background: var(--octo-primary-hover); }
 
   /* Comment cards */
-  #tdoc-comment-layer { position: absolute; top: 0; left: 0; width: 100%; pointer-events: none; z-index: 999996; }
-  .tdoc-margin-comment { position: absolute; width: 280px; background: var(--octo-surface); border: 1px solid var(--octo-border); border-radius: var(--octo-radius-lg); padding: 12px; box-shadow: var(--octo-shadow-card); font: 13px system-ui, sans-serif; transition: box-shadow .15s, transform .15s, border-color .15s; z-index: 999996; pointer-events: auto; }
-  .tdoc-margin-comment:hover:not(.active) { box-shadow: var(--octo-shadow-menu); }
-  .tdoc-margin-comment.active { box-shadow: var(--octo-shadow-active); border-color: var(--octo-primary); }
-  .tdoc-margin-comment.tdoc-unanchored { border-style: dashed; }
-  .tdoc-reanchor-btn { display: none; font-size: 10px; color: var(--octo-muted); text-transform: uppercase; letter-spacing: 0.05em; margin: 0 0 6px; cursor: pointer; background: none; border: none; padding: 0; text-align: left; }
-  .tdoc-margin-comment.tdoc-unanchored .tdoc-reanchor-btn { display: block; }
+  #odoc-comment-layer { position: absolute; top: 0; left: 0; width: 100%; pointer-events: none; z-index: 999996; }
+  .odoc-margin-comment { position: absolute; width: 280px; background: var(--octo-surface); border: 1px solid var(--octo-border); border-radius: var(--octo-radius-lg); padding: 12px; box-shadow: var(--octo-shadow-card); font: 13px system-ui, sans-serif; transition: box-shadow .15s, transform .15s, border-color .15s; z-index: 999996; pointer-events: auto; }
+  .odoc-margin-comment:hover:not(.active) { box-shadow: var(--octo-shadow-menu); }
+  .odoc-margin-comment.active { box-shadow: var(--octo-shadow-active); border-color: var(--octo-primary); }
+  .odoc-margin-comment.odoc-unanchored { border-style: dashed; }
+  .odoc-reanchor-btn { display: none; font-size: 10px; color: var(--octo-muted); text-transform: uppercase; letter-spacing: 0.05em; margin: 0 0 6px; cursor: pointer; background: none; border: none; padding: 0; text-align: left; }
+  .odoc-margin-comment.odoc-unanchored .odoc-reanchor-btn { display: block; }
   /* Anchored cards also expose a "move anchor" action when they're active. */
-  .tdoc-margin-comment.active .tdoc-reanchor-btn { display: block; }
-  .tdoc-reanchor-btn:hover { color: var(--octo-primary); }
+  .odoc-margin-comment.active .odoc-reanchor-btn { display: block; }
+  .odoc-reanchor-btn:hover { color: var(--octo-primary); }
   /* Label swap: "unanchored" wording on unanchored cards, "move anchor" on
      active anchored cards. */
-  .tdoc-reanchor-btn .tdoc-reanchor-unanchored,
-  .tdoc-reanchor-btn .tdoc-reanchor-anchored { display: none; }
-  .tdoc-margin-comment.tdoc-unanchored .tdoc-reanchor-btn .tdoc-reanchor-unanchored { display: inline; }
-  .tdoc-margin-comment:not(.tdoc-unanchored).active .tdoc-reanchor-btn .tdoc-reanchor-anchored { display: inline; }
+  .odoc-reanchor-btn .odoc-reanchor-unanchored,
+  .odoc-reanchor-btn .odoc-reanchor-anchored { display: none; }
+  .odoc-margin-comment.odoc-unanchored .odoc-reanchor-btn .odoc-reanchor-unanchored { display: inline; }
+  .odoc-margin-comment:not(.odoc-unanchored).active .odoc-reanchor-btn .odoc-reanchor-anchored { display: inline; }
   /* Container for the anchor action buttons. */
-  .tdoc-anchor-actions { display: flex; gap: 12px; align-items: center; margin: 0 0 6px; }
+  .odoc-anchor-actions { display: flex; gap: 12px; align-items: center; margin: 0 0 6px; }
   /* While re-anchor mode is active, dim the rest of the UI and prompt the
      user to select. */
   /* Re-anchor banner: pinned below the bar with three actions. Visible
-     only while body.tdoc-reanchoring is set. */
-  .tdoc-reanchor-banner { display: none; position: fixed; top: 56px; left: 50%; transform: translateX(-50%); background: var(--octo-primary); color: var(--octo-surface); padding: 6px 10px 6px 14px; border-radius: var(--octo-radius-pill); font: 12px system-ui; z-index: 999999; align-items: center; gap: 6px; box-shadow: var(--octo-shadow-fab); }
-  body.tdoc-reanchoring .tdoc-reanchor-banner { display: inline-flex; }
-  .tdoc-reanchor-banner .label { padding: 0 4px; }
-  .tdoc-reanchor-banner button { background: rgba(255,255,255,0.15); border: none; color: var(--octo-surface); padding: 4px 10px; border-radius: var(--octo-radius-pill); font: 12px system-ui; cursor: pointer; }
-  .tdoc-reanchor-banner button:hover { background: rgba(255,255,255,0.28); }
-  .tdoc-reanchor-banner button.danger { background: rgba(255,255,255,0.15); }
-  .tdoc-reanchor-banner button.danger:hover { background: var(--octo-danger); }
+     only while body.odoc-reanchoring is set. */
+  .odoc-reanchor-banner { display: none; position: fixed; top: 56px; left: 50%; transform: translateX(-50%); background: var(--octo-primary); color: var(--octo-surface); padding: 6px 10px 6px 14px; border-radius: var(--octo-radius-pill); font: 12px system-ui; z-index: 999999; align-items: center; gap: 6px; box-shadow: var(--octo-shadow-fab); }
+  body.odoc-reanchoring .odoc-reanchor-banner { display: inline-flex; }
+  .odoc-reanchor-banner .label { padding: 0 4px; }
+  .odoc-reanchor-banner button { background: rgba(255,255,255,0.15); border: none; color: var(--octo-surface); padding: 4px 10px; border-radius: var(--octo-radius-pill); font: 12px system-ui; cursor: pointer; }
+  .odoc-reanchor-banner button:hover { background: rgba(255,255,255,0.28); }
+  .odoc-reanchor-banner button.danger { background: rgba(255,255,255,0.15); }
+  .odoc-reanchor-banner button.danger:hover { background: var(--octo-danger); }
   /* Old-version strip — a thin, quiet bar just under the top bar shown when
      the viewer is on a non-latest version. Single-direction nudge: it only
      points forward to the latest version. Hidden by default; the bar-setup
      code reveals it (and adds the body padding) only when version < latest. */
-  .tdoc-oldver-strip { display: none; position: fixed; top: 49px; left: 0; right: 0; height: 28px; background: #fbf6e9; color: #6b5e3a; border-bottom: 1px solid #efe6cd; font: 12px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; align-items: center; justify-content: center; gap: 6px; z-index: 999998; padding: 0 12px; }
-  body.tdoc-has-oldver-strip .tdoc-oldver-strip { display: flex; }
-  body.tdoc-has-oldver-strip { padding-top: 77px !important; }
-  .tdoc-oldver-strip a { color: #8a6d1f; font-weight: 600; text-decoration: none; border-bottom: 1px solid currentColor; }
-  .tdoc-oldver-strip a:hover { color: #6b5413; }
+  .odoc-oldver-strip { display: none; position: fixed; top: 49px; left: 0; right: 0; height: 28px; background: #fbf6e9; color: #6b5e3a; border-bottom: 1px solid #efe6cd; font: 12px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; align-items: center; justify-content: center; gap: 6px; z-index: 999998; padding: 0 12px; }
+  body.odoc-has-oldver-strip .odoc-oldver-strip { display: flex; }
+  body.odoc-has-oldver-strip { padding-top: 77px !important; }
+  .odoc-oldver-strip a { color: #8a6d1f; font-weight: 600; text-decoration: none; border-bottom: 1px solid currentColor; }
+  .odoc-oldver-strip a:hover { color: #6b5413; }
   /* Ghost marker — a faint horizontal line at the unanchored comment's
      original Y position, so the user can see where the deleted text used
      to be. Stays in document coordinates. */
-  .tdoc-ghost-marker { position: absolute; left: 0; right: 320px; height: 0; border-top: 1px dashed #d4d4d4; pointer-events: none; z-index: 999990; }
-  body.tdoc-narrow .tdoc-ghost-marker { display: none; }
-  .tdoc-margin-comment .author { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
-  .tdoc-margin-comment .author img { width: 24px; height: 24px; border-radius: 50%; }
-  .tdoc-margin-comment .author .login { font-weight: 600; color: var(--octo-ink-strong); font-size: 13px; }
-  .tdoc-margin-comment .author .anon { color: var(--octo-muted); font-style: italic; }
-  /* Agent identity — a simple "⚡ tdoc-agent" badge in place of an avatar.
+  .odoc-ghost-marker { position: absolute; left: 0; right: 320px; height: 0; border-top: 1px dashed #d4d4d4; pointer-events: none; z-index: 999990; }
+  body.odoc-narrow .odoc-ghost-marker { display: none; }
+  .odoc-margin-comment .author { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+  .odoc-margin-comment .author img { width: 24px; height: 24px; border-radius: 50%; }
+  .odoc-margin-comment .author .login { font-weight: 600; color: var(--octo-ink-strong); font-size: 13px; }
+  .odoc-margin-comment .author .anon { color: var(--octo-muted); font-style: italic; }
+  /* Agent identity — a simple "⚡ odoc-agent" badge in place of an avatar.
      The status chip on agent replies (applied / partial / question) lets
      the user tell at a glance whether their comment was addressed. */
-  .tdoc-agent-badge { display: inline-flex; width: 24px; height: 24px; border-radius: 50%; background: var(--octo-ink-strong); color: var(--octo-surface); align-items: center; justify-content: center; font-size: 13px; }
-  .tdoc-agent-reply { background: var(--octo-surface-subtle); border-left: 3px solid var(--octo-ink-strong); padding-left: 8px; }
-  .tdoc-agent-status { display: inline-block; font-size: 11px; padding: 1px 8px; border-radius: var(--octo-radius-pill); margin: 0 0 6px; font-weight: 600; }
-  .tdoc-agent-status-applied { background: var(--octo-ok-bg); color: var(--octo-ok-fg); }
-  .tdoc-agent-status-partial { background: var(--octo-warn-bg); color: var(--octo-warn-fg); }
-  .tdoc-agent-status-question { background: var(--octo-ask-bg); color: var(--octo-ask-fg); }
-  .tdoc-margin-comment .text { color: var(--octo-ink-strong); line-height: 1.45; word-wrap: break-word; }
-  .tdoc-margin-comment .meta { font-size: 11px; color: var(--octo-muted-dark); margin-top: 8px; display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
-  .tdoc-margin-comment .meta > span:first-child { flex: 1 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .tdoc-margin-comment .del { cursor: pointer; color: var(--octo-danger); }
-  .tdoc-margin-comment .del:hover { text-decoration: underline; }
-  .tdoc-margin-comment .actions { display: inline-flex; gap: 2px; align-items: center; flex-shrink: 0; }
-  .tdoc-margin-comment .copy-md { cursor: pointer; color: var(--octo-muted); display: inline-flex; align-items: center; padding: 3px; border-radius: var(--octo-radius-sm); transition: background .12s, color .12s; }
-  .tdoc-margin-comment .copy-md:hover { color: var(--octo-primary); background: var(--octo-surface-subtle); }
-  .tdoc-margin-comment .copy-md svg { width: 14px; height: 14px; display: block; }
-  .tdoc-margin-comment .tdoc-reply-toggle { cursor: pointer; color: var(--octo-primary); font-weight: 500; padding: 2px 7px; border-radius: var(--octo-radius-sm); transition: background .12s; }
-  .tdoc-margin-comment .tdoc-reply-toggle:hover { background: var(--octo-surface-subtle); }
+  .odoc-agent-badge { display: inline-flex; width: 24px; height: 24px; border-radius: 50%; background: var(--octo-ink-strong); color: var(--octo-surface); align-items: center; justify-content: center; font-size: 13px; }
+  .odoc-agent-reply { background: var(--octo-surface-subtle); border-left: 3px solid var(--octo-ink-strong); padding-left: 8px; }
+  .odoc-agent-status { display: inline-block; font-size: 11px; padding: 1px 8px; border-radius: var(--octo-radius-pill); margin: 0 0 6px; font-weight: 600; }
+  .odoc-agent-status-applied { background: var(--octo-ok-bg); color: var(--octo-ok-fg); }
+  .odoc-agent-status-partial { background: var(--octo-warn-bg); color: var(--octo-warn-fg); }
+  .odoc-agent-status-question { background: var(--octo-ask-bg); color: var(--octo-ask-fg); }
+  .odoc-margin-comment .text { color: var(--octo-ink-strong); line-height: 1.45; word-wrap: break-word; }
+  .odoc-margin-comment .meta { font-size: 11px; color: var(--octo-muted-dark); margin-top: 8px; display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+  .odoc-margin-comment .meta > span:first-child { flex: 1 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .odoc-margin-comment .del { cursor: pointer; color: var(--octo-danger); }
+  .odoc-margin-comment .del:hover { text-decoration: underline; }
+  .odoc-margin-comment .actions { display: inline-flex; gap: 2px; align-items: center; flex-shrink: 0; }
+  .odoc-margin-comment .copy-md { cursor: pointer; color: var(--octo-muted); display: inline-flex; align-items: center; padding: 3px; border-radius: var(--octo-radius-sm); transition: background .12s, color .12s; }
+  .odoc-margin-comment .copy-md:hover { color: var(--octo-primary); background: var(--octo-surface-subtle); }
+  .odoc-margin-comment .copy-md svg { width: 14px; height: 14px; display: block; }
+  .odoc-margin-comment .odoc-reply-toggle { cursor: pointer; color: var(--octo-primary); font-weight: 500; padding: 2px 7px; border-radius: var(--octo-radius-sm); transition: background .12s; }
+  .odoc-margin-comment .odoc-reply-toggle:hover { background: var(--octo-surface-subtle); }
 
   /* Reactions + emoji picker */
-  .tdoc-reactions { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; align-items: center; }
-  .tdoc-react-chip { position: relative; display: inline-flex; align-items: center; gap: 4px; font: 12px system-ui; background: var(--octo-surface-subtle); border: 1px solid var(--octo-border); border-radius: var(--octo-radius-pill); padding: 2px 8px; cursor: pointer; color: var(--octo-ink-soft); transition: background .12s, border-color .12s; }
-  .tdoc-react-chip:hover { background: var(--octo-surface-hover); }
-  .tdoc-react-chip.mine { background: var(--octo-mine-bg); border-color: var(--octo-primary); color: var(--octo-primary); }
+  .odoc-reactions { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; align-items: center; }
+  .odoc-react-chip { position: relative; display: inline-flex; align-items: center; gap: 4px; font: 12px system-ui; background: var(--octo-surface-subtle); border: 1px solid var(--octo-border); border-radius: var(--octo-radius-pill); padding: 2px 8px; cursor: pointer; color: var(--octo-ink-soft); transition: background .12s, border-color .12s; }
+  .odoc-react-chip:hover { background: var(--octo-surface-hover); }
+  .odoc-react-chip.mine { background: var(--octo-mine-bg); border-color: var(--octo-primary); color: var(--octo-primary); }
   /* Agent reactions get a tinted background so users can scan a long doc
      and spot which comments the agent has already responded to. */
-  .tdoc-react-chip.agent { background: var(--octo-agent-bg); border-color: var(--octo-agent-border); color: var(--octo-agent-fg); }
-  .tdoc-react-chip.agent.mine { background: var(--octo-agent-bg); border-color: var(--octo-agent-border); color: var(--octo-agent-fg); }
+  .odoc-react-chip.agent { background: var(--octo-agent-bg); border-color: var(--octo-agent-border); color: var(--octo-agent-fg); }
+  .odoc-react-chip.agent.mine { background: var(--octo-agent-bg); border-color: var(--octo-agent-border); color: var(--octo-agent-fg); }
   /* Custom reactors tooltip — shows the GitHub logins (or agent labels) of
      everyone who used this emoji. Native title= has ~1s delay; this is
      instant and styled to match the doc. */
-  .tdoc-react-chip[data-users]:hover::after {
+  .odoc-react-chip[data-users]:hover::after {
     content: attr(data-users);
     position: absolute;
     bottom: calc(100% + 6px);
@@ -450,66 +450,66 @@
     pointer-events: none;
     z-index: 999999;
   }
-  .tdoc-react-add { background: transparent; border: none; color: var(--octo-faint); padding: 3px; border-radius: var(--octo-radius-sm); cursor: pointer; line-height: 1; transition: color .12s, opacity .12s, background .12s; display: inline-flex; align-items: center; }
-  .tdoc-react-add svg { width: 16px; height: 16px; display: block; }
-  .tdoc-reactions .tdoc-react-add { opacity: 0; }
-  .tdoc-margin-comment:hover .tdoc-reactions .tdoc-react-add, .tdoc-reply:hover .tdoc-reactions .tdoc-react-add, .tdoc-reactions:has(.tdoc-react-chip) .tdoc-react-add { opacity: 1; }
-  .tdoc-react-add.inline svg { width: 14px; height: 14px; }
-  .tdoc-react-add.inline { opacity: 0.55; vertical-align: middle; }
-  .tdoc-react-add:hover { color: var(--octo-primary); opacity: 1; background: var(--octo-surface-subtle); }
-  .tdoc-emoji-picker { position: absolute; background: var(--octo-surface); border: 1px solid var(--octo-border); border-radius: var(--octo-radius-lg); padding: 6px; display: grid; grid-template-columns: repeat(6, 32px); gap: 2px; box-shadow: var(--octo-shadow-menu); z-index: 1000001; }
-  .tdoc-emoji-picker button { background: transparent; border: none; padding: 0; cursor: pointer; border-radius: var(--octo-radius-sm); width: 32px; height: 32px; font-size: 18px; line-height: 1; display: inline-flex; align-items: center; justify-content: center; }
-  .tdoc-emoji-picker button:hover { background: var(--octo-surface-subtle); }
-  .tdoc-emoji-picker button.tdoc-emoji-text { grid-column: span 6; height: auto; padding: 6px 8px; font-size: 12px; font-weight: 600; color: var(--octo-primary); }
-  .tdoc-emoji-picker button.tdoc-emoji-text:hover { background: var(--octo-mine-bg); }
+  .odoc-react-add { background: transparent; border: none; color: var(--octo-faint); padding: 3px; border-radius: var(--octo-radius-sm); cursor: pointer; line-height: 1; transition: color .12s, opacity .12s, background .12s; display: inline-flex; align-items: center; }
+  .odoc-react-add svg { width: 16px; height: 16px; display: block; }
+  .odoc-reactions .odoc-react-add { opacity: 0; }
+  .odoc-margin-comment:hover .odoc-reactions .odoc-react-add, .odoc-reply:hover .odoc-reactions .odoc-react-add, .odoc-reactions:has(.odoc-react-chip) .odoc-react-add { opacity: 1; }
+  .odoc-react-add.inline svg { width: 14px; height: 14px; }
+  .odoc-react-add.inline { opacity: 0.55; vertical-align: middle; }
+  .odoc-react-add:hover { color: var(--octo-primary); opacity: 1; background: var(--octo-surface-subtle); }
+  .odoc-emoji-picker { position: absolute; background: var(--octo-surface); border: 1px solid var(--octo-border); border-radius: var(--octo-radius-lg); padding: 6px; display: grid; grid-template-columns: repeat(6, 32px); gap: 2px; box-shadow: var(--octo-shadow-menu); z-index: 1000001; }
+  .odoc-emoji-picker button { background: transparent; border: none; padding: 0; cursor: pointer; border-radius: var(--octo-radius-sm); width: 32px; height: 32px; font-size: 18px; line-height: 1; display: inline-flex; align-items: center; justify-content: center; }
+  .odoc-emoji-picker button:hover { background: var(--octo-surface-subtle); }
+  .odoc-emoji-picker button.odoc-emoji-text { grid-column: span 6; height: auto; padding: 6px 8px; font-size: 12px; font-weight: 600; color: var(--octo-primary); }
+  .odoc-emoji-picker button.odoc-emoji-text:hover { background: var(--octo-mine-bg); }
 
   /* Replies + reply form */
-  .tdoc-replies-toggle { margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--octo-hairline); display: inline-flex; align-items: center; gap: 4px; cursor: pointer; font-size: 12px; color: var(--octo-primary); user-select: none; }
-  .tdoc-replies-toggle:hover { text-decoration: underline; }
-  .tdoc-replies-toggle .chev { transition: transform .15s; }
-  .tdoc-replies-toggle.open .chev { transform: rotate(90deg); }
-  .tdoc-replies { display: none; flex-direction: column; gap: 10px; margin-top: 10px; }
-  .tdoc-replies.open { display: flex; }
-  .tdoc-reply { padding-left: 12px; border-left: 2px solid var(--octo-border); }
-  .tdoc-reply .author { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
-  .tdoc-reply .author img { width: 18px; height: 18px; border-radius: 50%; }
-  .tdoc-reply .author .login { font-weight: 600; font-size: 12px; color: var(--octo-ink-strong); }
-  .tdoc-reply .author .anon { color: var(--octo-muted); font-style: italic; font-size: 12px; }
-  .tdoc-reply .text { color: var(--octo-ink); font-size: 13px; line-height: 1.4; word-wrap: break-word; }
-  .tdoc-reply .meta { font-size: 11px; color: var(--octo-muted-dark); margin-top: 4px; display: flex; justify-content: space-between; }
-  .tdoc-reply .del { cursor: pointer; color: var(--octo-danger); }
-  .tdoc-reply .del:hover { text-decoration: underline; }
-  .tdoc-reply-form { display: none; margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--octo-hairline); }
-  .tdoc-reply-form.open { display: block; }
-  .tdoc-reply-form textarea { width: 100%; min-height: 48px; box-sizing: border-box; padding: 8px 10px; font: 13px system-ui; line-height: 1.45; color: var(--octo-ink); border: 1px solid var(--octo-border); border-radius: var(--octo-radius-md); resize: vertical; outline: none; transition: border-color .12s, box-shadow .12s; }
-  .tdoc-reply-form textarea::placeholder { color: var(--octo-muted); }
-  .tdoc-reply-form textarea:focus { border-color: var(--octo-primary); box-shadow: var(--octo-focus-ring); }
-  .tdoc-reply-form-foot { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; }
-  .tdoc-reply-form-foot .hint { color: var(--octo-muted-dark); font-size: 11px; }
-  .tdoc-reply-form-foot .tdoc-reply-submit { background: var(--octo-primary); color: var(--octo-surface); border: none; border-radius: var(--octo-radius-md); padding: 6px 14px; font: 12px system-ui; font-weight: 600; cursor: pointer; box-shadow: 0 1px 2px rgba(22,82,240,0.2); transition: background .12s, box-shadow .12s; }
-  .tdoc-reply-form-foot .tdoc-reply-submit:hover { background: var(--octo-primary-hover); box-shadow: 0 2px 8px rgba(22,82,240,0.28); }
+  .odoc-replies-toggle { margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--octo-hairline); display: inline-flex; align-items: center; gap: 4px; cursor: pointer; font-size: 12px; color: var(--octo-primary); user-select: none; }
+  .odoc-replies-toggle:hover { text-decoration: underline; }
+  .odoc-replies-toggle .chev { transition: transform .15s; }
+  .odoc-replies-toggle.open .chev { transform: rotate(90deg); }
+  .odoc-replies { display: none; flex-direction: column; gap: 10px; margin-top: 10px; }
+  .odoc-replies.open { display: flex; }
+  .odoc-reply { padding-left: 12px; border-left: 2px solid var(--octo-border); }
+  .odoc-reply .author { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
+  .odoc-reply .author img { width: 18px; height: 18px; border-radius: 50%; }
+  .odoc-reply .author .login { font-weight: 600; font-size: 12px; color: var(--octo-ink-strong); }
+  .odoc-reply .author .anon { color: var(--octo-muted); font-style: italic; font-size: 12px; }
+  .odoc-reply .text { color: var(--octo-ink); font-size: 13px; line-height: 1.4; word-wrap: break-word; }
+  .odoc-reply .meta { font-size: 11px; color: var(--octo-muted-dark); margin-top: 4px; display: flex; justify-content: space-between; }
+  .odoc-reply .del { cursor: pointer; color: var(--octo-danger); }
+  .odoc-reply .del:hover { text-decoration: underline; }
+  .odoc-reply-form { display: none; margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--octo-hairline); }
+  .odoc-reply-form.open { display: block; }
+  .odoc-reply-form textarea { width: 100%; min-height: 48px; box-sizing: border-box; padding: 8px 10px; font: 13px system-ui; line-height: 1.45; color: var(--octo-ink); border: 1px solid var(--octo-border); border-radius: var(--octo-radius-md); resize: vertical; outline: none; transition: border-color .12s, box-shadow .12s; }
+  .odoc-reply-form textarea::placeholder { color: var(--octo-muted); }
+  .odoc-reply-form textarea:focus { border-color: var(--octo-primary); box-shadow: var(--octo-focus-ring); }
+  .odoc-reply-form-foot { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; }
+  .odoc-reply-form-foot .hint { color: var(--octo-muted-dark); font-size: 11px; }
+  .odoc-reply-form-foot .odoc-reply-submit { background: var(--octo-primary); color: var(--octo-surface); border: none; border-radius: var(--octo-radius-md); padding: 6px 14px; font: 12px system-ui; font-weight: 600; cursor: pointer; box-shadow: 0 1px 2px rgba(22,82,240,0.2); transition: background .12s, box-shadow .12s; }
+  .odoc-reply-form-foot .odoc-reply-submit:hover { background: var(--octo-primary-hover); box-shadow: 0 2px 8px rgba(22,82,240,0.28); }
 
   /* Anchor highlights (Custom Highlight API + fallback span) */
-  ::highlight(tdoc-pending) { background-color: #fff3a8; }
-  ::highlight(tdoc-anchor) { background-color: var(--octo-highlight); }
+  ::highlight(odoc-pending) { background-color: #fff3a8; }
+  ::highlight(odoc-anchor) { background-color: var(--octo-highlight); }
   /* Active = clicked. Visibly different from resting: vivid yellow + thick
      gold underline. (The CSS Highlight API only supports background-color,
      color, and text-decoration — so we stack those.) */
-  ::highlight(tdoc-anchor-active) {
+  ::highlight(odoc-anchor-active) {
     background-color: var(--octo-highlight-active);
     text-decoration: underline solid #b8860b;
     text-decoration-thickness: 3px;
     text-underline-offset: 2px;
   }
-  .tdoc-anchor-mark { background: var(--octo-highlight); cursor: pointer; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
-  .tdoc-anchor-mark:hover { background: #fdedb0; }
-  .tdoc-anchor-mark.active { background: var(--octo-highlight-active); box-shadow: 0 -3px 0 -1px #b8860b inset; }
+  .odoc-anchor-mark { background: var(--octo-highlight); cursor: pointer; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
+  .odoc-anchor-mark:hover { background: #fdedb0; }
+  .odoc-anchor-mark.active { background: var(--octo-highlight-active); box-shadow: 0 -3px 0 -1px #b8860b inset; }
 
   /* Element outlines + hover affordance */
-  .tdoc-element-outline { position: absolute; pointer-events: none; border: 1.5px solid rgba(22,82,240,0.35); border-radius: var(--octo-radius-sm); box-sizing: border-box; z-index: 999995; transition: border-color .15s, box-shadow .15s, border-width .15s; }
-  .tdoc-element-outline.pending { border-color: #f0d000; border-width: 2px; background: transparent; }
-  .tdoc-element-outline.active { border-color: var(--octo-primary); border-width: 2px; box-shadow: 0 0 0 4px rgba(22,82,240,0.18); }
-  .tdoc-hover-outline { position: absolute; pointer-events: none; z-index: 999995; border: 2px dashed var(--octo-primary); border-radius: var(--octo-radius-sm); background: rgba(22,82,240,0.06); box-sizing: border-box; transition: opacity .12s; }
+  .odoc-element-outline { position: absolute; pointer-events: none; border: 1.5px solid rgba(22,82,240,0.35); border-radius: var(--octo-radius-sm); box-sizing: border-box; z-index: 999995; transition: border-color .15s, box-shadow .15s, border-width .15s; }
+  .odoc-element-outline.pending { border-color: #f0d000; border-width: 2px; background: transparent; }
+  .odoc-element-outline.active { border-color: var(--octo-primary); border-width: 2px; box-shadow: 0 0 0 4px rgba(22,82,240,0.18); }
+  .odoc-hover-outline { position: absolute; pointer-events: none; z-index: 999995; border: 2px dashed var(--octo-primary); border-radius: var(--octo-radius-sm); background: rgba(22,82,240,0.06); box-sizing: border-box; transition: opacity .12s; }
   /* Clickable pill that appears NEXT TO commentable artifacts (img/canvas/svg/video/pre).
      Positioned just outside the artifact's right edge so it can't obscure
      content. Uses !important on the visible colors to defend against doc-side
@@ -518,7 +518,7 @@
      property is reset with !important — otherwise the document's own rules (e.g.
      an "svg { margin: 16px; display: block }" doc template) leak in and inflate
      it. Compact, icon-forward, with a soft tinted shadow. */
-  .tdoc-comment-pill {
+  .odoc-comment-pill {
     position: absolute !important; z-index: 999998 !important;
     box-sizing: border-box !important; height: auto !important; width: auto !important;
     min-width: 0 !important; min-height: 0 !important; max-width: none !important;
@@ -536,55 +536,55 @@
     opacity: 1 !important; visibility: visible !important;
     -webkit-appearance: none !important; appearance: none !important;
   }
-  .tdoc-comment-pill:hover {
+  .odoc-comment-pill:hover {
     background: var(--octo-primary-hover) !important; color: #fff !important;
     transform: translateY(-1px) !important;
     box-shadow: 0 4px 14px rgba(22,82,240,0.42), 0 1px 2px rgba(0,0,0,0.14) !important;
   }
-  .tdoc-comment-pill:active { transform: translateY(0) scale(0.97) !important; }
-  .tdoc-comment-pill svg {
+  .odoc-comment-pill:active { transform: translateY(0) scale(0.97) !important; }
+  .odoc-comment-pill svg {
     width: 13px !important; height: 13px !important; flex: 0 0 13px !important;
     margin: 0 !important; padding: 0 !important; display: block !important;
     vertical-align: middle !important; stroke: #fff !important; fill: none !important;
     max-width: none !important; box-shadow: none !important;
   }
-  .tdoc-drag-marquee { position: absolute; pointer-events: none; z-index: 999997; border: 1.5px solid var(--octo-primary); background: rgba(22,82,240,0.1); box-sizing: border-box; }
+  .odoc-drag-marquee { position: absolute; pointer-events: none; z-index: 999997; border: 1.5px solid var(--octo-primary); background: rgba(22,82,240,0.1); box-sizing: border-box; }
 
   /* Popup (new-comment) — light surface, consistent with the toolbar/cards. */
-  .tdoc-popup { position: absolute; background: var(--octo-surface); color: var(--octo-ink); border: 1px solid var(--octo-border); border-radius: var(--octo-radius-lg); padding: 14px; width: 320px; box-shadow: var(--octo-shadow-menu); z-index: 999998; font: 13px system-ui, sans-serif; }
-  .tdoc-popup .head { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 10px; }
+  .odoc-popup { position: absolute; background: var(--octo-surface); color: var(--octo-ink); border: 1px solid var(--octo-border); border-radius: var(--octo-radius-lg); padding: 14px; width: 320px; box-shadow: var(--octo-shadow-menu); z-index: 999998; font: 13px system-ui, sans-serif; }
+  .odoc-popup .head { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 10px; }
   /* Anchor preview as a subtle chip so it reads as "commenting on this". */
-  .tdoc-popup .head .h { flex: 1 1 auto; min-width: 0; background: var(--octo-surface-subtle); color: var(--octo-ink-soft); font-size: 12px; padding: 3px 8px; border-radius: var(--octo-radius-sm); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .tdoc-popup .head .x { flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; cursor: pointer; color: var(--octo-muted); border-radius: var(--octo-radius-sm); font-size: 16px; line-height: 1; transition: background .12s, color .12s; }
-  .tdoc-popup .head .x:hover { background: var(--octo-surface-subtle); color: var(--octo-ink); }
-  .tdoc-popup textarea { width: 100%; min-height: 72px; background: var(--octo-surface); color: var(--octo-ink); border: 1px solid var(--octo-border); border-radius: var(--octo-radius-md); padding: 9px 10px; font: inherit; line-height: 1.45; resize: vertical; box-sizing: border-box; outline: none; transition: border-color .12s, box-shadow .12s; }
-  .tdoc-popup textarea::placeholder { color: var(--octo-muted); }
-  .tdoc-popup textarea:focus { border-color: var(--octo-primary); box-shadow: var(--octo-focus-ring); }
-  .tdoc-popup .foot { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; }
-  .tdoc-popup .hint { color: var(--octo-muted-dark); font-size: 11px; }
-  .tdoc-popup .submit { background: var(--octo-primary); border: none; color: var(--octo-surface); padding: 7px 16px; border-radius: var(--octo-radius-md); cursor: pointer; font: inherit; font-weight: 600; box-shadow: 0 1px 2px rgba(22,82,240,0.2); transition: background .12s, box-shadow .12s; }
-  .tdoc-popup .submit:hover { background: var(--octo-primary-hover); box-shadow: 0 2px 8px rgba(22,82,240,0.28); }
-  .tdoc-popup .submit:disabled { opacity: 0.5; cursor: not-allowed; box-shadow: none; }
-  .tdoc-popup .signin-needed { color: var(--octo-warn-fg); font-size: 12px; padding: 8px 0; }
+  .odoc-popup .head .h { flex: 1 1 auto; min-width: 0; background: var(--octo-surface-subtle); color: var(--octo-ink-soft); font-size: 12px; padding: 3px 8px; border-radius: var(--octo-radius-sm); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .odoc-popup .head .x { flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; cursor: pointer; color: var(--octo-muted); border-radius: var(--octo-radius-sm); font-size: 16px; line-height: 1; transition: background .12s, color .12s; }
+  .odoc-popup .head .x:hover { background: var(--octo-surface-subtle); color: var(--octo-ink); }
+  .odoc-popup textarea { width: 100%; min-height: 72px; background: var(--octo-surface); color: var(--octo-ink); border: 1px solid var(--octo-border); border-radius: var(--octo-radius-md); padding: 9px 10px; font: inherit; line-height: 1.45; resize: vertical; box-sizing: border-box; outline: none; transition: border-color .12s, box-shadow .12s; }
+  .odoc-popup textarea::placeholder { color: var(--octo-muted); }
+  .odoc-popup textarea:focus { border-color: var(--octo-primary); box-shadow: var(--octo-focus-ring); }
+  .odoc-popup .foot { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; }
+  .odoc-popup .hint { color: var(--octo-muted-dark); font-size: 11px; }
+  .odoc-popup .submit { background: var(--octo-primary); border: none; color: var(--octo-surface); padding: 7px 16px; border-radius: var(--octo-radius-md); cursor: pointer; font: inherit; font-weight: 600; box-shadow: 0 1px 2px rgba(22,82,240,0.2); transition: background .12s, box-shadow .12s; }
+  .odoc-popup .submit:hover { background: var(--octo-primary-hover); box-shadow: 0 2px 8px rgba(22,82,240,0.28); }
+  .odoc-popup .submit:disabled { opacity: 0.5; cursor: not-allowed; box-shadow: none; }
+  .odoc-popup .signin-needed { color: var(--octo-warn-fg); font-size: 12px; padding: 8px 0; }
 
   /* Modal (sign-in) */
-  .tdoc-modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,0.55); z-index: 1000000; display: flex; align-items: center; justify-content: center; font: 14px system-ui, sans-serif; }
-  .tdoc-modal { background: var(--octo-surface); color: var(--octo-ink-strong); border-radius: var(--octo-radius-xl); padding: 28px; width: 460px; box-shadow: 0 20px 60px rgba(0,0,0,0.3); }
-  .tdoc-modal h3 { margin: 0 0 8px; font-size: 20px; }
-  .tdoc-modal p { margin: 0 0 14px; color: var(--octo-ink-soft); line-height: 1.5; }
-  .tdoc-modal .code { background: var(--octo-ink-panel); color: var(--octo-surface); padding: 18px; border-radius: var(--octo-radius-lg); font: 24px ui-monospace, "SF Mono", Menlo, monospace; letter-spacing: 0.15em; text-align: center; margin: 0 0 14px; user-select: all; cursor: copy; }
-  .tdoc-modal .step { display: flex; gap: 10px; margin-bottom: 8px; color: var(--octo-ink-soft); }
-  .tdoc-modal .step .n { width: 22px; height: 22px; border-radius: 50%; background: var(--octo-primary); color: var(--octo-surface); display: inline-flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600; flex-shrink: 0; }
-  .tdoc-modal .actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; }
-  .tdoc-modal button { padding: 8px 16px; border-radius: var(--octo-radius-md); font: inherit; cursor: pointer; border: 1px solid #ccc; background: var(--octo-surface); }
-  .tdoc-modal button.primary { background: var(--octo-primary); border-color: var(--octo-primary); color: var(--octo-surface); }
-  .tdoc-modal button.primary:hover { background: var(--octo-primary-hover); }
-  .tdoc-modal .status { color: var(--octo-muted); font-size: 13px; }
+  .odoc-modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,0.55); z-index: 1000000; display: flex; align-items: center; justify-content: center; font: 14px system-ui, sans-serif; }
+  .odoc-modal { background: var(--octo-surface); color: var(--octo-ink-strong); border-radius: var(--octo-radius-xl); padding: 28px; width: 460px; box-shadow: 0 20px 60px rgba(0,0,0,0.3); }
+  .odoc-modal h3 { margin: 0 0 8px; font-size: 20px; }
+  .odoc-modal p { margin: 0 0 14px; color: var(--octo-ink-soft); line-height: 1.5; }
+  .odoc-modal .code { background: var(--octo-ink-panel); color: var(--octo-surface); padding: 18px; border-radius: var(--octo-radius-lg); font: 24px ui-monospace, "SF Mono", Menlo, monospace; letter-spacing: 0.15em; text-align: center; margin: 0 0 14px; user-select: all; cursor: copy; }
+  .odoc-modal .step { display: flex; gap: 10px; margin-bottom: 8px; color: var(--octo-ink-soft); }
+  .odoc-modal .step .n { width: 22px; height: 22px; border-radius: 50%; background: var(--octo-primary); color: var(--octo-surface); display: inline-flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600; flex-shrink: 0; }
+  .odoc-modal .actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; }
+  .odoc-modal button { padding: 8px 16px; border-radius: var(--octo-radius-md); font: inherit; cursor: pointer; border: 1px solid #ccc; background: var(--octo-surface); }
+  .odoc-modal button.primary { background: var(--octo-primary); border-color: var(--octo-primary); color: var(--octo-surface); }
+  .odoc-modal button.primary:hover { background: var(--octo-primary-hover); }
+  .odoc-modal .status { color: var(--octo-muted); font-size: 13px; }
   /* Modal helper classes used by Publish/Share so dark-mode can override. */
-  .tdoc-modal .muted { color: var(--octo-muted-dark); font-size: 13px; }
-  .tdoc-modal .divider { border-top: 1px solid var(--octo-hairline); padding-top: 12px; margin-top: 12px; }
-  .tdoc-modal .danger { color: var(--octo-danger); font-size: 13px; }
-  .tdoc-modal code { background: var(--octo-surface-subtle); padding: 1px 5px; border-radius: 3px; }
+  .odoc-modal .muted { color: var(--octo-muted-dark); font-size: 13px; }
+  .odoc-modal .divider { border-top: 1px solid var(--octo-hairline); padding-top: 12px; margin-top: 12px; }
+  .odoc-modal .danger { color: var(--octo-danger); font-size: 13px; }
+  .odoc-modal code { background: var(--octo-surface-subtle); padding: 1px 5px; border-radius: 3px; }
 
   /* Bar collapse breakpoints — tied to viewport width, not layout class.
      The bar progressively hides elements as the viewport tightens, so it
@@ -594,56 +594,56 @@
        < 900px: workspace ·          v · | title | avatar   · share · ⋯  (name hides)
        < 700px: workspace             · | title |            share · ⋯  (version+identity into ⋯) */
   @media (max-width: 1100px) {
-    .tdoc-bar .crumb-slug, .tdoc-bar .crumb-sep-slug { display: none; }
+    .odoc-bar .crumb-slug, .odoc-bar .crumb-sep-slug { display: none; }
   }
   @media (max-width: 900px) {
-    .tdoc-chip .name { display: none; }
-    .tdoc-chip { padding: 3px; }
-    .tdoc-bar #tdoc-fork-btn, .tdoc-bar #tdoc-saveas-btn { display: none; }
-    .tdoc-bar .tdoc-secondary-toggle { display: inline-flex; }
+    .odoc-chip .name { display: none; }
+    .odoc-chip { padding: 3px; }
+    .odoc-bar #odoc-fork-btn, .odoc-bar #odoc-saveas-btn { display: none; }
+    .odoc-bar .odoc-secondary-toggle { display: inline-flex; }
   }
   @media (max-width: 700px) {
-    .tdoc-bar { padding: 0 8px; gap: 4px; }
-    .tdoc-version-wrap { display: none; }
-    .tdoc-bar .doc-title { font-size: 13px; }
-    .tdoc-bar #tdoc-copy-md-btn span { display: none; }
-    .tdoc-bar #tdoc-publish-btn span, .tdoc-bar #tdoc-share-btn span { display: inline; }
+    .odoc-bar { padding: 0 8px; gap: 4px; }
+    .odoc-version-wrap { display: none; }
+    .odoc-bar .doc-title { font-size: 13px; }
+    .odoc-bar #odoc-copy-md-btn span { display: none; }
+    .odoc-bar #odoc-publish-btn span, .odoc-bar #odoc-share-btn span { display: inline; }
   }
 
   /* Narrow mode (drawer + FAB) — still driven by the layout evaluator so
      it can also kick in when the comment column would crowd the article. */
-  body.tdoc-narrow #tdoc-comment-layer { position: fixed; top: auto; left: 0; right: 0; bottom: 0; max-height: 70vh; width: 100%; pointer-events: auto; background: var(--octo-surface); border-top: 1px solid var(--octo-border); box-shadow: 0 -4px 24px rgba(0,0,0,0.08); transform: translateY(100%); transition: transform .2s; overflow-y: auto; padding: 12px 12px 24px; box-sizing: border-box; z-index: 999998; }
-  body.tdoc-narrow #tdoc-comment-layer.open { transform: translateY(0); }
-  body.tdoc-narrow #tdoc-comment-layer .tdoc-drawer-handle { display: block; width: 36px; height: 4px; background: #ccc; border-radius: 2px; margin: 0 auto 12px; cursor: grab; touch-action: none; user-select: none; }
-  body.tdoc-narrow #tdoc-comment-layer .tdoc-drawer-handle:active { cursor: grabbing; }
-  body.tdoc-narrow .tdoc-margin-comment { position: static !important; width: auto !important; left: auto !important; top: auto !important; margin-bottom: 10px; transform: none !important; }
-  body.tdoc-narrow .tdoc-fab { position: fixed; bottom: 16px; right: 16px; z-index: 999997; background: var(--octo-primary); color: var(--octo-surface); border: none; border-radius: var(--octo-radius-pill); padding: 10px 16px; font: 13px system-ui; font-weight: 600; box-shadow: var(--octo-shadow-fab); cursor: pointer; display: inline-flex; align-items: center; gap: 6px; transition: transform .12s, box-shadow .12s; }
-  body.tdoc-narrow .tdoc-fab:active { transform: scale(0.96); }
+  body.odoc-narrow #odoc-comment-layer { position: fixed; top: auto; left: 0; right: 0; bottom: 0; max-height: 70vh; width: 100%; pointer-events: auto; background: var(--octo-surface); border-top: 1px solid var(--octo-border); box-shadow: 0 -4px 24px rgba(0,0,0,0.08); transform: translateY(100%); transition: transform .2s; overflow-y: auto; padding: 12px 12px 24px; box-sizing: border-box; z-index: 999998; }
+  body.odoc-narrow #odoc-comment-layer.open { transform: translateY(0); }
+  body.odoc-narrow #odoc-comment-layer .odoc-drawer-handle { display: block; width: 36px; height: 4px; background: #ccc; border-radius: 2px; margin: 0 auto 12px; cursor: grab; touch-action: none; user-select: none; }
+  body.odoc-narrow #odoc-comment-layer .odoc-drawer-handle:active { cursor: grabbing; }
+  body.odoc-narrow .odoc-margin-comment { position: static !important; width: auto !important; left: auto !important; top: auto !important; margin-bottom: 10px; transform: none !important; }
+  body.odoc-narrow .odoc-fab { position: fixed; bottom: 16px; right: 16px; z-index: 999997; background: var(--octo-primary); color: var(--octo-surface); border: none; border-radius: var(--octo-radius-pill); padding: 10px 16px; font: 13px system-ui; font-weight: 600; box-shadow: var(--octo-shadow-fab); cursor: pointer; display: inline-flex; align-items: center; gap: 6px; transition: transform .12s, box-shadow .12s; }
+  body.odoc-narrow .odoc-fab:active { transform: scale(0.96); }
   /* Count badge inside the FAB — a contrasting pill so the number reads as a
      distinct chip rather than plain text next to the icon. */
-  #tdoc-fab-count { display: inline-flex; align-items: center; justify-content: center; min-width: 18px; height: 18px; padding: 0 5px; border-radius: var(--octo-radius-pill); background: var(--octo-surface); color: var(--octo-primary); font-size: 11px; font-weight: 700; line-height: 1; }
-  body.tdoc-narrow .tdoc-popup { width: calc(100vw - 24px); max-width: 320px; left: 12px !important; }
-  body.tdoc-narrow .tdoc-modal { width: calc(100vw - 32px); padding: 20px; }
-  body.tdoc-narrow .tdoc-modal .code { font-size: 20px; }
-  body.tdoc-narrow .tdoc-hover-outline, body.tdoc-narrow .tdoc-comment-pill, body.tdoc-narrow .tdoc-drag-marquee { display: none; }
-  body.tdoc-narrow .tdoc-emoji-picker { grid-template-columns: repeat(6, 36px); }
-  body.tdoc-narrow .tdoc-emoji-picker button { width: 36px; height: 36px; font-size: 20px; }
+  #odoc-fab-count { display: inline-flex; align-items: center; justify-content: center; min-width: 18px; height: 18px; padding: 0 5px; border-radius: var(--octo-radius-pill); background: var(--octo-surface); color: var(--octo-primary); font-size: 11px; font-weight: 700; line-height: 1; }
+  body.odoc-narrow .odoc-popup { width: calc(100vw - 24px); max-width: 320px; left: 12px !important; }
+  body.odoc-narrow .odoc-modal { width: calc(100vw - 32px); padding: 20px; }
+  body.odoc-narrow .odoc-modal .code { font-size: 20px; }
+  body.odoc-narrow .odoc-hover-outline, body.odoc-narrow .odoc-comment-pill, body.odoc-narrow .odoc-drag-marquee { display: none; }
+  body.odoc-narrow .odoc-emoji-picker { grid-template-columns: repeat(6, 36px); }
+  body.odoc-narrow .odoc-emoji-picker button { width: 36px; height: 36px; font-size: 20px; }
   @media (max-width: 480px) {
-    .tdoc-bar { padding: 0 10px; gap: 8px; }
-    .tdoc-bar button, .tdoc-bar .tdoc-menu-wrap > button { padding: 4px 8px; font-size: 12px; }
-    .tdoc-icon-btn span { display: none; }
-    .tdoc-emoji-picker { grid-template-columns: repeat(5, 40px); padding: 8px; }
-    .tdoc-emoji-picker button { width: 40px; height: 40px; font-size: 22px; }
-    .tdoc-emoji-picker button.tdoc-emoji-text { grid-column: span 5; }
+    .odoc-bar { padding: 0 10px; gap: 8px; }
+    .odoc-bar button, .odoc-bar .odoc-menu-wrap > button { padding: 4px 8px; font-size: 12px; }
+    .odoc-icon-btn span { display: none; }
+    .odoc-emoji-picker { grid-template-columns: repeat(5, 40px); padding: 8px; }
+    .odoc-emoji-picker button { width: 40px; height: 40px; font-size: 22px; }
+    .odoc-emoji-picker button.odoc-emoji-text { grid-column: span 5; }
   }
 
   /* Footer */
-  .tdoc-footer { margin-top: 80px; padding: 20px 16px 28px; font: 12px system-ui, sans-serif; color: var(--octo-muted-dark); text-align: center; border-top: 1px solid var(--octo-hairline); box-sizing: border-box; max-width: 100%; }
-  .tdoc-footer .tdoc-footer-row { display: inline-flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: center; row-gap: 4px; }
-  .tdoc-footer a { color: var(--octo-muted-dark); text-decoration: none; }
-  .tdoc-footer a:hover { color: var(--octo-primary); text-decoration: underline; }
-  .tdoc-footer .sep { color: #ccc; }
-  @media (max-width: 700px) { .tdoc-footer .tdoc-footer-row { flex-direction: column; gap: 4px; } .tdoc-footer .sep { display: none; } }
+  .odoc-footer { margin-top: 80px; padding: 20px 16px 28px; font: 12px system-ui, sans-serif; color: var(--octo-muted-dark); text-align: center; border-top: 1px solid var(--octo-hairline); box-sizing: border-box; max-width: 100%; }
+  .odoc-footer .odoc-footer-row { display: inline-flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: center; row-gap: 4px; }
+  .odoc-footer a { color: var(--octo-muted-dark); text-decoration: none; }
+  .odoc-footer a:hover { color: var(--octo-primary); text-decoration: underline; }
+  .odoc-footer .sep { color: #ccc; }
+  @media (max-width: 700px) { .odoc-footer .odoc-footer-row { flex-direction: column; gap: 4px; } .odoc-footer .sep { display: none; } }
 
   `;
   const style = document.createElement('style');
@@ -663,7 +663,7 @@
   // Highlight API: one shared registry for pending, one per saved comment.
   const pendingHighlight = HIGHLIGHT_API ? new Highlight() : null;
   if (HIGHLIGHT_API) {
-    CSS.highlights.set('tdoc-pending', pendingHighlight);
+    CSS.highlights.set('odoc-pending', pendingHighlight);
   }
   function rebuildSharedHighlights() {
     if (!HIGHLIGHT_API) return;
@@ -674,13 +674,13 @@
       const target = (id === state.activeId) ? active : idle;
       for (const r of mark.ranges) target.add(r);
     }
-    CSS.highlights.set('tdoc-anchor', idle);
-    CSS.highlights.set('tdoc-anchor-active', active);
+    CSS.highlights.set('odoc-anchor', idle);
+    CSS.highlights.set('odoc-anchor-active', active);
   }
   function clearAllCommentHighlights() {
     if (!HIGHLIGHT_API) return;
-    CSS.highlights.delete('tdoc-anchor');
-    CSS.highlights.delete('tdoc-anchor-active');
+    CSS.highlights.delete('odoc-anchor');
+    CSS.highlights.delete('odoc-anchor-active');
   }
 
   function escapeHtml(s) {
@@ -696,7 +696,7 @@
 
   // ========== Top bar (HackMD-style three-group layout) ==========
   const bar = document.createElement('div');
-  bar.className = 'tdoc-bar';
+  bar.className = 'odoc-bar';
 
   const versions = Array.isArray(cfg.versions) && cfg.versions.length ? cfg.versions : [{ n: version }];
   versions.sort((a, b) => (a.n || 0) - (b.n || 0));
@@ -704,13 +704,13 @@
 
   // Left group: workspace mark + slug crumb + version picker.
   const leftHtml = `
-    <button class="tdoc-bar-mark" id="tdoc-bar-mark" title="octo-doc on GitHub" aria-label="octo-doc on GitHub"><svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><rect width="24" height="24" rx="6" fill="var(--octo-primary)"/><text x="12" y="16.5" text-anchor="middle" font-family="system-ui,-apple-system,sans-serif" font-size="11" font-weight="700" letter-spacing="-0.5" fill="#fff">o<tspan fill="#fff" fill-opacity="0.7">·</tspan>d</text></svg></button>
+    <button class="odoc-bar-mark" id="odoc-bar-mark" title="octo-doc on GitHub" aria-label="octo-doc on GitHub"><svg width="24" height="24" viewBox="0 0 24 24" aria-hidden="true"><rect width="24" height="24" rx="6" fill="var(--octo-primary)"/><text x="12" y="16.5" text-anchor="middle" font-family="system-ui,-apple-system,sans-serif" font-size="11" font-weight="700" letter-spacing="-0.5" fill="#fff">o<tspan fill="#fff" fill-opacity="0.7">·</tspan>d</text></svg></button>
     <span class="crumb crumb-slug" title="${escapeHtml(slugCrumbLabel)}">${escapeHtml(slugCrumbLabel)}</span>
     <span class="crumb-sep crumb-sep-slug" aria-hidden="true">/</span>
-    <div class="tdoc-version-wrap">
-      <button class="tdoc-version-toggle" id="tdoc-version-toggle" type="button" aria-haspopup="listbox" aria-expanded="false">v${version}${versions.length > 1 ? ' ▾' : ''}</button>
+    <div class="odoc-version-wrap">
+      <button class="odoc-version-toggle" id="odoc-version-toggle" type="button" aria-haspopup="listbox" aria-expanded="false">v${version}${versions.length > 1 ? ' ▾' : ''}</button>
       ${versions.length > 1 ? `
-        <div class="tdoc-version-menu" id="tdoc-version-menu" role="listbox">
+        <div class="odoc-version-menu" id="odoc-version-menu" role="listbox">
           ${versions.map(v => `<button role="option" data-version="${v.n}" class="${v.n === version ? 'current' : ''}">v${v.n}${v.n === version ? ' · current' : ''}</button>`).join('')}
         </div>
       ` : ''}
@@ -719,27 +719,27 @@
   // Center: doc title, pulled from the document's <title> at setup time (see
   // below). Starts EMPTY — the slug already shows in the left breadcrumb, so
   // echoing it here would just duplicate. A titled doc fills this in.
-  const centerHtml = `<span class="doc-title" id="tdoc-title"></span>`;
+  const centerHtml = `<span class="doc-title" id="odoc-title"></span>`;
 
   // Right: copy menu + primary CTA (Share or Publish) + ⋯ overflow + identity.
   const copyMenuHtml = `
-    <div class="tdoc-menu-wrap">
-      <button id="tdoc-copy-md-btn" title="Copy as Markdown" aria-label="Copy as Markdown">
+    <div class="odoc-menu-wrap">
+      <button id="odoc-copy-md-btn" title="Copy as Markdown" aria-label="Copy as Markdown">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
         <span>Copy</span>
       </button>
-      <div class="tdoc-menu" id="tdoc-copy-md-menu">
+      <div class="odoc-menu" id="odoc-copy-md-menu">
         <button data-mode="doc">Doc only</button>
         <button data-mode="doc-comments">Doc + comments</button>
       </div>
     </div>`;
 
   // Primary CTA: published → Share (mint a code link); draft/local → Publish.
-  const shareCtaHtml = `<button id="tdoc-share-btn" class="primary" title="Share link" aria-label="Share">
+  const shareCtaHtml = `<button id="odoc-share-btn" class="primary" title="Share link" aria-label="Share">
          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
          <span>Share</span>
        </button>`;
-  const publishCtaHtml = `<button id="tdoc-publish-btn" class="primary" title="Publish to your octo-doc server" aria-label="Publish">
+  const publishCtaHtml = `<button id="odoc-publish-btn" class="primary" title="Publish to your octo-doc server" aria-label="Publish">
          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5"/><polyline points="5 12 12 5 19 12"/></svg>
          <span>Publish</span>
        </button>`;
@@ -747,28 +747,28 @@
 
   // Fork / Save-as live in the ⋯ menu on narrow viewports.
   const forkBtnHtml = isPublished
-    ? '<button id="tdoc-fork-btn">Fork</button>'
-    : (isFork ? '<button id="tdoc-saveas-btn">Save As New Local Doc</button>' : '');
+    ? '<button id="odoc-fork-btn">Fork</button>'
+    : (isFork ? '<button id="odoc-saveas-btn">Save As New Local Doc</button>' : '');
 
   const rightHtml = `
     ${copyMenuHtml}
     ${forkBtnHtml}
     ${primaryCtaHtml}
-    <div class="tdoc-menu-wrap">
-      <button class="tdoc-secondary-toggle" id="tdoc-more-btn" aria-label="More" title="More">⋯</button>
-      <div class="tdoc-secondary-menu" id="tdoc-secondary-menu">
+    <div class="odoc-menu-wrap">
+      <button class="odoc-secondary-toggle" id="odoc-more-btn" aria-label="More" title="More">⋯</button>
+      <div class="odoc-secondary-menu" id="odoc-secondary-menu">
         ${isPublished ? `${isAuthor ? '<button data-action="share">Share</button>' : ''}<button data-action="fork">Fork</button>` : ''}
         ${(isLocal || isDraft) ? '<button data-action="publish">Publish</button>' : ''}
         ${isFork ? '<button data-action="saveas">Save copy</button>' : ''}
         <button data-action="repo">octo-doc on GitHub</button>
       </div>
     </div>
-    <span id="tdoc-identity-slot"></span>`;
+    <span id="odoc-identity-slot"></span>`;
 
   bar.innerHTML = `
-    <div class="tdoc-bar-left">${leftHtml}</div>
-    <div class="tdoc-bar-center">${centerHtml}</div>
-    <div class="tdoc-bar-right">${rightHtml}</div>
+    <div class="odoc-bar-left">${leftHtml}</div>
+    <div class="odoc-bar-center">${centerHtml}</div>
+    <div class="odoc-bar-right">${rightHtml}</div>
   `;
   document.body.appendChild(bar);
 
@@ -780,11 +780,11 @@
     const latestVersion = versions[versions.length - 1].n;
     if (typeof version === 'number' && version < latestVersion) {
       const strip = document.createElement('div');
-      strip.className = 'tdoc-oldver-strip';
+      strip.className = 'odoc-oldver-strip';
       const latestUrl = `/d/${encodeURIComponent(slug)}/v/${latestVersion}`;
       strip.innerHTML = `<span>You're viewing v${version} — the latest is <a href="${latestUrl}">v${latestVersion}</a></span>`;
       document.body.appendChild(strip);
-      document.body.classList.add('tdoc-has-oldver-strip');
+      document.body.classList.add('odoc-has-oldver-strip');
     }
   }
 
@@ -792,21 +792,21 @@
   // explicit actions to avoid the gesture conflict (clicking empty space
   // would otherwise be ambiguous with "deselect").
   const reanchorBanner = document.createElement('div');
-  reanchorBanner.className = 'tdoc-reanchor-banner';
+  reanchorBanner.className = 'odoc-reanchor-banner';
   reanchorBanner.innerHTML = `
     <span class="label">Select text to move anchor</span>
-    <button type="button" id="tdoc-reanchor-remove">Remove anchor</button>
-    <button type="button" id="tdoc-reanchor-cancel" class="danger">Cancel</button>
+    <button type="button" id="odoc-reanchor-remove">Remove anchor</button>
+    <button type="button" id="odoc-reanchor-cancel" class="danger">Cancel</button>
   `;
   document.body.appendChild(reanchorBanner);
 
   const titleEl = document.querySelector('title');
-  if (titleEl && titleEl.textContent) document.getElementById('tdoc-title').textContent = titleEl.textContent;
+  if (titleEl && titleEl.textContent) document.getElementById('odoc-title').textContent = titleEl.textContent;
 
   // Workspace mark in the bar's left → the open-source project. There is
   // no public catalog; the owner reaches their doc list via the profile
   // chip menu instead.
-  document.getElementById('tdoc-bar-mark').onclick = () =>
+  document.getElementById('odoc-bar-mark').onclick = () =>
     window.open('https://github.com/lml2468/octo-doc', '_blank', 'noopener');
 
   // Fork: opens the renderable /fork view in a new tab AND triggers a download
@@ -849,17 +849,17 @@
     }, 250);
   }
   if (isPublished) {
-    const fb = document.getElementById('tdoc-fork-btn');
+    const fb = document.getElementById('odoc-fork-btn');
     if (fb) fb.onclick = forkAndDownload;
-    const sb = document.getElementById('tdoc-share-btn');
+    const sb = document.getElementById('odoc-share-btn');
     if (sb) sb.onclick = (e) => { e.stopPropagation(); showShareModal(); };
   }
   if (isLocal) {
-    const pb = document.getElementById('tdoc-publish-btn');
+    const pb = document.getElementById('odoc-publish-btn');
     if (pb) pb.onclick = (e) => { e.stopPropagation(); showPublishModal(); };
   }
   if (isDraft) {
-    const pb = document.getElementById('tdoc-publish-btn');
+    const pb = document.getElementById('odoc-publish-btn');
     if (pb) pb.onclick = (e) => { e.stopPropagation(); showPromoteModal(); };
   }
   function triggerForkDownload(slug, version) {
@@ -871,15 +871,15 @@
   if (isFork) {
     // Save As: same download as Fork, but from within fork mode (no /fork open
     // since we ARE the fork tab already).
-    const sa = document.getElementById('tdoc-saveas-btn');
+    const sa = document.getElementById('odoc-saveas-btn');
     if (sa) sa.onclick = () => triggerForkDownload(slug, version);
   }
 
   // Version picker — clicking a row navigates to /d/<slug>/v/<n>. The
   // worker handles version routing; we let the browser do the navigation
   // instead of any in-page swap so the user can hit Back to return.
-  const versionToggle = document.getElementById('tdoc-version-toggle');
-  const versionMenu = document.getElementById('tdoc-version-menu');
+  const versionToggle = document.getElementById('odoc-version-toggle');
+  const versionMenu = document.getElementById('odoc-version-menu');
   if (versionToggle && versionMenu) {
     versionToggle.onclick = (e) => {
       e.stopPropagation();
@@ -897,19 +897,19 @@
     });
   }
 
-  const copyBtn = document.getElementById('tdoc-copy-md-btn');
-  const copyMenu = document.getElementById('tdoc-copy-md-menu');
+  const copyBtn = document.getElementById('odoc-copy-md-btn');
+  const copyMenu = document.getElementById('odoc-copy-md-menu');
   copyBtn.onclick = (e) => { e.stopPropagation(); copyMenu.classList.toggle('open'); };
   copyMenu.querySelectorAll('button').forEach(b => {
     b.onclick = async (e) => {
       e.stopPropagation();
       copyMenu.classList.remove('open');
-      await window.__tdocCopyDocMd(b.dataset.mode === 'doc-comments');
+      await window.__odocCopyDocMd(b.dataset.mode === 'doc-comments');
     };
   });
 
-  const moreBtn = document.getElementById('tdoc-more-btn');
-  const secMenu = document.getElementById('tdoc-secondary-menu');
+  const moreBtn = document.getElementById('odoc-more-btn');
+  const secMenu = document.getElementById('odoc-secondary-menu');
   moreBtn.onclick = (e) => { e.stopPropagation(); secMenu.classList.toggle('open'); };
   secMenu.querySelectorAll('button').forEach(b => {
     b.onclick = (e) => {
@@ -924,34 +924,34 @@
   });
 
   function renderIdentity() {
-    const slot = document.getElementById('tdoc-identity-slot');
+    const slot = document.getElementById('odoc-identity-slot');
     if (!isPublished) { slot.innerHTML = ''; return; }
     if (identity) {
       // Profile chip → dropdown. "My docs" is owner-only (the configured
-      // TDOC_OWNER); everyone signed in still gets Sign out.
+      // ODOC_OWNER); everyone signed in still gets Sign out.
       slot.innerHTML =
-        `<div class="tdoc-menu-wrap">
-          <button class="tdoc-chip" id="tdoc-me" aria-haspopup="menu" aria-expanded="false">
+        `<div class="odoc-menu-wrap">
+          <button class="odoc-chip" id="odoc-me" aria-haspopup="menu" aria-expanded="false">
             <img src="${escapeHtml(identity.avatar_url || '')}" alt=""><span class="name">${escapeHtml(identity.login)}</span>
           </button>
-          <div class="tdoc-menu" id="tdoc-me-menu" role="menu">
-            ${isOwner ? `<button id="tdoc-my-docs" role="menuitem">My docs</button>` : ''}
-            <button id="tdoc-signout" role="menuitem">Sign out</button>
+          <div class="odoc-menu" id="odoc-me-menu" role="menu">
+            ${isOwner ? `<button id="odoc-my-docs" role="menuitem">My docs</button>` : ''}
+            <button id="odoc-signout" role="menuitem">Sign out</button>
           </div>
         </div>`;
-      const meBtn = document.getElementById('tdoc-me');
-      const meMenu = document.getElementById('tdoc-me-menu');
+      const meBtn = document.getElementById('odoc-me');
+      const meMenu = document.getElementById('odoc-me-menu');
       meBtn.onclick = (e) => {
         e.stopPropagation();
         const open = meMenu.classList.toggle('open');
         meBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
       };
       if (isOwner) {
-        document.getElementById('tdoc-my-docs').onclick = () => {
+        document.getElementById('odoc-my-docs').onclick = () => {
           window.open('/me', '_blank', 'noopener');
         };
       }
-      document.getElementById('tdoc-signout').onclick = async () => {
+      document.getElementById('odoc-signout').onclick = async () => {
         await fetch('/v1/auth/logout', { method: 'POST' });
         identity = null;
         isOwner = false;
@@ -959,8 +959,8 @@
         refreshComments();
       };
     } else if (authConfigured) {
-      slot.innerHTML = `<button class="tdoc-chip signin" id="tdoc-signin">Sign in</button>`;
-      document.getElementById('tdoc-signin').onclick = startLogin;
+      slot.innerHTML = `<button class="odoc-chip signin" id="odoc-signin">Sign in</button>`;
+      document.getElementById('odoc-signin').onclick = startLogin;
     } else {
       // No login provider configured — commenting is anonymous, no sign-in UI.
       slot.innerHTML = '';
@@ -970,17 +970,17 @@
 
   // ========== Comment layer + FAB ==========
   const commentLayer = document.createElement('div');
-  commentLayer.id = 'tdoc-comment-layer';
+  commentLayer.id = 'odoc-comment-layer';
   const drawerHandle = document.createElement('div');
-  drawerHandle.className = 'tdoc-drawer-handle';
+  drawerHandle.className = 'odoc-drawer-handle';
   drawerHandle.setAttribute('aria-label', 'Drag down to close comments');
   commentLayer.appendChild(drawerHandle);
   document.body.appendChild(commentLayer);
 
   const fab = document.createElement('button');
-  fab.className = 'tdoc-fab';
+  fab.className = 'odoc-fab';
   fab.style.display = 'none';
-  fab.innerHTML = '💬 <span id="tdoc-fab-count">0</span>';
+  fab.innerHTML = '💬 <span id="odoc-fab-count">0</span>';
   fab.onclick = (e) => { e.stopPropagation(); commentLayer.classList.toggle('open'); };
   document.body.appendChild(fab);
 
@@ -1020,9 +1020,9 @@
 
   // ========== Footer ==========
   const footer = document.createElement('footer');
-  footer.className = 'tdoc-footer';
+  footer.className = 'odoc-footer';
   footer.innerHTML =
-    '<div class="tdoc-footer-row">' +
+    '<div class="odoc-footer-row">' +
       '<span>Powered by <a href="https://github.com/lml2468/octo-doc" target="_blank" rel="noopener">octo-doc</a></span>' +
     '</div>';
   document.body.appendChild(footer);
@@ -1228,11 +1228,11 @@
     if (Array.isArray(anchor.aid_history)) {
       for (const x of anchor.aid_history) if (x && !aidCandidates.includes(x)) aidCandidates.push(x);
     }
-    const fromSelector = anchor.selector && (/\[data-tdoc-aid="([^"]+)"\]/.exec(anchor.selector) || [])[1];
+    const fromSelector = anchor.selector && (/\[data-odoc-aid="([^"]+)"\]/.exec(anchor.selector) || [])[1];
     if (fromSelector && !aidCandidates.includes(fromSelector)) aidCandidates.push(fromSelector);
     if (aidCandidates.length) {
       for (const aid of aidCandidates) {
-        const byAid = document.querySelector(`[data-tdoc-aid="${aid}"]`);
+        const byAid = document.querySelector(`[data-odoc-aid="${aid}"]`);
         if (byAid) return byAid;
       }
       // Recorded aid(s), none present in this DOM → unanchored, never fallback.
@@ -1284,12 +1284,12 @@
   function fallbackWrapAsSpan(comment, range) {
     if (range.startContainer !== range.endContainer || range.startContainer.nodeType !== Node.TEXT_NODE) return null;
     const mark = document.createElement('span');
-    mark.className = 'tdoc-anchor-mark';
+    mark.className = 'odoc-anchor-mark';
     mark.dataset.commentId = comment.id;
     try { range.surroundContents(mark); return mark; } catch { return null; }
   }
   function unwrapFallbackSpans() {
-    document.querySelectorAll('.tdoc-anchor-mark').forEach(mark => {
+    document.querySelectorAll('.odoc-anchor-mark').forEach(mark => {
       const parent = mark.parentNode;
       if (!parent) return;
       while (mark.firstChild) parent.insertBefore(mark.firstChild, mark);
@@ -1306,9 +1306,9 @@
   function renderAuthor(author) {
     if (!author) return `<div class="author"><span class="anon">anonymous</span></div>`;
     if (author.kind === 'agent') {
-      // Agent identity (currently always 'tdoc-agent'). No avatar URL — use
+      // Agent identity (currently always 'odoc-agent'). No avatar URL — use
       // a generic icon-circle to differentiate from human commenters.
-      return `<div class="author tdoc-agent-author"><span class="tdoc-agent-badge">⚡</span><span class="login">${escapeHtml(author.login || 'tdoc-agent')}</span></div>`;
+      return `<div class="author odoc-agent-author"><span class="odoc-agent-badge">⚡</span><span class="login">${escapeHtml(author.login || 'odoc-agent')}</span></div>`;
     }
     const avatar = author.avatar_url ? `<img src="${escapeHtml(author.avatar_url)}" alt="">` : '';
     return `<div class="author">${avatar}<span class="login">${escapeHtml(author.login || 'anonymous')}</span></div>`;
@@ -1320,14 +1320,14 @@
     if (!entries.length) return '';
     const chips = entries.map(([emoji, users]) => {
       const mine = users.includes(me);
-      const hasAgent = users.includes('tdoc-agent');
-      const cls = [`tdoc-react-chip`, mine ? 'mine' : '', hasAgent ? 'agent' : ''].filter(Boolean).join(' ');
+      const hasAgent = users.includes('odoc-agent');
+      const cls = [`odoc-react-chip`, mine ? 'mine' : '', hasAgent ? 'agent' : ''].filter(Boolean).join(' ');
       return `<span class="${cls}" data-emoji="${escapeHtml(emoji)}" data-target-id="${escapeHtml(target.id)}" data-users="${users.map(escapeHtml).join('\n')}">${escapeHtml(emoji)} ${users.length}</span>`;
     }).join('');
-    return `<div class="tdoc-reactions" data-target-id="${escapeHtml(target.id)}">${chips}<button class="tdoc-react-add" data-target-id="${escapeHtml(target.id)}" title="Add reaction" aria-label="Add reaction">${REACT_ICON_SVG}</button></div>`;
+    return `<div class="odoc-reactions" data-target-id="${escapeHtml(target.id)}">${chips}<button class="odoc-react-add" data-target-id="${escapeHtml(target.id)}" title="Add reaction" aria-label="Add reaction">${REACT_ICON_SVG}</button></div>`;
   }
   function renderReactInline(target) {
-    return `<button class="tdoc-react-add inline" data-target-id="${escapeHtml(target.id)}" title="Add reaction" aria-label="Add reaction">${REACT_ICON_SVG}</button>`;
+    return `<button class="odoc-react-add inline" data-target-id="${escapeHtml(target.id)}" title="Add reaction" aria-label="Add reaction">${REACT_ICON_SVG}</button>`;
   }
   function renderReply(reply) {
     const canDelete = !isFork && (!isPublished || (identity && reply.author && identity.login === reply.author.login));
@@ -1336,13 +1336,13 @@
     // Whitelist the status (it drives a CSS class) instead of interpolating raw.
     const safeStatus = ['applied', 'partial', 'question'].includes(reply.agent_status) ? reply.agent_status : null;
     const statusChip = safeStatus
-      ? `<span class="tdoc-agent-status tdoc-agent-status-${safeStatus}">${
+      ? `<span class="odoc-agent-status odoc-agent-status-${safeStatus}">${
           safeStatus === 'applied' ? '✓ applied' :
           safeStatus === 'partial' ? '◐ partial' :
           '? question'
         }</span>`
       : '';
-    return `<div class="tdoc-reply${isAgent ? ' tdoc-agent-reply' : ''}" data-comment-id="${escapeHtml(reply.id)}">
+    return `<div class="odoc-reply${isAgent ? ' odoc-agent-reply' : ''}" data-comment-id="${escapeHtml(reply.id)}">
       ${renderAuthor(reply.author)}
       ${statusChip}
       <div class="text">${escapeHtml(reply.text)}</div>
@@ -1358,14 +1358,14 @@
   }
   function buildCard(comment) {
     const card = document.createElement('div');
-    card.className = 'tdoc-margin-comment';
+    card.className = 'odoc-margin-comment';
     card.dataset.commentId = comment.id;
     const canDelete = !isFork && (!isPublished || (identity && comment.author && identity.login === comment.author.login));
     const replies = Array.isArray(comment.replies) ? comment.replies : [];
     const hasReactions = comment.reactions && Object.values(comment.reactions).some(u => u && u.length > 0);
     card.innerHTML = `
-      ${isFork ? '' : `<div class="tdoc-anchor-actions">
-        <button class="tdoc-reanchor-btn" type="button" data-id="${escapeHtml(comment.id)}"><span class="tdoc-reanchor-unanchored">unanchored — click to re-anchor</span><span class="tdoc-reanchor-anchored">↻ move anchor</span></button>
+      ${isFork ? '' : `<div class="odoc-anchor-actions">
+        <button class="odoc-reanchor-btn" type="button" data-id="${escapeHtml(comment.id)}"><span class="odoc-reanchor-unanchored">unanchored — click to re-anchor</span><span class="odoc-reanchor-anchored">↻ move anchor</span></button>
       </div>`}
       ${renderAuthor(comment.author)}
       <div class="text">${escapeHtml(comment.text)}</div>
@@ -1374,29 +1374,29 @@
         <span>v${comment.version} · ${new Date(comment.created_at).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</span>
         <span class="actions">
           ${!hasReactions && !isFork ? renderReactInline(comment) : ''}
-          ${isFork ? '' : `<span class="tdoc-reply-toggle" data-id="${escapeHtml(comment.id)}">Reply</span>`}
+          ${isFork ? '' : `<span class="odoc-reply-toggle" data-id="${escapeHtml(comment.id)}">Reply</span>`}
           <span class="copy-md" data-id="${escapeHtml(comment.id)}" title="Copy as Markdown" aria-label="Copy as Markdown"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></span>
           ${canDelete ? `<span class="del" data-id="${escapeHtml(comment.id)}">delete</span>` : ''}
         </span>
       </div>
       ${replies.length ? `
-        <div class="tdoc-replies-toggle" data-id="${escapeHtml(comment.id)}">
+        <div class="odoc-replies-toggle" data-id="${escapeHtml(comment.id)}">
           <svg class="chev" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
           ${replies.length} ${replies.length === 1 ? 'reply' : 'replies'}
         </div>
-        <div class="tdoc-replies">${replies.map(r => renderReply(r)).join('')}</div>
+        <div class="odoc-replies">${replies.map(r => renderReply(r)).join('')}</div>
       ` : ''}
-      ${isFork ? '' : `<div class="tdoc-reply-form" data-parent-id="${escapeHtml(comment.id)}">
+      ${isFork ? '' : `<div class="odoc-reply-form" data-parent-id="${escapeHtml(comment.id)}">
         <textarea placeholder="Reply…"></textarea>
-        <div class="tdoc-reply-form-foot">
+        <div class="odoc-reply-form-foot">
           <span class="hint">⌘+Enter to submit · Esc to cancel</span>
-          <button class="tdoc-reply-submit">Reply</button>
+          <button class="odoc-reply-submit">Reply</button>
         </div>
       </div>`}
     `;
 
-    const repliesToggle = card.querySelector('.tdoc-replies-toggle');
-    const repliesEl = card.querySelector('.tdoc-replies');
+    const repliesToggle = card.querySelector('.odoc-replies-toggle');
+    const repliesEl = card.querySelector('.odoc-replies');
     if (repliesToggle && repliesEl) {
       repliesToggle.onclick = (e) => {
         e.stopPropagation();
@@ -1407,9 +1407,9 @@
     }
 
     const copyMdBtn = card.querySelector('.copy-md');
-    if (copyMdBtn) copyMdBtn.onclick = (e) => { e.stopPropagation(); window.__tdocCopyCommentMd(comment.id, copyMdBtn); };
+    if (copyMdBtn) copyMdBtn.onclick = (e) => { e.stopPropagation(); window.__odocCopyCommentMd(comment.id, copyMdBtn); };
 
-    const reBtn = card.querySelector('.tdoc-reanchor-btn');
+    const reBtn = card.querySelector('.odoc-reanchor-btn');
     if (reBtn) reBtn.onclick = (e) => { e.stopPropagation(); startReanchor(comment.id); };
 
     card.querySelectorAll('.del').forEach(del => {
@@ -1424,14 +1424,14 @@
         }
         // Belt + suspenders: drop the active highlight before refresh in case
         // the deleted comment was the active one (which would leave a stale
-        // ::highlight(tdoc-anchor-active) ring until refresh completes).
+        // ::highlight(odoc-anchor-active) ring until refresh completes).
         setActiveComment(null);
         await refreshComments();
       };
     });
 
-    const replyToggle = card.querySelector('.tdoc-reply-toggle');
-    const replyForm = card.querySelector('.tdoc-reply-form');
+    const replyToggle = card.querySelector('.odoc-reply-toggle');
+    const replyForm = card.querySelector('.odoc-reply-form');
     if (replyToggle && replyForm) {
       replyToggle.onclick = (e) => {
         e.stopPropagation();
@@ -1456,14 +1456,14 @@
         replyForm.classList.remove('open');
         await refreshComments();
       };
-      replyForm.querySelector('.tdoc-reply-submit').onclick = (e) => { e.stopPropagation(); submitReply(); };
+      replyForm.querySelector('.odoc-reply-submit').onclick = (e) => { e.stopPropagation(); submitReply(); };
       replyTa.addEventListener('keydown', (e) => {
         if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); submitReply(); }
         if (e.key === 'Escape') { replyForm.classList.remove('open'); requestAnimationFrame(repositionCards); }
       });
     }
 
-    card.querySelectorAll('.tdoc-react-chip').forEach(chip => {
+    card.querySelectorAll('.odoc-react-chip').forEach(chip => {
       chip.onclick = async (e) => {
         e.stopPropagation();
         if (isFork) return; // read-only mode
@@ -1475,7 +1475,7 @@
         await refreshComments();
       };
     });
-    card.querySelectorAll('.tdoc-react-add').forEach(addBtn => {
+    card.querySelectorAll('.odoc-react-add').forEach(addBtn => {
       addBtn.onclick = (e) => {
         e.stopPropagation();
         if (authConfigured && !identity) { startLogin(); return; }
@@ -1493,10 +1493,10 @@
   function openEmojiPicker(anchorBtn, targetId) {
     closeEmojiPicker();
     emojiPicker = document.createElement('div');
-    emojiPicker.className = 'tdoc-emoji-picker';
+    emojiPicker.className = 'odoc-emoji-picker';
     emojiPicker.innerHTML =
       QUICK_EMOJIS.map(e => `<button data-emoji="${e}">${e}</button>`).join('') +
-      QUICK_TEXT_REACTIONS.map(t => `<button class="tdoc-emoji-text" data-emoji="${t}">${t}</button>`).join('');
+      QUICK_TEXT_REACTIONS.map(t => `<button class="odoc-emoji-text" data-emoji="${t}">${t}</button>`).join('');
     document.body.appendChild(emojiPicker);
     const r = anchorBtn.getBoundingClientRect();
     emojiPicker.style.visibility = 'hidden';
@@ -1561,7 +1561,7 @@
   function repositionCards() {
     // Always reposition element outlines first — they should track their
     // anchor element on every layout change regardless of narrow/wide mode.
-    document.querySelectorAll('.tdoc-element-outline:not(.pending)').forEach(o => o._reposition?.());
+    document.querySelectorAll('.odoc-element-outline:not(.pending)').forEach(o => o._reposition?.());
     if (state.narrow) {
       for (const card of state.cardEls.values()) { card.style.top = ''; card.style.left = ''; }
       return;
@@ -1610,9 +1610,9 @@
       if (y < prevBottom + margin) y = prevBottom + margin;
       row.card.style.top = y + 'px';
       row.card.style.left = cardLeft + 'px';
-      if (row.anchored) row.card.classList.remove('tdoc-unanchored');
+      if (row.anchored) row.card.classList.remove('odoc-unanchored');
       else {
-        row.card.classList.add('tdoc-unanchored');
+        row.card.classList.add('odoc-unanchored');
         // Ghost marker shows where the deleted text USED to be — only
         // meaningful when the anchor was lost involuntarily (the doc was
         // rewritten). When the user explicitly removed the anchor via the
@@ -1637,29 +1637,29 @@
     for (const { card } of withoutFb) {
       card.style.top = tailY + 'px';
       card.style.left = cardLeft + 'px';
-      card.classList.add('tdoc-unanchored');
+      card.classList.add('odoc-unanchored');
       tailY += card.offsetHeight + margin;
     }
   }
 
   function renderGhostMarker(commentId, pageY) {
-    let g = document.querySelector(`.tdoc-ghost-marker[data-comment-id="${CSS.escape(commentId)}"]`);
+    let g = document.querySelector(`.odoc-ghost-marker[data-comment-id="${CSS.escape(commentId)}"]`);
     if (!g) {
       g = document.createElement('div');
-      g.className = 'tdoc-ghost-marker';
+      g.className = 'odoc-ghost-marker';
       g.dataset.commentId = commentId;
       document.body.appendChild(g);
     }
     g.style.top = pageY + 'px';
   }
   function removeGhostMarker(commentId) {
-    const g = document.querySelector(`.tdoc-ghost-marker[data-comment-id="${CSS.escape(commentId)}"]`);
+    const g = document.querySelector(`.odoc-ghost-marker[data-comment-id="${CSS.escape(commentId)}"]`);
     if (g) g.remove();
   }
 
   function setActiveComment(id) {
     state.activeId = id || null;
-    document.querySelectorAll('.tdoc-anchor-mark.active, .tdoc-margin-comment.active, .tdoc-element-outline.active')
+    document.querySelectorAll('.odoc-anchor-mark.active, .odoc-margin-comment.active, .odoc-element-outline.active')
       .forEach(el => el.classList.remove('active'));
     if (!id) { rebuildSharedHighlights(); return; }
     const mark = state.anchorMarks.get(id);
@@ -1704,7 +1704,7 @@
     const el = findElement(comment.anchor);
     if (!el) return null;
     const outline = document.createElement('div');
-    outline.className = 'tdoc-element-outline';
+    outline.className = 'odoc-element-outline';
     outline.dataset.commentId = comment.id;
     document.body.appendChild(outline);
     const repos = () => positionOutlineAround(outline, el);
@@ -1721,9 +1721,9 @@
   function resetAnchors() {
     clearAllCommentHighlights();
     unwrapFallbackSpans();
-    document.querySelectorAll('.tdoc-element-outline:not(.pending)').forEach(el => el.remove());
-    document.querySelectorAll('.tdoc-ghost-marker').forEach(el => el.remove());
-    for (const card of commentLayer.querySelectorAll('.tdoc-margin-comment')) card.remove();
+    document.querySelectorAll('.odoc-element-outline:not(.pending)').forEach(el => el.remove());
+    document.querySelectorAll('.odoc-ghost-marker').forEach(el => el.remove());
+    for (const card of commentLayer.querySelectorAll('.odoc-margin-comment')) card.remove();
     state.anchorMarks.clear();
     state.cardEls.clear();
   }
@@ -1735,7 +1735,7 @@
     let list = [];
     if (isFork) {
       // Read-only: parse the embedded JSON. No /api calls.
-      const block = document.getElementById('tdoc-fork-comments');
+      const block = document.getElementById('odoc-fork-comments');
       if (block) {
         try { list = (JSON.parse(block.textContent || '{}').comments) || []; } catch { list = []; }
       }
@@ -1746,10 +1746,10 @@
       } catch { list = []; }
     }
     state.activeComments = list.filter(c => c.status !== 'resolved');
-    document.body.classList.toggle('tdoc-has-comments', state.activeComments.length > 0);
-    document.body.dataset.tdocReady = '1';
+    document.body.classList.toggle('odoc-has-comments', state.activeComments.length > 0);
+    document.body.dataset.odocReady = '1';
 
-    const fabCount = document.getElementById('tdoc-fab-count');
+    const fabCount = document.getElementById('odoc-fab-count');
     if (fabCount) fabCount.textContent = state.activeComments.length;
 
     const textCache = state.activeComments.some(c => (c.anchor?.kind || (c.anchor?.text ? 'text' : null)) === 'text')
@@ -1815,7 +1815,7 @@
     const columnRoom = window.innerWidth - articleRight;
     const narrow = isPhone || articleWidth < MIN_ARTICLE_WIDTH || columnRoom < MIN_COLUMN_WIDTH;
     state.narrow = narrow;
-    document.body.classList.toggle('tdoc-narrow', narrow);
+    document.body.classList.toggle('odoc-narrow', narrow);
     fab.style.display = (narrow && state.activeComments.length > 0) ? 'inline-flex' : 'none';
     if (!narrow) commentLayer.classList.remove('open');
   }
@@ -1841,37 +1841,37 @@
 
   // ========== Publish / Share modals ==========
   function closeAuxModal() {
-    const m = document.getElementById('tdoc-aux-modal');
+    const m = document.getElementById('odoc-aux-modal');
     if (m) m.remove();
   }
   function showPublishModal() {
     closeAuxModal();
     const bg = document.createElement('div');
-    bg.className = 'tdoc-modal-bg';
-    bg.id = 'tdoc-aux-modal';
+    bg.className = 'odoc-modal-bg';
+    bg.id = 'odoc-aux-modal';
     bg.innerHTML = `
-      <div class="tdoc-modal" data-state="idle">
+      <div class="odoc-modal" data-state="idle">
         <h3>Publish this doc</h3>
         <p>We'll publish this to your self-hosted octo-doc server so anyone with the link can read and comment.</p>
-        <div class="step"><span class="n">·</span><span>Slug: <code id="tdoc-pub-slug">${escapeHtml(slug)}</code></span></div>
-        <div class="status" id="tdoc-pub-status" style="margin-top:10px;display:none;"></div>
-        <div id="tdoc-pub-result" style="margin-top:10px;display:none;">
-          <div class="code" style="font-size:14px;letter-spacing:0;text-align:left;" id="tdoc-pub-url"></div>
+        <div class="step"><span class="n">·</span><span>Slug: <code id="odoc-pub-slug">${escapeHtml(slug)}</code></span></div>
+        <div class="status" id="odoc-pub-status" style="margin-top:10px;display:none;"></div>
+        <div id="odoc-pub-result" style="margin-top:10px;display:none;">
+          <div class="code" style="font-size:14px;letter-spacing:0;text-align:left;" id="odoc-pub-url"></div>
           <div class="actions" style="justify-content:flex-start;gap:8px;">
-            <button class="primary" id="tdoc-pub-copy">Copy link</button>
-            <button id="tdoc-pub-open">View live →</button>
+            <button class="primary" id="odoc-pub-copy">Copy link</button>
+            <button id="odoc-pub-open">View live →</button>
           </div>
         </div>
         <div class="actions">
-          <button id="tdoc-pub-cancel">Cancel</button>
-          <button class="primary" id="tdoc-pub-go">Publish</button>
+          <button id="odoc-pub-cancel">Cancel</button>
+          <button class="primary" id="odoc-pub-go">Publish</button>
         </div>
       </div>`;
     document.body.appendChild(bg);
-    document.getElementById('tdoc-pub-cancel').onclick = closeAuxModal;
-    document.getElementById('tdoc-pub-go').onclick = async () => {
-      const status = document.getElementById('tdoc-pub-status');
-      const go = document.getElementById('tdoc-pub-go');
+    document.getElementById('odoc-pub-cancel').onclick = closeAuxModal;
+    document.getElementById('odoc-pub-go').onclick = async () => {
+      const status = document.getElementById('odoc-pub-status');
+      const go = document.getElementById('odoc-pub-go');
       status.style.display = 'block';
       status.textContent = 'Publishing — this can take 20–60s on first run…';
       go.disabled = true;
@@ -1888,13 +1888,13 @@
         }
         const url = data.data.url;
         status.style.display = 'none';
-        const result = document.getElementById('tdoc-pub-result');
+        const result = document.getElementById('odoc-pub-result');
         result.style.display = 'block';
-        document.getElementById('tdoc-pub-url').textContent = url;
-        document.getElementById('tdoc-pub-copy').onclick = () => navigator.clipboard?.writeText(url);
-        document.getElementById('tdoc-pub-open').onclick = () => window.open(url, '_blank');
-        document.getElementById('tdoc-pub-go').style.display = 'none';
-        document.getElementById('tdoc-pub-cancel').textContent = 'Done';
+        document.getElementById('odoc-pub-url').textContent = url;
+        document.getElementById('odoc-pub-copy').onclick = () => navigator.clipboard?.writeText(url);
+        document.getElementById('odoc-pub-open').onclick = () => window.open(url, '_blank');
+        document.getElementById('odoc-pub-go').style.display = 'none';
+        document.getElementById('odoc-pub-cancel').textContent = 'Done';
       } catch (e) {
         status.textContent = 'Failed: ' + e.message;
         go.disabled = false;
@@ -1904,30 +1904,30 @@
   function showShareModal() {
     closeAuxModal();
     const bg = document.createElement('div');
-    bg.className = 'tdoc-modal-bg';
-    bg.id = 'tdoc-aux-modal';
+    bg.className = 'odoc-modal-bg';
+    bg.id = 'odoc-aux-modal';
     bg.innerHTML = `
-      <div class="tdoc-modal">
+      <div class="odoc-modal">
         <h3>Share this doc</h3>
         <p class="muted" style="margin:0 0 10px;">Generate a link that lets anyone read and comment — no account needed.</p>
-        <div class="status" id="tdoc-share-status" style="display:none;margin-bottom:10px;"></div>
-        <div id="tdoc-share-result" style="display:none;">
-          <div class="code" id="tdoc-share-url" style="font-size:14px;letter-spacing:0;text-align:left;cursor:copy;"></div>
+        <div class="status" id="odoc-share-status" style="display:none;margin-bottom:10px;"></div>
+        <div id="odoc-share-result" style="display:none;">
+          <div class="code" id="odoc-share-url" style="font-size:14px;letter-spacing:0;text-align:left;cursor:copy;"></div>
           <div class="actions" style="justify-content:flex-start;gap:8px;margin-top:0;margin-bottom:10px;">
-            <button class="primary" id="tdoc-share-copy">Copy link</button>
+            <button class="primary" id="odoc-share-copy">Copy link</button>
           </div>
           <p class="muted" style="font-size:12px;">Anyone with this link can read and comment. Generate a new link to rotate it (old links stop working).</p>
         </div>
         <div class="actions">
-          <button id="tdoc-share-close">Close</button>
-          <button class="primary" id="tdoc-share-go">Generate link</button>
+          <button id="odoc-share-close">Close</button>
+          <button class="primary" id="odoc-share-go">Generate link</button>
         </div>
       </div>`;
     document.body.appendChild(bg);
-    document.getElementById('tdoc-share-close').onclick = closeAuxModal;
-    document.getElementById('tdoc-share-go').onclick = async () => {
-      const status = document.getElementById('tdoc-share-status');
-      const go = document.getElementById('tdoc-share-go');
+    document.getElementById('odoc-share-close').onclick = closeAuxModal;
+    document.getElementById('odoc-share-go').onclick = async () => {
+      const status = document.getElementById('odoc-share-status');
+      const go = document.getElementById('odoc-share-go');
       status.style.display = 'block';
       status.textContent = 'Generating…';
       go.disabled = true;
@@ -1941,12 +1941,12 @@
         }
         const url = data.data.url;
         status.style.display = 'none';
-        const result = document.getElementById('tdoc-share-result');
+        const result = document.getElementById('odoc-share-result');
         result.style.display = 'block';
-        const urlEl = document.getElementById('tdoc-share-url');
+        const urlEl = document.getElementById('odoc-share-url');
         urlEl.textContent = url;
         urlEl.onclick = () => navigator.clipboard?.writeText(url);
-        document.getElementById('tdoc-share-copy').onclick = () => navigator.clipboard?.writeText(url);
+        document.getElementById('odoc-share-copy').onclick = () => navigator.clipboard?.writeText(url);
         go.textContent = 'Rotate link';
         go.disabled = false;
       } catch (e) {
@@ -1960,30 +1960,30 @@
   function showPromoteModal() {
     closeAuxModal();
     const bg = document.createElement('div');
-    bg.className = 'tdoc-modal-bg';
-    bg.id = 'tdoc-aux-modal';
+    bg.className = 'odoc-modal-bg';
+    bg.id = 'odoc-aux-modal';
     bg.innerHTML = `
-      <div class="tdoc-modal">
+      <div class="odoc-modal">
         <h3>Publish this draft</h3>
         <p class="muted">This freezes the current draft as a new immutable version with a permanent URL. The draft slot is then cleared — start a fresh draft to iterate again.</p>
-        <div class="status" id="tdoc-pub-status" style="display:none;margin-top:10px;"></div>
-        <div id="tdoc-pub-result" style="display:none;margin-top:10px;">
-          <div class="code" id="tdoc-pub-url" style="font-size:14px;letter-spacing:0;text-align:left;"></div>
+        <div class="status" id="odoc-pub-status" style="display:none;margin-top:10px;"></div>
+        <div id="odoc-pub-result" style="display:none;margin-top:10px;">
+          <div class="code" id="odoc-pub-url" style="font-size:14px;letter-spacing:0;text-align:left;"></div>
           <div class="actions" style="justify-content:flex-start;gap:8px;">
-            <button class="primary" id="tdoc-pub-copy">Copy link</button>
-            <button id="tdoc-pub-open">View →</button>
+            <button class="primary" id="odoc-pub-copy">Copy link</button>
+            <button id="odoc-pub-open">View →</button>
           </div>
         </div>
         <div class="actions">
-          <button id="tdoc-pub-cancel">Cancel</button>
-          <button class="primary" id="tdoc-pub-go">Publish</button>
+          <button id="odoc-pub-cancel">Cancel</button>
+          <button class="primary" id="odoc-pub-go">Publish</button>
         </div>
       </div>`;
     document.body.appendChild(bg);
-    document.getElementById('tdoc-pub-cancel').onclick = closeAuxModal;
-    document.getElementById('tdoc-pub-go').onclick = async () => {
-      const status = document.getElementById('tdoc-pub-status');
-      const go = document.getElementById('tdoc-pub-go');
+    document.getElementById('odoc-pub-cancel').onclick = closeAuxModal;
+    document.getElementById('odoc-pub-go').onclick = async () => {
+      const status = document.getElementById('odoc-pub-status');
+      const go = document.getElementById('odoc-pub-go');
       status.style.display = 'block';
       status.textContent = 'Publishing…';
       go.disabled = true;
@@ -1999,13 +1999,13 @@
         }
         const url = data.data.url;
         status.style.display = 'none';
-        const result = document.getElementById('tdoc-pub-result');
+        const result = document.getElementById('odoc-pub-result');
         result.style.display = 'block';
-        document.getElementById('tdoc-pub-url').textContent = url;
-        document.getElementById('tdoc-pub-copy').onclick = () => navigator.clipboard?.writeText(url);
-        document.getElementById('tdoc-pub-open').onclick = () => window.open(url, '_blank');
-        document.getElementById('tdoc-pub-go').style.display = 'none';
-        document.getElementById('tdoc-pub-cancel').textContent = 'Done';
+        document.getElementById('odoc-pub-url').textContent = url;
+        document.getElementById('odoc-pub-copy').onclick = () => navigator.clipboard?.writeText(url);
+        document.getElementById('odoc-pub-open').onclick = () => window.open(url, '_blank');
+        document.getElementById('odoc-pub-go').style.display = 'none';
+        document.getElementById('odoc-pub-cancel').textContent = 'Done';
       } catch (e) {
         status.textContent = 'Failed: ' + e.message;
         go.disabled = false;
@@ -2028,7 +2028,7 @@
   function setPendingElementOutline(el) {
     clearPendingElementOutline();
     pendingElementOutline = document.createElement('div');
-    pendingElementOutline.className = 'tdoc-element-outline pending';
+    pendingElementOutline.className = 'odoc-element-outline pending';
     positionOutlineAround(pendingElementOutline, el);
     document.body.appendChild(pendingElementOutline);
   }
@@ -2046,7 +2046,7 @@
     closePopup();
     hideHoverUI();
     popup = document.createElement('div');
-    popup.className = 'tdoc-popup';
+    popup.className = 'odoc-popup';
     const needsSignIn = authConfigured && !identity;
     const preview = anchor.kind === 'text'
       ? `"${escapeHtml(anchor.text.slice(0, 80))}${anchor.text.length > 80 ? '…' : ''}"`
@@ -2172,17 +2172,17 @@
   // Commentable artifacts: leaf media + semantic blocks the author signaled
   // are "a unit" (section/article/aside/blockquote/table/details — note
   // `figure` and `pre` already included as media) + any element the author
-  // explicitly opted in via `data-tdoc-artifact` or a class containing
-  // `tdoc-artifact`. Author-composed cards (a transcript panel built from
+  // explicitly opted in via `data-odoc-artifact` or a class containing
+  // `odoc-artifact`. Author-composed cards (a transcript panel built from
   // <div>s, a custom widget) become commentable as a unit when tagged —
   // instead of being invisible to the artifact system.
   // NB: `article` is excluded — it's a doc content-root pattern; making it
   // commentable would let the whole doc become one big artifact. Use
-  // `section` or `data-tdoc-artifact` to mark sub-blocks instead.
+  // `section` or `data-odoc-artifact` to mark sub-blocks instead.
   const COMMENTABLE =
     'img, svg, canvas, video, pre, figure, iframe[src], ' +
     'section, aside, blockquote, table, details, ' +
-    '[data-tdoc-artifact], [class*="tdoc-artifact"]';
+    '[data-odoc-artifact], [class*="odoc-artifact"]';
   // The doc content root (per SKILL.md every doc wraps content in one of
   // these). resolveArtifact must never climb into/past it.
   const ARTICLE_ROOT_SEL = 'main, article, .wrap, .content, .container';
@@ -2287,8 +2287,8 @@
     if (!leaf || leaf.nodeType !== 1) return leaf;
     // If the leaf is already inside a comment-anchored element, keep that
     // exact element so existing anchors don't shift.
-    if (leaf.closest && leaf.closest('[data-tdoc-anchored]')) {
-      return leaf.closest('[data-tdoc-anchored]');
+    if (leaf.closest && leaf.closest('[data-odoc-anchored]')) {
+      return leaf.closest('[data-odoc-anchored]');
     }
     // Climb the full ancestor chain up to the content root, recording the
     // OUTERMOST visual-box ancestor that is still tighter than the content
@@ -2331,7 +2331,7 @@
   //
   // Old version was hard-coded around "must contain a media leaf
   // (img/svg/canvas/video)". That excluded the v0.1.54 cases — semantic
-  // blocks (<section>, <table>, etc.) and author opt-in (data-tdoc-artifact)
+  // blocks (<section>, <table>, etc.) and author opt-in (data-odoc-artifact)
   // can be commentable WITHOUT containing any media. This rewrite mirrors
   // the COMMENTABLE selector exactly: an artifact is anything COMMENTABLE
   // (either as the hovered element itself, an ancestor of it, or a
@@ -2341,7 +2341,7 @@
     if (isInUI(node) || (node.closest && node.closest(UI_ALL))) return null;
     // Existing anchored element wins (keep anchors stable).
     if (node.closest) {
-      const anchored = node.closest('[data-tdoc-anchored]');
+      const anchored = node.closest('[data-odoc-anchored]');
       if (anchored) return anchored;
     }
     // 1. Direct hit: the hovered node IS a commentable artifact, OR it's
@@ -2390,8 +2390,8 @@
     // IDENTITY FIRST: prefer the worker-stamped artifact id (immune to
     // DOM restructuring — same artifact in a different version has the
     // same aid).
-    const aid = el.getAttribute && el.getAttribute('data-tdoc-aid');
-    if (aid) return `[data-tdoc-aid="${aid}"]`;
+    const aid = el.getAttribute && el.getAttribute('data-odoc-aid');
+    if (aid) return `[data-odoc-aid="${aid}"]`;
     if (el.id) return `#${CSS.escape(el.id)}`;
     // Last-resort positional path (used only for previews before the doc
     // is published — after publish, every artifact has an aid).
@@ -2411,7 +2411,7 @@
     return parts.join(' > ');
   }
   function elementAid(el) {
-    return (el && el.getAttribute && el.getAttribute('data-tdoc-aid')) || null;
+    return (el && el.getAttribute && el.getAttribute('data-odoc-aid')) || null;
   }
   function elementLabel(el) {
     return el.getAttribute('alt') || el.getAttribute('aria-label') || el.getAttribute('title') || el.tagName.toLowerCase();
@@ -2419,7 +2419,7 @@
 
   // ── Anchor stability for ELEMENT (artifact) comments ──────────────────
   // Positional selectors like `div > svg:nth-of-type(1)` silently drift to
-  // a DIFFERENT artifact when /tdoc edit restructures the DOM (e.g. wraps
+  // a DIFFERENT artifact when /odoc edit restructures the DOM (e.g. wraps
   // an svg in a <figure>, or adds a sibling). To make element anchors
   // survive regeneration we capture a CONTENT FINGERPRINT at comment time
   // and validate it at resolve time — if the selector lands on something
@@ -2499,7 +2499,7 @@
     if (hit) {
       if (!dragState.marquee) {
         dragState.marquee = document.createElement('div');
-        dragState.marquee.className = 'tdoc-drag-marquee';
+        dragState.marquee.className = 'odoc-drag-marquee';
         document.body.appendChild(dragState.marquee);
       }
       dragState.marquee.style.left = Math.min(dragState.x0, e.pageX) + 'px';
@@ -2599,11 +2599,11 @@
   function startReanchor(id) {
     if (state.reanchoringId === id) { exitReanchor(); return; }
     state.reanchoringId = id;
-    document.body.classList.add('tdoc-reanchoring');
+    document.body.classList.add('odoc-reanchoring');
   }
   function exitReanchor() {
     state.reanchoringId = null;
-    document.body.classList.remove('tdoc-reanchoring');
+    document.body.classList.remove('odoc-reanchoring');
   }
   // Capture a fallback position for an existing comment by reading the
   // current anchor's location, so an unanchored card stays where it was.
@@ -2625,8 +2625,8 @@
   // Wire banner buttons (created once near the bar). The banner is the
   // only place we expose "remove anchor" — keeps cards uncluttered and
   // resolves the gesture conflict you'd hit with "click empty space".
-  document.getElementById('tdoc-reanchor-cancel').onclick = (e) => { e.stopPropagation(); exitReanchor(); };
-  document.getElementById('tdoc-reanchor-remove').onclick = async (e) => {
+  document.getElementById('odoc-reanchor-cancel').onclick = (e) => { e.stopPropagation(); exitReanchor(); };
+  document.getElementById('odoc-reanchor-remove').onclick = async (e) => {
     e.stopPropagation();
     const id = state.reanchoringId;
     if (!id) return;
@@ -2665,7 +2665,7 @@
     const r = el.getBoundingClientRect();
 
     commentPill = document.createElement('button');
-    commentPill.className = 'tdoc-comment-pill';
+    commentPill.className = 'odoc-comment-pill';
     commentPill.type = 'button';
     commentPill.setAttribute('aria-label', 'Comment on this');
     commentPill.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>Comment`;
@@ -2703,7 +2703,7 @@
     const t = e.target;
     if (!t || t.nodeType !== 1) return;
     // The pill itself is in `body` — don't hide UI when the cursor enters it.
-    if (t.closest('.tdoc-comment-pill')) return;
+    if (t.closest('.odoc-comment-pill')) return;
     if (isInUI(t)) { hideHoverUI(); return; }
     // ANY element under the cursor → the artifact section it belongs to
     // (the ring, a button, a label, empty padding — all map to the SAME
@@ -2717,7 +2717,7 @@
     const next = e.relatedTarget;
     if (!next) { hideHoverUI(); return; }
     // Stay shown if cursor moves into the Comment button.
-    if (next.closest && next.closest('.tdoc-comment-pill')) return;
+    if (next.closest && next.closest('.odoc-comment-pill')) return;
     // Stay shown while the cursor remains anywhere inside the SAME section.
     if (pillTargetEl && pillTargetEl.contains && pillTargetEl.contains(next)) return;
     if (pillTargetEl && artifactSectionOf(next) === pillTargetEl) return;
@@ -2734,26 +2734,26 @@
     if (!t || t.nodeType !== 1) return;
 
     // Close menus that aren't under the cursor
-    if (!t.closest('#tdoc-more-btn') && !t.closest('#tdoc-secondary-menu')) secMenu.classList.remove('open');
-    if (!t.closest('.tdoc-menu-wrap')) copyMenu.classList.remove('open');
+    if (!t.closest('#odoc-more-btn') && !t.closest('#odoc-secondary-menu')) secMenu.classList.remove('open');
+    if (!t.closest('.odoc-menu-wrap')) copyMenu.classList.remove('open');
     // Close the profile menu on any click outside its wrapper.
-    if (!t.closest('#tdoc-me') && !t.closest('#tdoc-me-menu')) {
-      const mm = document.getElementById('tdoc-me-menu');
-      const mb = document.getElementById('tdoc-me');
+    if (!t.closest('#odoc-me') && !t.closest('#odoc-me-menu')) {
+      const mm = document.getElementById('odoc-me-menu');
+      const mb = document.getElementById('odoc-me');
       if (mm) mm.classList.remove('open');
       if (mb) mb.setAttribute('aria-expanded', 'false');
     }
-    if (!t.closest('.tdoc-version-wrap')) {
-      const vm = document.getElementById('tdoc-version-menu');
-      const vt = document.getElementById('tdoc-version-toggle');
+    if (!t.closest('.odoc-version-wrap')) {
+      const vm = document.getElementById('odoc-version-menu');
+      const vt = document.getElementById('odoc-version-toggle');
       if (vm) vm.classList.remove('open');
       if (vt) vt.setAttribute('aria-expanded', 'false');
     }
-    if (!t.closest('.tdoc-emoji-picker') && !t.closest('.tdoc-react-add')) closeEmojiPicker();
+    if (!t.closest('.odoc-emoji-picker') && !t.closest('.odoc-react-add')) closeEmojiPicker();
 
     // Close drawer on outside click (narrow only)
     if (commentLayer.classList.contains('open') &&
-        !t.closest('#tdoc-comment-layer, .tdoc-fab, .tdoc-popup, .tdoc-modal-bg, .tdoc-emoji-picker')) {
+        !t.closest('#odoc-comment-layer, .odoc-fab, .odoc-popup, .odoc-modal-bg, .odoc-emoji-picker')) {
       commentLayer.classList.remove('open');
     }
 
@@ -2784,13 +2784,13 @@
       }
       if (node.nodeType !== Node.ELEMENT_NODE) return '';
       if (node.classList && (
-        node.classList.contains('tdoc-bar') ||
-        node.classList.contains('tdoc-popup') ||
-        node.classList.contains('tdoc-margin-comment') ||
-        node.classList.contains('tdoc-modal-bg') ||
-        node.classList.contains('tdoc-element-outline') ||
-        node.classList.contains('tdoc-hover-outline') ||
-        node.id === 'tdoc-comment-layer'
+        node.classList.contains('odoc-bar') ||
+        node.classList.contains('odoc-popup') ||
+        node.classList.contains('odoc-margin-comment') ||
+        node.classList.contains('odoc-modal-bg') ||
+        node.classList.contains('odoc-element-outline') ||
+        node.classList.contains('odoc-hover-outline') ||
+        node.id === 'odoc-comment-layer'
       )) return '';
       const tag = node.tagName.toLowerCase();
       const kids = () => Array.from(node.childNodes).map(c => walk(c, ctx)).join('');
@@ -2909,7 +2909,7 @@
     return md;
   }
 
-  window.__tdocCopyDocMd = async function (includeComments) {
+  window.__odocCopyDocMd = async function (includeComments) {
     const clone = document.body.cloneNode(true);
     clone.querySelectorAll(UI_ALL + ', script, style, noscript').forEach(n => n.remove());
     let md = htmlToMarkdown(clone);
@@ -2917,10 +2917,10 @@
       md += '\n\n---\n\n## Comments\n\n' + state.activeComments.map(commentToMd).join('\n---\n\n');
     }
     const ok = await copyText(md);
-    if (ok) flashCopied(document.getElementById('tdoc-copy-md-btn'));
+    if (ok) flashCopied(document.getElementById('odoc-copy-md-btn'));
     else flashToast('Copy failed');
   };
-  window.__tdocCopyCommentMd = async function (commentId, srcBtn) {
+  window.__odocCopyCommentMd = async function (commentId, srcBtn) {
     const c = state.activeComments.find(x => x.id === commentId);
     if (!c) return;
     const ok = await copyText(commentToMd(c));

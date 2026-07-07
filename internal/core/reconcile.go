@@ -11,7 +11,7 @@ import (
 // alive at the version we try to re-bind it by fingerprint + nearest-heading,
 // appending an anchor_changed event; otherwise we mark it lost.
 
-var aidSelectorRe = regexp.MustCompile(`\[data-tdoc-aid="(\w+)"\]`)
+var aidSelectorRe = regexp.MustCompile(`\[data-odoc-aid="(\w+)"\]`)
 
 // knownAid extracts the aid an anchor currently targets, if any.
 func knownAid(a *Anchor) string {
@@ -79,7 +79,7 @@ func nextAnchor(a *Anchor, aids []StampedArtifact) *Anchor {
 		return &Anchor{
 			Kind:        "element",
 			AID:         newAID,
-			Selector:    `[data-tdoc-aid="` + newAID + `"]`,
+			Selector:    `[data-odoc-aid="` + newAID + `"]`,
 			Label:       label,
 			Fingerprint: a.Fingerprint,
 			Fallback:    a.Fallback,

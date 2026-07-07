@@ -25,7 +25,7 @@
             "id": "r1",
             "author": {
               "kind": "agent",
-              "login": "tdoc-agent"
+              "login": "odoc-agent"
             },
             "text": "done",
             "agent_status": "applied"
@@ -37,7 +37,7 @@
           "at_version": 2,
           "at": "2024-01-01T00:00:00.000Z",
           "applied_in": 2,
-          "by": "tdoc-agent",
+          "by": "odoc-agent",
           "agent_status": "applied"
         }
       ]

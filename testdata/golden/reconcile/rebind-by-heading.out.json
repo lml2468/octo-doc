@@ -11,7 +11,7 @@
       "anchor": {
         "kind": "element",
         "aid": "newhash",
-        "selector": "[data-tdoc-aid=\"newhash\"]",
+        "selector": "[data-odoc-aid=\"newhash\"]",
         "label": "svg",
         "fallback": {
           "nearestHeading": {

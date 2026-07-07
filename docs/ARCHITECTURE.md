@@ -1,25 +1,13 @@
 # octo-doc Architecture
 
 octo-doc is a self-hosted reimplementation of [tdoc](https://github.com/serenakeyitan/tdoc)
-that removes every Cloudflare dependency (Workers, KV, D1, R2, Durable Objects)
-while preserving the document model, URL scheme, and comment semantics
-byte-for-byte. It is written in Go 1.26 and ships as a single static binary.
+that preserves the document model, URL scheme, and comment semantics
+byte-for-byte. It is written in Go 1.26 and ships as a single static binary
+backed by PostgreSQL (metadata) and an S3-compatible object store (blobs).
 
-## Before / after
+## System shape
 
 ```
-┌─────────────────────── UPSTREAM (Cloudflare) ───────────────────────┐
-│                                                                       │
-│   tdoc-publish ──HTTP──▶  Worker (worker.js, 1921 LOC)                │
-│                              ├── R2 bucket  DOCS   (immutable HTML)    │
-│                              ├── KV         META   (meta + comments    │
-│                              │                      + sessions)        │
-│                              └── Durable Object COMMENTS               │
-│                                   (per-slug write serialization)       │
-│                           overlay.js inlined at BUILD time via         │
-│                           the __TDOC_OVERLAY_JS__ placeholder          │
-└───────────────────────────────────────────────────────────────────────┘
-
 ┌──────────────────────── octo-doc (self-hosted) ─────────────────────┐
 │                                                                       │
 │   octo publish ──HTTP──▶  Go 1.26 app (chi router, static binary)     │
@@ -27,7 +15,7 @@ byte-for-byte. It is written in Go 1.26 and ships as a single static binary.
 │                              │  transport/ ─▶ service/ ─▶ storage/     │
 │                              │  (thin httpx) (logic)     (interfaces)  │
 │                              │                                          │
-│                              ├── internal/core/ (PORTED VERBATIM):     │
+│                              ├── internal/core/ (dependency-free):     │
 │                              │     cyrb53.go         hash primitive      │
 │                              │     stamp.go          data-odoc-aid       │
 │                              │     fold.go           event-log fold       │
@@ -38,9 +26,9 @@ byte-for-byte. It is written in Go 1.26 and ships as a single static binary.
 │                              │     types.go          shared domain types     │
 │                              │                                          │
 │                              ├── internal/service/ DocService,          │
-│                              │     CommentService, AuthService, github   │
+│                              │     CommentService, AuthService           │
 │                              ├── internal/platform/ sluglock (per-slug  │
-│                              │     lock ≈DO), config, log, apperr        │
+│                              │     write lock), config, log, apperr      │
 │                              └── internal/storage/ {MetadataStore,      │
 │                                    BlobStore}: postgres/ + s3/          │
 │                                    (memory/ for tests)                  │
@@ -58,29 +46,27 @@ services; no storage type (a pgx row, an S3 object) ever reaches a handler.
 Module boundaries are ordinary Go packages exporting their public surface; there
 are no import cycles.
 
-### What maps to what
+### Storage
 
-| Cloudflare primitive            | octo-doc replacement                                  |
-| ------------------------------- | ----------------------------------------------------- |
-| R2 bucket `DOCS`                | `BlobStore` → S3-compatible (S3 / MinIO)              |
-| KV `META` (meta + comments)     | `MetadataStore` → PostgreSQL (pgx)                    |
-| KV `session:*`                  | `MetadataStore.sessions` table                        |
-| Durable Object `CommentsStore`  | in-process per-slug keyed mutex (`internal/platform/sluglock`) |
-| `wrangler secret TDOC_UPLOAD_TOKEN` | `WRITE_TOKEN` env, or `/v1/admin/bootstrap` token |
-| Worker build-time overlay inline | `assets/overlay.js` embedded via `go:embed`         |
-| `caches.default`, `Request.cf`, `waitUntil` | none — no Cloudflare assumptions leak in |
+| Concern | Backend |
+| ------- | ------- |
+| Immutable version HTML + the mutable draft slot | `BlobStore` → S3-compatible (S3 / MinIO) |
+| Doc metadata, comments, sessions | `MetadataStore` → PostgreSQL (pgx) |
+| Per-slug write serialization | in-process keyed mutex (`internal/platform/sluglock`) |
+| Author auth | `WRITE_TOKEN` env, or a `/v1/admin/bootstrap` token |
+| Overlay delivery | `assets/overlay.js` embedded via `go:embed` |
 
 ## Rendering parity (byte-equivalent output)
 
-The success criterion *"相同输入下渲染字节级等价于上游 Workers"* is met by
+The success criterion *"相同输入下渲染字节级等价于上游"* is met by
 **porting the rendering-critical functions verbatim** into `internal/core/`
 rather than rewriting them:
 
 - `stampAids()` — stamps `data-odoc-aid="<cyrb53 hash>"` on every commentable
-  artifact. Ported character-for-character from upstream worker.js (the aid hash
+  artifact. Ported character-for-character from upstream (the aid hash
   is byte-identical; only the attribute name is octo-doc-native). Verified by
   `go test ./internal/core/` against the golden fixtures in `testdata/golden`
-  ("byte-parity with the upstream Cloudflare worker") across ordinary and
+  ("byte-parity with the upstream renderer") across ordinary and
   adversarial HTML.
 - The event-log comment model (`snapshotAt`, `dedupEvents`, `reconcileAnchors`,
   `compactComments`) — ported verbatim.
@@ -197,7 +183,7 @@ seam a future Octo unified login plugs into.
 
 Per-slug comment writes are serialized by `internal/platform/sluglock` — an
 in-process keyed mutex that makes `read → applyCommentOp → write` atomic for a
-given slug, exactly the guarantee the Durable Object provided. This is correct
+given slug. This is correct
 for the default **single-instance** deployment. The event log additionally
 converges under concurrent writes via `dedupEvents` (stable event ids), so even
 races that the mutex doesn't cover (e.g. future multi-instance) degrade to

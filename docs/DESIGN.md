@@ -5,13 +5,11 @@ operational procedures (backup, upgrade).
 
 ## Motivation
 
-tdoc is excellent but couples you to Cloudflare: publishing requires a
-Cloudflare account, `wrangler login`, an R2 bucket, a KV namespace, a claimed
-`workers.dev` subdomain, and a Durable Object migration. That's a lot of
-vendor-specific surface for "host an HTML file with comments." octo-doc keeps
-the product identical and ships it as a single static Go binary that runs
-anywhere — a $5 VPS, a homelab box, a container platform — with
-`docker compose up -d` or a one-file `octo-doc serve`.
+octo-doc makes prompt-native, commentable documents something you host yourself.
+The product is "host an HTML file with comments and versions" — so it ships as a
+single static Go binary that runs anywhere — a $5 VPS, a homelab box, a container
+platform — with `docker compose up -d` or a one-file `octo-doc serve`, backed by
+PostgreSQL and any S3-compatible object store you already run.
 
 ## Runtime & framework selection
 
@@ -78,23 +76,23 @@ BlobStore       immutable HTML keyed by (slug, version)
 
 octo-doc has exactly **two required backends behind these two interfaces**:
 PostgreSQL for `MetadataStore` and an S3-compatible object store for `BlobStore`.
-There is no single-node fallback — the same split that R2 + KV made on
-Cloudflare is now the supported topology everywhere, which keeps the production
-path and the local-development path (Postgres + MinIO) identical. The in-memory
-store exists only to make `internal/core`/service tests hermetic.
+There is no single-node fallback — this metadata/blob split is the supported
+topology everywhere, which keeps the production path and the local-development
+path (Postgres + MinIO) identical. The in-memory store exists only to make
+`internal/core`/service tests hermetic.
 
 ### Why two stores, not one
 
 Metadata is small, transactional, and queried (`listMeta` for the catalog).
 Blobs are large, immutable, and write-once. Splitting them lets each pick the
 right backend: a relational store for metadata, an object store for blobs —
-the same split R2+KV made on Cloudflare, now pluggable.
+each pluggable behind its interface.
 
 ## Concurrency, in depth
 
 The per-slug lock (`internal/platform/sluglock`) is an in-process keyed mutex.
 It guarantees the read-modify-write of a slug's comment list is atomic within
-one process — the Durable Object's guarantee, minus the network hop.
+one process.
 
 For **multi-instance** deployments (several app containers behind a load
 balancer sharing one Postgres), the in-process lock is insufficient. Because
@@ -131,8 +129,3 @@ if bucket versioning is on.
 Because documents are immutable and comments are an append-only event log,
 upgrades are non-destructive by construction: there is no in-place mutation a
 new version could corrupt.
-
-## Migrating from a Cloudflare deployment
-
-See [MIGRATING_FROM_WORKERS.md](./MIGRATING_FROM_WORKERS.md) for the KV/R2 →
-Postgres/S3 import path.

@@ -1,7 +1,7 @@
 // Package core is the dependency-free domain kernel: artifact identity stamping,
 // the comment event-log fold, mutation ops, and anchor reconciliation.
 //
-// It is a verbatim-equivalent port of the upstream Cloudflare Worker's logic.
+// It is a verbatim-equivalent port of the upstream tdoc logic.
 // The same input MUST produce byte-identical output (for stamping) or
 // logically-identical snapshots (for the fold), verified against golden
 // fixtures generated from the original TypeScript in testdata/golden.

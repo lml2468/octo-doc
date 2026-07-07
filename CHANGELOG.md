@@ -6,6 +6,45 @@ adhere to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-07-07
+
+### Changed
+
+- **Rebranded every octo-doc-owned `tdoc` identifier to `odoc`**: the aid
+  attribute is now `data-odoc-aid`, overlay CSS classes are `odoc-*`, the boot
+  global is `window.__ODOC__`, the agent login is `odoc-agent`, and the artifact
+  opt-in marker is `data-odoc-artifact`. The aid **hash** is unchanged (computed
+  over stripped content), so golden parity holds.
+- Removed all Cloudflare/Workers framing from docs and comments — octo-doc is
+  described on its own terms (self-hosted, PostgreSQL + S3).
+- Repository home is `github.com/lml2468/octo-doc`: the Go module path, imports,
+  `octo update` release repo, `REPO_URL` default, and the ghcr image
+  (`ghcr.io/lml2468/octo-doc`) all point there. `go install
+  github.com/lml2468/octo-doc/cmd/octo@latest` now resolves.
+
+### Fixed
+
+- A fresh `?code=` or Bearer credential now takes precedence over a stale
+  capability cookie, so rotating a share code cuts off old links while a
+  recipient's new link keeps working, and `octo new --open` reaches the author's
+  draft even with a pre-existing reader cookie.
+- The Share (mint-code) button is hidden from readers — it is an author-only
+  action and previously 404'd when a reader clicked it.
+- `promote` is idempotent past the version commit: a failed draft-clear no longer
+  surfaces as an error that a retry would turn into a duplicate version.
+
+### Removed
+
+- The legacy `TDOC_*` env fallback and `~/.tdoc` / `~/tdocs` paths — `OCTO_*` is
+  the only configuration surface.
+- `docs/MIGRATING_FROM_WORKERS.md` (Cloudflare migration guide).
+
+### Breaking
+
+- Documents published before this release carry `data-tdoc-aid` in their stored
+  HTML; their comment anchors will not resolve until the doc is re-published (the
+  overlay now looks for `data-odoc-aid`).
+
 ### Changed
 
 - **Rewrote the server in Go** (was TypeScript/Node). The domain kernel

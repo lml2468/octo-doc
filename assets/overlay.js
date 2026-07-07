@@ -1961,7 +1961,7 @@
     bg.innerHTML = `
       <div class="tdoc-modal">
         <h3>Publish this draft</h3>
-        <p class="muted">This freezes the current draft as a new immutable version with a permanent URL. The draft stays editable for the next round.</p>
+        <p class="muted">This freezes the current draft as a new immutable version with a permanent URL. The draft slot is then cleared — start a fresh draft to iterate again.</p>
         <div class="status" id="tdoc-pub-status" style="display:none;margin-top:10px;"></div>
         <div id="tdoc-pub-result" style="display:none;margin-top:10px;">
           <div class="code" id="tdoc-pub-url" style="font-size:14px;letter-spacing:0;text-align:left;"></div>

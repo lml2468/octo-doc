@@ -26,21 +26,58 @@ import (
 func slugFromPath(r *http.Request) string  { return chi.URLParam(r, "slug") }
 func slugFromQuery(r *http.Request) string { return r.URL.Query().Get("slug") }
 
-// capCookieName is the per-doc capability cookie. Scoping the name (and Path) to
-// the slug means one share link never leaks access to another doc.
+// capCookieName is the per-doc capability cookie. Scoping the name to the slug
+// means one share link never leaks access to another doc. (The cookie's Path is
+// "/" so it reaches /v1 routes too — see setCapCookie; only the name is scoped.)
 func capCookieName(slug string) string { return "octo_cap_" + storage.HashSlug(slug) }
 
-// codeFromRequest extracts a candidate credential for a doc: Authorization Bearer
-// first (author write token or code-as-bearer, used by the CLI), then the per-doc
-// capability cookie, then the ?code= query param (a browser's first hit).
-func (s *Server) codeFromRequest(r *http.Request, slug string) string {
+// credCandidates returns every credential a request presents for a doc, in no
+// particular order: an Authorization Bearer (author write token or code-as-bearer,
+// used by the CLI), the per-doc capability cookie, and the ?code= query param (a
+// browser's first hit). A request can carry more than one — e.g. a browser holding
+// a stale cookie that is then handed a freshly rotated ?code= link — so callers
+// must resolve them all and take the strongest, never letting a weak/stale cookie
+// mask a valid ?code= or Bearer.
+func (s *Server) credCandidates(r *http.Request, slug string) []string {
+	var creds []string
 	if t := bearerToken(r); t != "" {
-		return t
+		creds = append(creds, t)
 	}
 	if c, err := r.Cookie(capCookieName(slug)); err == nil && c.Value != "" {
-		return c.Value
+		creds = append(creds, c.Value)
 	}
-	return r.URL.Query().Get("code")
+	if q := r.URL.Query().Get("code"); q != "" {
+		creds = append(creds, q)
+	}
+	return creds
+}
+
+// resolveCap returns the highest capability any of the request's credentials
+// grants for the slug. Resolving all candidates (rather than the first non-empty
+// one) means a fresh valid ?code= or Bearer always wins over a stale cookie — so
+// rotating a code cuts off the old link while a recipient's new link still works,
+// and an author's ?code=<write-token> is honored even if the browser holds a
+// weaker reader cookie for the same doc.
+func (s *Server) resolveCap(r *http.Request, slug string) (service.Capability, error) {
+	_, cap, err := s.bestCred(r, slug)
+	return cap, err
+}
+
+// bestCred returns the credential granting the strongest capability for the slug,
+// plus that capability. Used by the ?code=→cookie exchange so the cookie it sets
+// carries the credential the viewer was actually authorized by (not a stale one).
+func (s *Server) bestCred(r *http.Request, slug string) (string, service.Capability, error) {
+	bestCred, best := "", service.CapNone
+	for _, cred := range s.credCandidates(r, slug) {
+		cap, err := s.auth.CapabilityFor(r.Context(), slug, cred)
+		if err != nil {
+			return "", service.CapNone, err
+		}
+		if cap > best {
+			best, bestCred = cap, cred
+		}
+	}
+	return bestCred, best, nil
 }
 
 // capCtxKey stashes the resolved capability for handlers that branch on it.
@@ -70,8 +107,7 @@ func (s *Server) docHTMLGate(min service.Capability, next http.HandlerFunc) http
 			writeErr(w, s.logger, err)
 			return
 		}
-		cred := s.codeFromRequest(r, slug)
-		cap, err := s.auth.CapabilityFor(r.Context(), slug, cred)
+		cred, cap, err := s.bestCred(r, slug)
 		if err != nil {
 			writeErr(w, s.logger, err)
 			return
@@ -82,8 +118,10 @@ func (s *Server) docHTMLGate(min service.Capability, next http.HandlerFunc) http
 			return
 		}
 		// Exchange a ?code= credential for a cookie and drop it from the URL, so
-		// the secret (reader code OR write token) leaves the address bar.
-		if r.URL.Query().Get("code") != "" && bearerToken(r) == "" {
+		// the secret (reader code OR write token) leaves the address bar. Only do
+		// this when the winning credential came in via ?code= (a fresh link),
+		// storing that credential so a later stale cookie can't shadow it.
+		if q := r.URL.Query().Get("code"); q != "" && q == cred && bearerToken(r) == "" {
 			setCapCookie(w, slug, cred, s.cfg.CookieSecure)
 			clean := *r.URL
 			q := clean.Query()
@@ -106,7 +144,7 @@ func (s *Server) requireDocReadJSON(slugFrom func(*http.Request) string, next ht
 			writeErr(w, s.logger, err)
 			return
 		}
-		cap, err := s.auth.CapabilityFor(r.Context(), slug, s.codeFromRequest(r, slug))
+		cap, err := s.resolveCap(r, slug)
 		if err != nil {
 			writeErr(w, s.logger, err)
 			return
@@ -124,7 +162,7 @@ func (s *Server) requireDocReadJSON(slugFrom func(*http.Request) string, next ht
 // have the slug; it returns a 404-worthy error on none. Returns nil when the
 // caller has at least reader access.
 func (s *Server) requireDocCap(r *http.Request, slug string) error {
-	cap, err := s.auth.CapabilityFor(r.Context(), slug, s.codeFromRequest(r, slug))
+	cap, err := s.resolveCap(r, slug)
 	if err != nil {
 		return err
 	}
@@ -145,7 +183,7 @@ func (s *Server) requireDocAuthor(next http.Handler) http.Handler {
 			writeErr(w, s.logger, err)
 			return
 		}
-		cap, err := s.auth.CapabilityFor(r.Context(), slug, s.codeFromRequest(r, slug))
+		cap, err := s.resolveCap(r, slug)
 		if err != nil {
 			writeErr(w, s.logger, err)
 			return

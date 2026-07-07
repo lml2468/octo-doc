@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"maps"
 	"time"
 
@@ -221,6 +222,13 @@ func (s *DocService) GetDraft(ctx context.Context, slug string) (*RenderData, er
 // Promote turns the current draft into a new immutable version via the normal
 // publish path (monotonic maxV+1), then clears the draft blob + meta marker. It
 // holds the per-slug lock across the whole sequence so it can't race a publish.
+//
+// publishLocked is the point of no return: once it succeeds the version is durably
+// committed and cannot be rolled back. Clearing the draft afterwards is best-effort
+// cleanup — if it fails we log and still return success, because reporting a failure
+// would invite a retry that re-runs publishLocked and mints a duplicate version. A
+// leftover draft blob is harmless: it's invisible to ListVersions and is overwritten
+// by the next SaveDraft.
 func (s *DocService) Promote(ctx context.Context, slug, title string) (*PublishResult, error) {
 	var result *PublishResult
 	err := s.lock.With(ctx, slug, func() error {
@@ -236,13 +244,16 @@ func (s *DocService) Promote(ctx context.Context, slug, title string) (*PublishR
 		if perr != nil {
 			return perr
 		}
+		result = r
+		// Best-effort cleanup past the commit point — never fail the promote here.
 		if derr := s.blobs.DeleteDraft(ctx, slug); derr != nil {
-			return apperr.Upstream("draft clear failed", "draft_clear_failed", derr)
+			slog.Default().Warn("promote: draft blob clear failed (harmless, will be overwritten)",
+				"slug", slug, "version", r.Version, "err", derr)
 		}
 		if merr := s.clearDraftMeta(ctx, slug); merr != nil {
-			return merr
+			slog.Default().Warn("promote: draft meta clear failed (harmless)",
+				"slug", slug, "version", r.Version, "err", merr)
 		}
-		result = r
 		return nil
 	})
 	if err != nil {

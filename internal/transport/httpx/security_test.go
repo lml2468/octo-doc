@@ -182,6 +182,47 @@ func TestAuthorMutationsViaCookie(t *testing.T) {
 	}
 }
 
+// TestFreshCodeBeatsStaleCookie guards the credential-precedence fix: a browser
+// holding an old capability cookie that is then handed a fresh valid ?code= link
+// must be authorized by the code, not shadowed by the stale cookie. Covers both
+// failure modes: (a) a revoked reader code cut off despite a valid new code, and
+// (b) an author's ?code=<write-token> blocked by a pre-existing reader cookie.
+func TestFreshCodeBeatsStaleCookie(t *testing.T) {
+	h := newTestServer(t, nil)
+	auth := map[string]string{"Authorization": "Bearer test-token", "Content-Type": "application/json"}
+	_ = do(t, h, http.MethodPost, "/v1/docs", auth,
+		`{"slug":"rot","html":"<html><body><p>hi</p></body></html>"}`)
+
+	mintCode := func() string {
+		sh := do(t, h, http.MethodPost, "/v1/docs/rot/share", map[string]string{"Authorization": "Bearer test-token"}, "")
+		var share map[string]any
+		_ = json.Unmarshal(sh.Body.Bytes(), &share)
+		code, _ := share["data"].(map[string]any)["code"].(string)
+		return code
+	}
+
+	// (a) Rotate: an old code's cookie must not block a freshly rotated code link.
+	oldCode := mintCode()
+	newCode := mintCode() // rotation invalidates oldCode's hash
+	staleCookie := capCookie("rot", oldCode)
+	rec := do(t, h, http.MethodGet, "/d/rot/v/1?code="+newCode, map[string]string{"Cookie": staleCookie}, "")
+	if rec.Code != http.StatusFound {
+		t.Fatalf("fresh code with stale cookie = %d; want 302 (code honored): %s", rec.Code, rec.Body.String())
+	}
+	// The exchange must re-issue the cookie with the winning (new) code.
+	if sc := rec.Header().Get("Set-Cookie"); !contains(sc, newCode) {
+		t.Errorf("exchange should store the new code; Set-Cookie = %q", sc)
+	}
+
+	// (b) An author's ?code=<write-token> must win over a stale reader cookie so
+	// `octo new --open` reaches the draft even in a browser that read the doc first.
+	readerCookie := capCookie("rot", newCode)
+	rec = do(t, h, http.MethodGet, "/d/rot/draft?code=test-token", map[string]string{"Cookie": readerCookie}, "")
+	if rec.Code != http.StatusFound {
+		t.Fatalf("author code with reader cookie = %d; want 302 (author honored): %s", rec.Code, rec.Body.String())
+	}
+}
+
 func contains(s, sub string) bool {
 	return len(sub) == 0 || (len(s) >= len(sub) && indexOf(s, sub) >= 0)
 }

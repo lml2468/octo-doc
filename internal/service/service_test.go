@@ -2,6 +2,7 @@ package service_test
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/Mininglamp-OSS/octo-doc/internal/core"
@@ -116,6 +117,54 @@ func TestPublishMergeReconcilesAnchors(t *testing.T) {
 	}
 	if _, err := cs.List(ctx, "d", 2); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// failDeleteDraftBlobs wraps a blob store but always errors on DeleteDraft, to
+// simulate a transient blob-store failure in the post-commit cleanup of Promote.
+type failDeleteDraftBlobs struct {
+	*memory.Store
+}
+
+func (f failDeleteDraftBlobs) DeleteDraft(ctx context.Context, slug string) error {
+	return errors.New("simulated transient S3 failure")
+}
+
+// TestPromoteIdempotentWhenDraftClearFails guards against a duplicate version: if
+// DeleteDraft fails after publishLocked has committed the version, Promote must
+// still report success (not surface the cleanup error), so a naive retry doesn't
+// re-run publishLocked and mint a second identical version.
+func TestPromoteIdempotentWhenDraftClearFails(t *testing.T) {
+	store := memory.New()
+	locker := sluglock.NewMemory()
+	blobs := failDeleteDraftBlobs{store}
+	cs := service.NewCommentService(store, locker)
+	ds := service.NewDocService(blobs, store, cs, locker, "", 5<<20)
+	ctx := context.Background()
+
+	if _, err := ds.SaveDraft(ctx, "d", "<html><body><p>draft</p></body></html>", "T"); err != nil {
+		t.Fatal(err)
+	}
+
+	// Promote succeeds despite the DeleteDraft failure (cleanup is best-effort).
+	r1, err := ds.Promote(ctx, "d", "T")
+	if err != nil {
+		t.Fatalf("promote should succeed past the commit point, got: %v", err)
+	}
+	if r1.Version != 1 {
+		t.Fatalf("first promote version = %d, want 1", r1.Version)
+	}
+
+	// The draft still exists (delete failed), so a retry could re-promote. Because
+	// the first promote reported success, a well-behaved caller won't retry — but if
+	// it does, it mints v2 rather than corrupting v1. Assert v1 is intact and the
+	// list has exactly the versions we expect after one *successful* promote.
+	vl, err := ds.ListVersions(ctx, "d")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(vl.Versions) != 1 || vl.Versions[0].N != 1 {
+		t.Fatalf("after one successful promote, versions = %+v; want exactly [v1]", vl.Versions)
 	}
 }
 

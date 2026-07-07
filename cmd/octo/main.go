@@ -107,10 +107,10 @@ commands:
   update       self-update from GitHub Releases
   version      print the CLI version
 
-config (env wins, then ~/.octo/config.json, then ~/.tdoc fallbacks):
+config (env wins, then ~/.octo/config.json):
   OCTO_BASE_URL  server to author against (e.g. https://docs.example.com)
   OCTO_TOKEN     write token (Authorization: Bearer) — author credential
   OCTO_CODE      a doc share code (reader credential, for pull/comment)
-  OCTO_DIR       local working copy (default ~/octo-docs, else existing ~/tdocs)
+  OCTO_DIR       local working copy (default ~/octo-docs)
 `)
 }

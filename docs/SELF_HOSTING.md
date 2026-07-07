@@ -8,7 +8,7 @@ From nothing to a live, TLS-secured doc server in ~15 minutes on a $5 VPS.
 git clone https://github.com/Mininglamp-OSS/octo-doc && cd octo-doc
 DOMAIN=docs.example.com docker compose -f deploy/docker-compose.yml up -d --wait
 TOKEN=$(curl -sX POST http://localhost:8080/v1/admin/bootstrap | jq -r .data.token)
-echo "Publish with:  export TDOC_BASE_URL=https://docs.example.com TDOC_TOKEN=$TOKEN"
+echo "Publish with:  export OCTO_BASE_URL=https://docs.example.com OCTO_TOKEN=$TOKEN"
 ```
 
 ---
@@ -59,16 +59,16 @@ the compose file before `up` (bootstrap is then disabled).
 ### 5. Publish from your machine
 
 ```bash
-export TDOC_BASE_URL="https://docs.example.com"
-export TDOC_TOKEN="<the token>"
-/tdoc publish my-doc          # or: bin/tdoc-publish my-doc
+export OCTO_BASE_URL="https://docs.example.com"
+export OCTO_TOKEN="<the token>"
+octo publish my-doc
 # → Published: https://docs.example.com/d/my-doc/v/1
 ```
 
 ### Verify
 
 ```bash
-curl -sf https://docs.example.com/v1/ping        # {"data":{"ok":true,"service":"tdoc"}}
+curl -sf https://docs.example.com/v1/ping        # {"data":{"ok":true,"service":"octo-doc"}}
 curl -sf https://docs.example.com/d/my-doc/v/1 | grep -q '<h1' && echo OK
 ```
 

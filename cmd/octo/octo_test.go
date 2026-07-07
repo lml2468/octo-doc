@@ -23,19 +23,21 @@ func TestConfigEnvPrecedence(t *testing.T) {
 	}
 }
 
-func TestConfigTDOCFallback(t *testing.T) {
-	// With no OCTO_* set, the legacy TDOC_* names must still resolve.
+func TestConfigNoLegacyFallback(t *testing.T) {
+	// Legacy names are gone: with no OCTO_* set (and a legacy-style var present),
+	// config resolves empty — OCTO_* is the only accepted surface.
 	os.Unsetenv("OCTO_BASE_URL")
 	os.Unsetenv("OCTO_TOKEN")
 	t.Setenv("TDOC_BASE_URL", "https://legacy.example.com")
 	t.Setenv("TDOC_TOKEN", "legacy-tok")
 	t.Setenv("OCTO_DIR", t.TempDir())
+	t.Setenv("HOME", t.TempDir()) // no ~/.octo/config.json to fall back to
 	cfg := loadConfig()
-	if cfg.BaseURL != "https://legacy.example.com" {
-		t.Errorf("BaseURL fallback = %q", cfg.BaseURL)
+	if cfg.BaseURL != "" {
+		t.Errorf("BaseURL = %q; legacy env must not resolve", cfg.BaseURL)
 	}
-	if cfg.Token != "legacy-tok" {
-		t.Errorf("Token fallback = %q", cfg.Token)
+	if cfg.Token != "" {
+		t.Errorf("Token = %q; legacy env must not resolve", cfg.Token)
 	}
 }
 

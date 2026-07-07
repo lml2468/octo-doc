@@ -237,7 +237,7 @@ func replay(c *Comment, at int) *foldState {
 func finalize(st *foldState) *CommentSnapshot {
 	if st.agentVerdict != nil {
 		if emoji := agentStatusEmoji[*st.agentVerdict]; emoji != "" {
-			applyReaction(st.snap.Reactions, emoji, "tdoc-agent", true)
+			applyReaction(st.snap.Reactions, emoji, "odoc-agent", true)
 		}
 	}
 	replies := []ReplySnapshot{}

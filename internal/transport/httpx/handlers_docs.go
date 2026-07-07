@@ -328,8 +328,8 @@ func (s *Server) handleRender(w http.ResponseWriter, r *http.Request) error {
 func injectCapMarker(html string, isAuthor bool) string {
 	marker := `<script>window.__ODOC_CAP__ = {isAuthor: ` + strconv.FormatBool(isAuthor) + `};</script>`
 	// The overlay boot is the last "<script>" InjectOverlayCfg wrote; place the
-	// marker before the window.__TDOC__ config script so both precede the overlay.
-	const anchor = "<script>window.__TDOC__ = "
+	// marker before the window.__ODOC__ config script so both precede the overlay.
+	const anchor = "<script>window.__ODOC__ = "
 	if i := strings.Index(html, anchor); i >= 0 {
 		return html[:i] + marker + "\n" + html[i:]
 	}

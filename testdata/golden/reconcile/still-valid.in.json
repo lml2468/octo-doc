@@ -16,7 +16,7 @@
           "anchor": {
             "kind": "element",
             "aid": "hash1",
-            "selector": "[data-tdoc-aid=\"hash1\"]",
+            "selector": "[data-odoc-aid=\"hash1\"]",
             "label": "svg"
           },
           "text": "on svg"

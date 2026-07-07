@@ -25,7 +25,7 @@ type forkExportInput struct {
 }
 
 // buildForkExport assembles the /export and /fork HTML: an agent-readable banner,
-// a JSON block, inline TDOC-COMMENT markers around anchored text, and (for fork)
+// a JSON block, inline ODOC-COMMENT markers around anchored text, and (for fork)
 // the overlay booted read-only. Ported from fork-export.ts.
 func buildForkExport(in forkExportInput) (string, error) {
 	open := make([]core.CommentSnapshot, 0, len(in.Comments))
@@ -45,7 +45,7 @@ func buildForkExport(in forkExportInput) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	block := `<script type="application/json" id="tdoc-fork-comments">` + jsonBlock + "</script>\n"
+	block := `<script type="application/json" id="odoc-fork-comments">` + jsonBlock + "</script>\n"
 
 	body := markAnchoredText(in.HTML, open)
 	if in.Kind == "fork" {
@@ -101,10 +101,10 @@ func buildBanner(in forkExportInput, open []core.CommentSnapshot) string {
 	b.WriteString("  version: " + core.ForHTMLComment(strconv.Itoa(in.Version)) + "\n")
 	b.WriteString("  exported: " + in.Now + "\n\n")
 	b.WriteString("  ## How to use this file\n")
-	b.WriteString("  Save it as ~/tdocs/<your-new-slug>/v1/index.html (or anywhere you like).\n")
+	b.WriteString("  Save it as ~/odocs/<your-new-slug>/v1/index.html (or anywhere you like).\n")
 	b.WriteString("  Comments below are read-only metadata bundled with the fork. Agents can\n")
 	b.WriteString("  read them to apply changes — say \"apply all comments to this doc\" and the\n")
-	b.WriteString("  agent will find the anchored regions (marked with TDOC-COMMENT html\n")
+	b.WriteString("  agent will find the anchored regions (marked with ODOC-COMMENT html\n")
 	b.WriteString("  comments inline below) and modify them accordingly.\n\n")
 	b.WriteString("  ## Comments included in this export\n")
 	b.WriteString("  " + strconv.Itoa(len(open)) + " comment(s).\n")
@@ -144,7 +144,7 @@ func markAnchoredText(html string, open []core.CommentSnapshot) string {
 		if c.Author != nil && c.Author.Login != "" {
 			who = c.Author.Login
 		}
-		marker := `<!--TDOC-COMMENT id="` + core.ForHTMLComment(c.ID) + `" by="` + core.ForHTMLComment(who) + `"-->` + needle + `<!--/TDOC-COMMENT-->`
+		marker := `<!--ODOC-COMMENT id="` + core.ForHTMLComment(c.ID) + `" by="` + core.ForHTMLComment(who) + `"-->` + needle + `<!--/ODOC-COMMENT-->`
 		out = out[:idx] + marker + out[idx+len(needle):]
 	}
 	return out

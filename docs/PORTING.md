@@ -68,7 +68,7 @@ JavaScript's regex `\s` matches the full Unicode whitespace set (vertical tab
 `\v`/U+000B, no-break space U+00A0, ideographic space U+3000, the U+2000–200A
 range, U+2028/U+2029, U+FEFF, …). Go's RE2 `\s` is **ASCII-only** (`[\t\n\f\r ]`).
 `stamp.go` normalizes an artifact's innerHTML with a whitespace-collapse before
-hashing it into the `data-tdoc-aid`; a bare `\s+` would collapse ASCII runs but
+hashing it into the `data-odoc-aid`; a bare `\s+` would collapse ASCII runs but
 leave a U+3000 or U+00A0 intact, producing a different normalized string — and a
 different aid — than upstream for any document containing non-ASCII whitespace
 (common in CJK source or pasted content). The port defines an explicit
@@ -82,7 +82,7 @@ does not, and historically excluded U+FEFF). Golden case: `stamp/unicode-ws`.
 - **`SafeJSONForScript` restores U+2028/U+2029.** Go's `encoding/json` always
   escapes the line/paragraph separators to ` `/` ` even with
   `SetEscapeHTML(false)`, whereas JS `JSON.stringify` emits them raw. The overlay
-  config is injected as a JSON literal inside `<script>window.__TDOC__ = …`, so to
+  config is injected as a JSON literal inside `<script>window.__ODOC__ = …`, so to
   keep those bytes identical to upstream the port un-escapes them back to the raw
   code points after marshaling. (Safe here: they are hazardous only in a *bare* JS
   string literal, not in a JSON value inside a script element.)

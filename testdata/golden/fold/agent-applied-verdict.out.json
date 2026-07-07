@@ -17,7 +17,7 @@
         "parent_id": "c1",
         "author": {
           "kind": "agent",
-          "login": "tdoc-agent"
+          "login": "odoc-agent"
         },
         "text": "done",
         "agent_status": "applied",
@@ -28,7 +28,7 @@
     ],
     "reactions": {
       "✅": [
-        "tdoc-agent"
+        "odoc-agent"
       ]
     },
     "deleted": false

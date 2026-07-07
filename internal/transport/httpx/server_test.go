@@ -102,7 +102,7 @@ func TestRenderAlwaysPublishedMode(t *testing.T) {
 		`{"slug":"m","version":1,"html":"<html><body><h1>x</h1></body></html>","meta":{"title":"M"}}`)
 	body := do(t, h, http.MethodGet, "/d/m/v/1", map[string]string{"Authorization": "Bearer test-token"}, "").Body.String()
 	if !strings.Contains(body, `"mode":"published"`) {
-		t.Errorf("expected published mode in: %s", body[strings.Index(body, "__TDOC__"):min(strings.Index(body, "__TDOC__")+120, len(body))])
+		t.Errorf("expected published mode in: %s", body[strings.Index(body, "__ODOC__"):min(strings.Index(body, "__ODOC__")+120, len(body))])
 	}
 	if !strings.Contains(body, `"authConfigured":false`) {
 		t.Error("expected authConfigured=false (anonymous commenting)")
@@ -155,10 +155,10 @@ func TestPublishRenderLifecycle(t *testing.T) {
 		t.Fatalf("render = %d", rec.Code)
 	}
 	html := rec.Body.String()
-	if !strings.Contains(html, "window.__TDOC__") {
+	if !strings.Contains(html, "window.__ODOC__") {
 		t.Error("overlay config not injected")
 	}
-	if !strings.Contains(html, "data-tdoc-aid=") {
+	if !strings.Contains(html, "data-odoc-aid=") {
 		t.Error("aids not stamped")
 	}
 	if !strings.Contains(rec.Header().Get("Content-Security-Policy"), "frame-ancestors") {
@@ -319,12 +319,12 @@ func TestForkExport(t *testing.T) {
 	if !strings.Contains(rec.Body.String(), "octo-doc fork export") {
 		t.Error("export banner missing")
 	}
-	if !strings.Contains(rec.Body.String(), "tdoc-fork-comments") {
+	if !strings.Contains(rec.Body.String(), "odoc-fork-comments") {
 		t.Error("fork comments JSON missing")
 	}
 
 	rec = do(t, h, http.MethodGet, "/d/f/v/1/fork", rd, "")
-	if !strings.Contains(rec.Body.String(), "window.__TDOC__") {
+	if !strings.Contains(rec.Body.String(), "window.__ODOC__") {
 		t.Error("fork should boot overlay")
 	}
 }

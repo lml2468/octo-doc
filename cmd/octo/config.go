@@ -8,12 +8,10 @@ import (
 )
 
 // config holds the resolved client configuration: where the local doc store
-// lives, which port the preview server binds, and how to reach a remote
-// octo-doc server for publish/pull.
+// lives and how to reach a remote octo-doc server for publish/pull.
 //
-// Resolution order for base URL and token: environment first (OCTO_* then the
-// legacy TDOC_* names), then the on-disk config file. This keeps existing tdoc
-// installs working unchanged while preferring the new OCTO_* surface.
+// Resolution order for base URL and token: OCTO_* environment first, then the
+// on-disk config file (~/.octo/config.json).
 type config struct {
 	BaseURL string
 	Token   string
@@ -46,45 +44,31 @@ func homeDir() string {
 	return h
 }
 
-// configPath returns the active config file path. It prefers ~/.octo/config.json
-// but falls back to a pre-existing ~/.tdoc/config.json so legacy installs are
-// read transparently. The returned bool reports whether the path already exists.
+// configPath returns the active config file path (~/.octo/config.json). The
+// returned bool reports whether the path already exists.
 func configPath() (string, bool) {
 	octo := filepath.Join(homeDir(), ".octo", "config.json")
 	if _, err := os.Stat(octo); err == nil {
 		return octo, true
 	}
-	tdoc := filepath.Join(homeDir(), ".tdoc", "config.json")
-	if _, err := os.Stat(tdoc); err == nil {
-		return tdoc, true
-	}
 	return octo, false // default write target, does not exist yet
 }
 
-// docDir resolves the local doc store: OCTO_DIR/TDOC_DIR env, else ~/octo-docs,
-// falling back to an existing ~/tdocs so legacy stores keep working.
+// docDir resolves the local doc store: OCTO_DIR env, else ~/octo-docs.
 func docDir() string {
-	if d := envFirst("OCTO_DIR", "TDOC_DIR"); d != "" {
+	if d := os.Getenv("OCTO_DIR"); d != "" {
 		return d
 	}
-	octo := filepath.Join(homeDir(), "octo-docs")
-	if _, err := os.Stat(octo); err == nil {
-		return octo
-	}
-	tdoc := filepath.Join(homeDir(), "tdocs")
-	if _, err := os.Stat(tdoc); err == nil {
-		return tdoc
-	}
-	return octo // default; created on first use
+	return filepath.Join(homeDir(), "octo-docs") // default; created on first use
 }
 
 // loadConfig resolves the full client config, reading the config file only to
 // fill in a base URL or token not already supplied via the environment.
 func loadConfig() config {
 	c := config{
-		BaseURL: strings.TrimRight(envFirst("OCTO_BASE_URL", "TDOC_BASE_URL"), "/"),
-		Token:   envFirst("OCTO_TOKEN", "TDOC_TOKEN"),
-		Code:    envFirst("OCTO_CODE"),
+		BaseURL: strings.TrimRight(os.Getenv("OCTO_BASE_URL"), "/"),
+		Token:   os.Getenv("OCTO_TOKEN"),
+		Code:    os.Getenv("OCTO_CODE"),
 		Dir:     docDir(),
 	}
 	if c.BaseURL == "" || c.Token == "" {

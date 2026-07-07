@@ -223,6 +223,38 @@ func TestFreshCodeBeatsStaleCookie(t *testing.T) {
 	}
 }
 
+// TestRenderCapMarkerReflectsViewer asserts the render injects window.__ODOC_CAP__
+// with isAuthor true only for the write-token holder, so the overlay hides the
+// author-only Share (mint-code) button from a reader.
+func TestRenderCapMarkerReflectsViewer(t *testing.T) {
+	h := newTestServer(t, nil)
+	auth := map[string]string{"Authorization": "Bearer test-token", "Content-Type": "application/json"}
+	_ = do(t, h, http.MethodPost, "/v1/docs", auth,
+		`{"slug":"cap","html":"<html><body><p>hi</p></body></html>"}`)
+	sh := do(t, h, http.MethodPost, "/v1/docs/cap/share", map[string]string{"Authorization": "Bearer test-token"}, "")
+	var share map[string]any
+	_ = json.Unmarshal(sh.Body.Bytes(), &share)
+	code, _ := share["data"].(map[string]any)["code"].(string)
+
+	// Author (write token as Bearer) → isAuthor: true.
+	rec := do(t, h, http.MethodGet, "/d/cap/v/1", map[string]string{"Authorization": "Bearer test-token"}, "")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("author render = %d", rec.Code)
+	}
+	if !contains(rec.Body.String(), `window.__ODOC_CAP__ = {isAuthor: true}`) {
+		t.Error("author render should carry isAuthor: true")
+	}
+
+	// Reader (share code cookie) → isAuthor: false.
+	rec = do(t, h, http.MethodGet, "/d/cap/v/1", map[string]string{"Cookie": capCookie("cap", code)}, "")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("reader render = %d: %s", rec.Code, rec.Body.String())
+	}
+	if !contains(rec.Body.String(), `window.__ODOC_CAP__ = {isAuthor: false}`) {
+		t.Error("reader render should carry isAuthor: false (Share button hidden)")
+	}
+}
+
 func contains(s, sub string) bool {
 	return len(sub) == 0 || (len(s) >= len(sub) && indexOf(s, sub) >= 0)
 }

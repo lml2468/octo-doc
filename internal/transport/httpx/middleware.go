@@ -10,7 +10,7 @@ import (
 
 	"github.com/go-chi/chi/v5/middleware"
 
-	"github.com/Mininglamp-OSS/octo-doc/internal/platform/apperr"
+	"github.com/lml2468/octo-doc/internal/platform/apperr"
 )
 
 // rateLimiter is a fixed-window limiter keyed by token+IP, in-memory (correct for

@@ -14,14 +14,14 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/Mininglamp-OSS/octo-doc/assets"
-	"github.com/Mininglamp-OSS/octo-doc/internal/config"
-	"github.com/Mininglamp-OSS/octo-doc/internal/platform/log"
-	"github.com/Mininglamp-OSS/octo-doc/internal/platform/sluglock"
-	"github.com/Mininglamp-OSS/octo-doc/internal/service"
-	"github.com/Mininglamp-OSS/octo-doc/internal/storage/postgres"
-	s3store "github.com/Mininglamp-OSS/octo-doc/internal/storage/s3"
-	"github.com/Mininglamp-OSS/octo-doc/internal/transport/httpx"
+	"github.com/lml2468/octo-doc/assets"
+	"github.com/lml2468/octo-doc/internal/config"
+	"github.com/lml2468/octo-doc/internal/platform/log"
+	"github.com/lml2468/octo-doc/internal/platform/sluglock"
+	"github.com/lml2468/octo-doc/internal/service"
+	"github.com/lml2468/octo-doc/internal/storage/postgres"
+	s3store "github.com/lml2468/octo-doc/internal/storage/s3"
+	"github.com/lml2468/octo-doc/internal/transport/httpx"
 )
 
 func TestFullLifecycle(t *testing.T) {

@@ -8,8 +8,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/Mininglamp-OSS/octo-doc/internal/config"
-	"github.com/Mininglamp-OSS/octo-doc/internal/platform/apperr"
+	"github.com/lml2468/octo-doc/internal/config"
+	"github.com/lml2468/octo-doc/internal/platform/apperr"
 )
 
 // maxJSONBody bounds JSON request bodies (comments, reactions, agent replies).

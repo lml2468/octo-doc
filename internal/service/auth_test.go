@@ -4,10 +4,10 @@ import (
 	"context"
 	"testing"
 
-	"github.com/Mininglamp-OSS/octo-doc/internal/config"
-	"github.com/Mininglamp-OSS/octo-doc/internal/platform/sluglock"
-	"github.com/Mininglamp-OSS/octo-doc/internal/service"
-	"github.com/Mininglamp-OSS/octo-doc/internal/storage/memory"
+	"github.com/lml2468/octo-doc/internal/config"
+	"github.com/lml2468/octo-doc/internal/platform/sluglock"
+	"github.com/lml2468/octo-doc/internal/service"
+	"github.com/lml2468/octo-doc/internal/storage/memory"
 )
 
 // The session machinery is the seam a future Octo unified login plugs into.

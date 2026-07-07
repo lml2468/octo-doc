@@ -1,6 +1,6 @@
 package main
 
-import "github.com/Mininglamp-OSS/octo-doc/internal/core"
+import "github.com/lml2468/octo-doc/internal/core"
 
 // comment is the on-disk shape of a comment in comments.json: a flat record with
 // nested replies. It uses "created" (the storage schema); the wire boundary

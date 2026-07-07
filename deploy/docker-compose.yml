@@ -11,7 +11,7 @@ services:
     build:
       context: ..
       dockerfile: deploy/Dockerfile
-    image: ghcr.io/mininglamp-oss/octo-doc:latest
+    image: ghcr.io/lml2468/octo-doc:latest
     restart: unless-stopped
     depends_on:
       postgres:

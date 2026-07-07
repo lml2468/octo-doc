@@ -1,4 +1,4 @@
-module github.com/Mininglamp-OSS/octo-doc
+module github.com/lml2468/octo-doc
 
 go 1.26
 

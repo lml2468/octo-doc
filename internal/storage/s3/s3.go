@@ -20,7 +20,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/aws/smithy-go"
 
-	"github.com/Mininglamp-OSS/octo-doc/internal/storage"
+	"github.com/lml2468/octo-doc/internal/storage"
 )
 
 // Options configure the S3 blob store.

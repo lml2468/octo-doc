@@ -17,7 +17,7 @@ import (
 )
 
 // releaseRepo is the GitHub repo whose Releases host the octo binaries.
-const releaseRepo = "Mininglamp-OSS/octo-doc"
+const releaseRepo = "lml2468/octo-doc"
 
 // cmdUpdate self-updates the octo binary from the latest GitHub Release. With
 // --check it only reports the current-vs-latest versions without downloading.

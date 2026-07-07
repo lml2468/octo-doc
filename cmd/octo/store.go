@@ -9,7 +9,7 @@ import (
 	"sort"
 
 	// Aliased because the local `config` type would shadow the package name.
-	configpkg "github.com/Mininglamp-OSS/octo-doc/internal/config"
+	configpkg "github.com/lml2468/octo-doc/internal/config"
 )
 
 // The on-disk doc store, rooted at cfg.Dir:

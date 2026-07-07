@@ -8,7 +8,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/Mininglamp-OSS/octo-doc/internal/core"
+	"github.com/lml2468/octo-doc/internal/core"
 )
 
 // TestClientCommentAndReact confirms the new comment/react client methods hit the

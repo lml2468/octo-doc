@@ -196,11 +196,18 @@ func (s *Store) AnyToken(_ context.Context) (bool, error) {
 // assetKey namespaces asset records by slug and content hash.
 func assetKey(slug, sha256 string) string { return slug + "\x00" + sha256 }
 
-// PutAssetMeta implements storage.MetadataStore.
+// PutAssetMeta implements storage.MetadataStore. Idempotent on (slug, sha256):
+// re-registering identical bytes refreshes the display fields but PRESERVES the
+// original Created timestamp, matching the postgres ON CONFLICT clause (which does
+// not update created). This keeps the GC grace window anchored to first upload.
 func (s *Store) PutAssetMeta(_ context.Context, meta storage.AssetMeta) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.assetMeta[assetKey(meta.Slug, meta.SHA256)] = cloneJSON(meta)
+	key := assetKey(meta.Slug, meta.SHA256)
+	if existing, ok := s.assetMeta[key]; ok {
+		meta.Created = existing.Created
+	}
+	s.assetMeta[key] = cloneJSON(meta)
 	return nil
 }
 

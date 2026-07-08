@@ -102,6 +102,12 @@ func TestAssetLifecycle(t *testing.T) {
 	if got := rec.Header().Get("Content-Security-Policy"); got != "default-src 'none'; sandbox" {
 		t.Errorf("locked CSP missing: %q", got)
 	}
+	if got := rec.Header().Get("X-Frame-Options"); got != "DENY" {
+		t.Errorf("X-Frame-Options = %q; want DENY", got)
+	}
+	if got := rec.Header().Get("Referrer-Policy"); got != "no-referrer" {
+		t.Errorf("Referrer-Policy = %q; want no-referrer", got)
+	}
 	if got := rec.Header().Get("Cache-Control"); got == "" || !bytes.Contains([]byte(got), []byte("immutable")) {
 		t.Errorf("immutable cache missing: %q", got)
 	}

@@ -213,7 +213,7 @@ func docSecurityHeaders(frameAncestors string) map[string]string {
 		"font-src 'self' data: https:",
 		"connect-src 'self' https:",
 		"frame-src 'self' https:",
-		"object-src 'self' data: blob:",
+		"object-src 'self' data: blob: https:",
 		"base-uri 'self'",
 		"frame-ancestors " + frameAncestors,
 	}, "; ")

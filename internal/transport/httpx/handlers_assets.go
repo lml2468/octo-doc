@@ -22,8 +22,11 @@ func (s *Server) handleUploadAsset(w http.ResponseWriter, r *http.Request) error
 	if err != nil {
 		return err
 	}
-	// Bound the multipart parse well above the byte cap so the size check happens in
-	// the service (with a typed 413) rather than as an opaque parse failure.
+	// Bound the request body at the transport edge so an oversized upload is
+	// rejected before ParseMultipartForm spools it to a temp file. The +1 MiB
+	// headroom covers multipart framing/other fields; the exact per-asset cap is
+	// enforced in the service (with a typed 413).
+	r.Body = http.MaxBytesReader(w, r.Body, s.cfg.MaxAssetBytes+1<<20)
 	if err := r.ParseMultipartForm(s.cfg.MaxAssetBytes + 1<<20); err != nil {
 		return apperr.Validation("invalid multipart body", "invalid_multipart")
 	}
@@ -119,6 +122,11 @@ func (s *Server) handleServeAsset(w http.ResponseWriter, r *http.Request) error 
 	// Neutralize the asset as an execution context: no scripts, no framing, sandboxed.
 	// Critical for user-supplied SVG/HTML-ish bytes served same-origin.
 	h.Set("Content-Security-Policy", "default-src 'none'; sandbox")
+	// This route sets headers by hand (not secHeaders, which carries a doc CSP), so
+	// re-apply the framing/referrer protections secHeaders would have added: an
+	// asset must not be frameable cross-origin or leak a Referer.
+	h.Set("X-Frame-Options", "DENY")
+	h.Set("Referrer-Policy", "no-referrer")
 	// Content-addressed URL ⇒ the bytes can never change ⇒ cache forever. Private,
 	// since a doc's assets inherit its per-doc access control.
 	h.Set("Cache-Control", "private, max-age=31536000, immutable")

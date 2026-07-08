@@ -28,16 +28,7 @@ func gcFixture(t *testing.T) (*memory.Store, *service.DocService, *service.Asset
 // timestamp so GC grace behavior is testable without waiting.
 func putAged(t *testing.T, store *memory.Store, sha string, created time.Time) {
 	t.Helper()
-	ctx := context.Background()
-	if err := store.PutAsset(ctx, "d", sha, []byte("bytes-for-"+sha)); err != nil {
-		t.Fatal(err)
-	}
-	if err := store.PutAssetMeta(ctx, storage.AssetMeta{
-		Slug: "d", SHA256: sha, MIME: "image/png", Size: 10, OriginalName: "x.png",
-		Created: created.UTC().Format("2006-01-02T15:04:05.000Z"),
-	}); err != nil {
-		t.Fatal(err)
-	}
+	putAgedSlug(t, store, "d", sha, created)
 }
 
 const sha1s = "1111111111111111111111111111111111111111111111111111111111111111"

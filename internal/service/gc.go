@@ -102,8 +102,11 @@ func (s *AssetService) GCAssets(ctx context.Context, grace time.Duration, now ti
 // cannot cause a just-referenced asset to be deleted (#46).
 func (s *AssetService) gcSlug(ctx context.Context, slug string, globalRefs map[string]struct{}, grace time.Duration, now time.Time, dryRun bool, report *GCReport) error {
 	return s.lock.With(ctx, slug, func() error {
-		fresh, err := s.slugReferencedSHAs(ctx, slug)
-		if err != nil {
+		// Re-scan this slug's own current HTML under the lock (see #46). Versions are
+		// immutable but a concurrent promote can add one, so re-read all of them, not
+		// just the draft.
+		fresh := map[string]struct{}{}
+		if err := s.scanSlugInto(ctx, slug, fresh); err != nil {
 			return err
 		}
 		assets, err := s.meta.ListAssetMeta(ctx, slug)
@@ -174,16 +177,6 @@ func (s *AssetService) allReferencedSHAs(ctx context.Context, assetSlugs []strin
 	return refs, nil
 }
 
-// slugReferencedSHAs returns the content addresses referenced by one slug's own
-// current HTML (all versions + draft).
-func (s *AssetService) slugReferencedSHAs(ctx context.Context, slug string) (map[string]struct{}, error) {
-	refs := map[string]struct{}{}
-	if err := s.scanSlugInto(ctx, slug, refs); err != nil {
-		return nil, err
-	}
-	return refs, nil
-}
-
 // scanSlugInto scans a slug's published versions and draft HTML, adding every bare
 // content address it finds to refs.
 func (s *AssetService) scanSlugInto(ctx context.Context, slug string, refs map[string]struct{}) error {
@@ -219,7 +212,14 @@ func (s *AssetService) scanSlugInto(ctx context.Context, slug string, refs map[s
 // a substring shares the source's backing array, so storing raw slices would pin
 // every scanned multi-MB HTML blob in memory for the whole GC pass.
 func scanInto(html string, refs map[string]struct{}) {
-	add := func(w string) { refs[strings.Clone(w)] = struct{}{} }
+	// Clone only on first sight: strings.Clone forces an allocation, so checking
+	// membership first avoids re-cloning a window already seen (common in a
+	// repetitive hex run).
+	add := func(w string) {
+		if _, ok := refs[w]; !ok {
+			refs[strings.Clone(w)] = struct{}{}
+		}
+	}
 	for _, run := range hexRunRe.FindAllString(html, -1) {
 		n := len(run)
 		if n <= maxSlideRun {

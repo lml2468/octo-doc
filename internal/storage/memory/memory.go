@@ -5,6 +5,8 @@ package memory
 import (
 	"context"
 	"encoding/json"
+	"maps"
+	"slices"
 	"sort"
 	"sync"
 	"time"
@@ -254,12 +256,7 @@ func (s *Store) ListAssetSlugs(_ context.Context) ([]string, error) {
 	for _, m := range s.assetMeta {
 		seen[m.Slug] = struct{}{}
 	}
-	out := make([]string, 0, len(seen))
-	for slug := range seen {
-		out = append(out, slug)
-	}
-	sort.Strings(out)
-	return out, nil
+	return slices.Sorted(maps.Keys(seen)), nil
 }
 
 // Close implements storage.MetadataStore.

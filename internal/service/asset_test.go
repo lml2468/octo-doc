@@ -17,6 +17,37 @@ import (
 // http.DetectContentType to classify it as image/png.
 var pngBytes = []byte{0x89, 'P', 'N', 'G', 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0}
 
+// TestAssetPutAcceptsSniffableAllowlistTypes guards that the default-allowlisted
+// types http.DetectContentType alone gets wrong (SVG, AVIF, WAV, OGG) are
+// accepted via the strengthened sniffer.
+func TestAssetPutAcceptsSniffableAllowlistTypes(t *testing.T) {
+	ctx := context.Background()
+	cases := []struct {
+		name string
+		data []byte
+		want string
+	}{
+		{"svg", []byte(`<?xml version="1.0"?><svg xmlns="http://www.w3.org/2000/svg"><rect/></svg>`), "image/svg+xml"},
+		{"svg-bare", []byte(`<svg xmlns="http://www.w3.org/2000/svg"></svg>`), "image/svg+xml"},
+		{"wav", []byte("RIFF\x24\x00\x00\x00WAVEfmt "), "audio/wav"},
+		{"webp", []byte("RIFF\x24\x00\x00\x00WEBPVP8 "), "image/webp"},
+		{"ogg", []byte("OggS\x00\x02\x00\x00\x00\x00\x00\x00\x00\x00"), "audio/ogg"},
+		{"avif", []byte("\x00\x00\x00\x1cftypavif\x00\x00\x00\x00"), "image/avif"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			svc := newAssets(t, 1<<20, []string{c.want})
+			res, err := svc.Put(ctx, "d", bytes.NewReader(c.data), c.name)
+			if err != nil {
+				t.Fatalf("Put(%s) rejected: %v", c.name, err)
+			}
+			if res.MIME != c.want {
+				t.Errorf("MIME = %q; want %q", res.MIME, c.want)
+			}
+		})
+	}
+}
+
 func newAssets(t *testing.T, maxBytes int64, allow []string) *service.AssetService {
 	t.Helper()
 	store := memory.New()

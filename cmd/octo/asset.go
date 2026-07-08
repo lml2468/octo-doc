@@ -78,11 +78,9 @@ func cmdAssetList(args []string) error {
 	tw := tabwriter.NewWriter(os.Stdout, 0, 2, 2, ' ', 0)
 	fmt.Fprintln(tw, "SHA256\tMIME\tSIZE\tNAME") //nolint:errcheck // tabwriter buffers; error surfaces at Flush
 	for _, a := range list {
-		sha := a.SHA256
-		if len(sha) > 12 {
-			sha = sha[:12]
-		}
-		fmt.Fprintf(tw, "%s\t%s\t%d\t%s\n", sha, a.MIME, a.Size, a.OriginalName) //nolint:errcheck // see above
+		// Print the full 64-char hash: `octo asset-rm` and the server require the
+		// complete content address (a truncated value is rejected as invalid_sha256).
+		fmt.Fprintf(tw, "%s\t%s\t%d\t%s\n", a.SHA256, a.MIME, a.Size, a.OriginalName) //nolint:errcheck // see above
 	}
 	return tw.Flush()
 }

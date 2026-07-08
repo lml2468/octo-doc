@@ -28,8 +28,13 @@ type MutationResult struct {
 	Body   any
 }
 
+// isoLayout is the millisecond-precision UTC timestamp layout used for all
+// service-written timestamps (comment events, asset Created). Shared so writers
+// (nowISO) and parsers (gc.withinGrace) can never drift apart.
+const isoLayout = "2006-01-02T15:04:05.000Z"
+
 func nowISO() string {
-	return time.Now().UTC().Format("2006-01-02T15:04:05.000Z")
+	return time.Now().UTC().Format(isoLayout)
 }
 
 // List folds a slug's comments to a version snapshot, or the full history when

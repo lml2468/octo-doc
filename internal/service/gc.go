@@ -69,8 +69,10 @@ func (s *AssetService) GCAssets(ctx context.Context, grace time.Duration, now ti
 				continue
 			}
 			// Unreferenced: keep if still within the grace window (uploaded but not
-			// yet wired in). A Created that won't parse is treated as "old enough".
-			if within, ok := withinGrace(a.Created, now, grace); ok && within {
+			// yet wired in). Fail SAFE — if the timestamp can't be parsed, keep the
+			// asset rather than delete it (deletion is irreversible).
+			within, parsed := withinGrace(a.Created, now, grace)
+			if !parsed || within {
 				report.Kept++
 				continue
 			}
@@ -115,10 +117,10 @@ func (s *AssetService) referencedSHAs(ctx context.Context, slug string, meta sto
 
 // withinGrace reports whether an asset created at `created` (RFC3339-ish, as
 // nowISO writes) is still inside the grace window ending at `now`. The second
-// return is false when the timestamp can't be parsed, letting the caller treat an
-// unparseable timestamp as past-grace (eligible for deletion).
+// return (parsed) is false when the timestamp can't be parsed; callers fail SAFE
+// on !parsed (keep the asset) since deletion is irreversible.
 func withinGrace(created string, now time.Time, grace time.Duration) (within bool, parsed bool) {
-	t, err := time.Parse("2006-01-02T15:04:05.000Z", created)
+	t, err := time.Parse(isoLayout, created)
 	if err != nil {
 		// Try RFC3339 as a fallback for any differently-formatted timestamps.
 		t, err = time.Parse(time.RFC3339, created)

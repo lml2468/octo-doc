@@ -120,13 +120,78 @@ func (s *AssetService) Delete(ctx context.Context, slug, sha string) error {
 	})
 }
 
-// sniffMIME determines the content type from the bytes. http.DetectContentType
-// returns a charset-parameterized type for text (e.g. "image/svg+xml" is served
-// as text) — normalize by dropping any parameter so it matches the allowlist.
+// sniffMIME determines the content type from the bytes. It never trusts a
+// client-declared type — it inspects the bytes only. http.DetectContentType
+// covers most types but has gaps that matter for our allowlist: it reports
+// audio/wave for WAV (not audio/wav), application/ogg for Ogg (not audio/ogg),
+// text/xml or text/plain for SVG (not image/svg+xml), and application/octet-stream
+// for AVIF. sniffExtra fills those in from magic bytes so the documented default
+// allowlist actually works; the charset parameter is dropped so it matches.
 func sniffMIME(data []byte) string {
+	if m := sniffExtra(data); m != "" {
+		return m
+	}
 	ct := http.DetectContentType(data)
 	if i := strings.IndexByte(ct, ';'); i >= 0 {
 		ct = strings.TrimSpace(ct[:i])
 	}
 	return ct
+}
+
+// sniffExtra recognizes container/markup formats http.DetectContentType maps to a
+// generic or non-canonical type, returning the canonical MIME (or "" to defer to
+// http.DetectContentType). All checks are on leading magic bytes only.
+func sniffExtra(data []byte) string {
+	// RIFF containers: "RIFF"????"WAVE"/"WEBP".
+	if len(data) >= 12 && string(data[:4]) == "RIFF" {
+		switch string(data[8:12]) {
+		case "WAVE":
+			return "audio/wav"
+		case "WEBP":
+			return "image/webp"
+		}
+	}
+	// Ogg: "OggS". Bitstreams may be audio or video; audio/ogg is the common case
+	// and the allowlisted one.
+	if len(data) >= 4 && string(data[:4]) == "OggS" {
+		return "audio/ogg"
+	}
+	// ISO-BMFF "ftyp" brand box: AVIF/HEIF share this framing. Box starts at 4.
+	if len(data) >= 12 && string(data[4:8]) == "ftyp" {
+		switch string(data[8:12]) {
+		case "avif", "avis":
+			return "image/avif"
+		}
+	}
+	// SVG: XML or bare root. http.DetectContentType returns text/*; sniff for an
+	// <svg root so a real SVG is classified as image/svg+xml.
+	if isSVG(data) {
+		return "image/svg+xml"
+	}
+	return ""
+}
+
+// isSVG reports whether data looks like an SVG document: an optional XML prolog
+// and/or leading whitespace followed by an <svg element.
+func isSVG(data []byte) bool {
+	s := data
+	if len(s) > 1024 {
+		s = s[:1024]
+	}
+	lower := strings.ToLower(string(s))
+	lower = strings.TrimSpace(lower)
+	if strings.HasPrefix(lower, "<?xml") {
+		if i := strings.Index(lower, "?>"); i >= 0 {
+			lower = strings.TrimSpace(lower[i+2:])
+		}
+	}
+	// Skip an optional <!DOCTYPE ...> and comments before the root.
+	for strings.HasPrefix(lower, "<!") {
+		if i := strings.Index(lower, ">"); i >= 0 {
+			lower = strings.TrimSpace(lower[i+1:])
+		} else {
+			break
+		}
+	}
+	return strings.HasPrefix(lower, "<svg")
 }

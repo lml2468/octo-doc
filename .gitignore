@@ -13,6 +13,13 @@ data/
 # OS / editor
 .DS_Store
 .claude/
+# …but the committed agent skill is tracked. Re-include only octo-doc's path
+# chain; every other local-only skill under .claude/ stays ignored.
+!.claude/
+.claude/*
+!.claude/skills/
+.claude/skills/*
+!.claude/skills/octo-doc/
 deploy/docker-compose.local.yml
 
 # Browser tooling output

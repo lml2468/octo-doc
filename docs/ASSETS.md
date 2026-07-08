@@ -387,10 +387,14 @@ expressed (see #44/#45/#46):
   `ListAssetSlugs` (a `DISTINCT slug` over the asset registry), so an asset
   uploaded to a slug that was never published (no `DocMeta` row) is still
   collected rather than leaking forever.
-- **No mid-authoring races.** Each slug's delete decision runs under that slug's
-  lock, and the slug's own current HTML is re-scanned inside the lock, so a
-  concurrent same-slug publish/`version-add` that re-references an asset cannot be
-  clobbered by a GC pass that started earlier.
+- **Same-slug authoring races closed.** Each slug's delete decision runs under
+  that slug's lock, and the slug's own current HTML is re-scanned inside the lock,
+  so a concurrent same-slug publish/`version-add` that re-references an asset
+  cannot be clobbered by a GC pass that started earlier. A residual **cross-doc**
+  race remains — a *different* doc that starts referencing an asset after the
+  pass's global snapshot, mid-run, is not re-observed — but it is bounded by the
+  grace window (only past-grace assets are eligible) and GC is opt-in; closing it
+  fully would need a global lock or a post-lock global re-scan.
 
 ---
 

@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"regexp"
+	"strings"
 	"time"
 )
 
@@ -11,18 +12,30 @@ import (
 // edits the reference away. GCAssets finds assets no live HTML references and, if
 // they are older than a grace period, deletes them. See docs/ASSETS.md (P2.4).
 
-// shaRe matches a bare 64-hex content address anywhere in HTML. It is deliberately
-// NOT anchored on an "assets/<sha>" URL shape: references are collected GLOBALLY
-// across every doc, so an asset stays alive whether it is referenced by a normal
-// same-origin URL, by a fork/other doc that copied that URL (#44), or by JS that
-// builds the URL from a bare sha string held in a variable or data island (#44).
-// FindAllString is non-overlapping, so a longer hex run yields extra 64-char
-// tokens — harmless, since over-retaining an asset is the safe failure direction.
-var shaRe = regexp.MustCompile(`[0-9a-f]{64}`)
+// hexRunRe matches a maximal run of >=64 lowercase-hex chars. References are
+// collected by sliding a 64-char window across each run (see scanInto), so a bare
+// 64-hex content address is found no matter where it sits — a normal same-origin
+// URL, a fork/other doc that copied that URL (#44), or JS that builds the URL from
+// a bare sha in a variable/data island (#44). Sliding is required for correctness:
+// a plain non-overlapping `[0-9a-f]{64}` match tiles from offset 0 and would MISS
+// a real sha that follows a hex run whose length is not a multiple of 64 (e.g. a
+// 40-char git sha immediately before the address) — an unsafe
+// (delete-a-referenced-asset) miss. Over-generating windows only over-retains,
+// which is the safe direction. Stored addresses are lowercase (hex.EncodeToString),
+// so lowercase-only matching covers every real reference.
+var hexRunRe = regexp.MustCompile(`[0-9a-f]{64,}`)
+
+// maxSlideRun bounds the full offset-by-offset slide. A hex run this long is a
+// data blob, not concatenated content-address references, so beyond it scanInto
+// falls back to 64-aligned windows (plus the tail). This caps the per-run window
+// count at O(len) inserts for realistic runs while avoiding pathological
+// O(len)-distinct-key memory blow-up from a multi-MB inline hex payload. The bound
+// comfortably exceeds any realistic concatenation of a few content addresses.
+const maxSlideRun = 4096
 
 // GCReport summarizes a garbage-collection pass.
 type GCReport struct {
-	Scanned    int        // slugs scanned for assets
+	Scanned    int        // asset-bearing slugs scanned
 	Assets     int        // asset records examined
 	Deleted    []GCDelete // assets removed (or that would be, in dry-run)
 	Kept       int        // assets kept (referenced or within grace)
@@ -47,23 +60,34 @@ type GCDelete struct {
 // draft — so a content address reused across docs (e.g. a fork keeping the source
 // slug's URL) keeps the asset alive (#44). Asset-bearing slugs are enumerated via
 // ListAssetSlugs, not ListMeta, so assets under a slug with no doc row are still
-// collected (#45). Each slug's delete decision runs under that slug's lock, with a
-// fresh re-scan of the slug's own current HTML inside the lock, so a concurrent
-// same-slug publish/version-add that re-references an asset is not clobbered (#46).
+// collected (#45).
+//
+// Concurrency: the global reference set is a snapshot taken before any lock. Each
+// slug's delete decision then runs under that slug's lock, re-scanning the slug's
+// OWN current HTML inside the lock and merging with the snapshot — this closes the
+// common same-slug race (an author editing their own doc during a pass) (#46).
+// A residual cross-doc race remains: a *different* doc that begins referencing an
+// asset after the snapshot, while the pass is mid-flight, is not re-observed, so
+// that asset could still be deleted. The grace window bounds the exposure (only
+// past-grace assets are eligible), and GC is an opt-in maintenance command; a full
+// fix would require a global lock or a post-lock global re-scan.
 func (s *AssetService) GCAssets(ctx context.Context, grace time.Duration, now time.Time, dryRun bool) (GCReport, error) {
+	// Enumerate asset-bearing slugs once and reuse for both the global scan and the
+	// per-slug pass (avoids a duplicate ListAssetSlugs round trip).
+	assetSlugs, err := s.meta.ListAssetSlugs(ctx)
+	if err != nil {
+		return GCReport{}, err
+	}
+
 	// Phase 1: global reference set from a snapshot of all docs' HTML.
-	referenced, err := s.allReferencedSHAs(ctx)
+	referenced, err := s.allReferencedSHAs(ctx, assetSlugs)
 	if err != nil {
 		return GCReport{}, err
 	}
 
 	// Phase 2: per asset-bearing slug, decide + delete under the slug lock.
-	slugs, err := s.meta.ListAssetSlugs(ctx)
-	if err != nil {
-		return GCReport{}, err
-	}
 	var report GCReport
-	for _, slug := range slugs {
+	for _, slug := range assetSlugs {
 		report.Scanned++
 		if err := s.gcSlug(ctx, slug, referenced, grace, now, dryRun, &report); err != nil {
 			return report, err
@@ -103,14 +127,15 @@ func (s *AssetService) gcSlug(ctx context.Context, slug string, globalRefs map[s
 				report.Kept++
 				continue
 			}
-			report.Deleted = append(report.Deleted, GCDelete{
-				Slug: slug, SHA256: a.SHA256, Size: a.Size, Reason: "unreferenced",
-			})
+			del := GCDelete{Slug: slug, SHA256: a.SHA256, Size: a.Size, Reason: "unreferenced"}
 			if !dryRun {
+				// Delete first; only record it as deleted on success, so a mid-pass
+				// failure doesn't overstate what was reclaimed.
 				if derr := s.deleteLocked(ctx, slug, a.SHA256); derr != nil {
 					return derr
 				}
 			}
+			report.Deleted = append(report.Deleted, del)
 		}
 		return nil
 	})
@@ -118,8 +143,10 @@ func (s *AssetService) gcSlug(ctx context.Context, slug string, globalRefs map[s
 
 // allReferencedSHAs scans every doc's published versions and draft for bare
 // content addresses, returning the union across ALL slugs. The union is what makes
-// cross-doc / fork / JS-built references keep an asset alive (#44).
-func (s *AssetService) allReferencedSHAs(ctx context.Context) (map[string]struct{}, error) {
+// cross-doc / fork / JS-built references keep an asset alive (#44). assetSlugs is
+// the pre-fetched asset-bearing slug list, folded in so a slug that holds assets
+// (and possibly a draft referencing them) but has no doc row is still scanned.
+func (s *AssetService) allReferencedSHAs(ctx context.Context, assetSlugs []string) (map[string]struct{}, error) {
 	refs := map[string]struct{}{}
 
 	// Every slug that has a doc row (published versions + draft)...
@@ -134,12 +161,8 @@ func (s *AssetService) allReferencedSHAs(ctx context.Context) (map[string]struct
 		}
 		scanned[entry.Slug] = struct{}{}
 	}
-	// ...plus any asset-bearing slug that has no doc row but may still hold a draft
-	// blob referencing its own assets (defensive; keeps the union complete).
-	assetSlugs, err := s.meta.ListAssetSlugs(ctx)
-	if err != nil {
-		return nil, err
-	}
+	// ...plus any asset-bearing slug with no doc row (defensive; keeps the union
+	// complete for a draft that references its own assets).
 	for _, slug := range assetSlugs {
 		if _, done := scanned[slug]; done {
 			continue
@@ -164,11 +187,6 @@ func (s *AssetService) slugReferencedSHAs(ctx context.Context, slug string) (map
 // scanSlugInto scans a slug's published versions and draft HTML, adding every bare
 // content address it finds to refs.
 func (s *AssetService) scanSlugInto(ctx context.Context, slug string, refs map[string]struct{}) error {
-	scan := func(html string) {
-		for _, m := range shaRe.FindAllString(html, -1) {
-			refs[m] = struct{}{}
-		}
-	}
 	versions, err := s.blobs.ListVersions(ctx, slug)
 	if err != nil {
 		return err
@@ -179,15 +197,43 @@ func (s *AssetService) scanSlugInto(ctx context.Context, slug string, refs map[s
 			return err
 		}
 		if ok {
-			scan(html)
+			scanInto(html, refs)
 		}
 	}
 	if html, ok, err := s.blobs.GetDraft(ctx, slug); err != nil {
 		return err
 	} else if ok {
-		scan(html)
+		scanInto(html, refs)
 	}
 	return nil
+}
+
+// scanInto adds every 64-hex content address in html to refs. It slides a 64-wide
+// window across each maximal hex run so an address is found regardless of its
+// offset within a longer run (see hexRunRe). For runs longer than maxSlideRun it
+// falls back to 64-aligned windows plus the tail window, bounding cost on a huge
+// inline hex blob while still catching any realistic reference (a clean
+// assets/<sha> is an exact-64 run; short concatenations stay well under the cap).
+//
+// Each key is copied (via strings.Clone) rather than sliced directly out of html:
+// a substring shares the source's backing array, so storing raw slices would pin
+// every scanned multi-MB HTML blob in memory for the whole GC pass.
+func scanInto(html string, refs map[string]struct{}) {
+	add := func(w string) { refs[strings.Clone(w)] = struct{}{} }
+	for _, run := range hexRunRe.FindAllString(html, -1) {
+		n := len(run)
+		if n <= maxSlideRun {
+			for i := 0; i+64 <= n; i++ {
+				add(run[i : i+64])
+			}
+			continue
+		}
+		// Oversized run: 64-aligned windows + the final window.
+		for i := 0; i+64 <= n; i += 64 {
+			add(run[i : i+64])
+		}
+		add(run[n-64:])
+	}
 }
 
 // withinGrace reports whether an asset created at `created` (RFC3339-ish, as

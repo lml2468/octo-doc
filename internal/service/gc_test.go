@@ -3,6 +3,7 @@ package service_test
 import (
 	"bytes"
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -282,5 +283,61 @@ func TestGCKeepsBareShaReference(t *testing.T) {
 	}
 	if len(rep.Deleted) != 0 {
 		t.Fatalf("bare-sha-referenced asset deleted: %+v", rep.Deleted)
+	}
+}
+
+// TestGCKeepsShaInsideLongerHexRun guards the tiling fix: a real content address
+// that sits at a non-64-aligned offset inside a longer contiguous hex run must
+// still be detected as a reference. A naive non-overlapping [0-9a-f]{64} scan
+// tiles from offset 0 and would miss it, deleting a referenced asset.
+func TestGCKeepsShaInsideLongerHexRun(t *testing.T) {
+	store, docs, assets := gcFixture(t)
+	ctx := context.Background()
+	now := time.Date(2026, 7, 8, 12, 0, 0, 0, time.UTC)
+
+	// A 40-char git-style hex sha immediately precedes the real asset sha, forming
+	// one contiguous 104-char hex run with the asset sha at offset 40.
+	gitLike := "0123456789abcdef0123456789abcdef01234567" // 40 hex chars
+	html := `<html><body><span data-x="` + gitLike + sha1s + `"></span></body></html>`
+	if _, err := docs.Publish(ctx, service.PublishInput{Slug: "d", HTML: html}); err != nil {
+		t.Fatal(err)
+	}
+	putAged(t, store, sha1s, now.Add(-48*time.Hour))
+
+	rep, err := assets.GCAssets(ctx, 24*time.Hour, now, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rep.Deleted) != 0 {
+		t.Fatalf("asset referenced inside a longer hex run was deleted: %+v", rep.Deleted)
+	}
+	if _, _, err := assets.Get(ctx, "d", sha1s); err != nil {
+		t.Errorf("referenced asset removed: %v", err)
+	}
+}
+
+// TestGCLargeHexBlobBounded guards the oversized-run cap: a doc carrying a huge
+// inline hex blob must not blow up GC, and a normal assets/<sha> reference (its
+// own isolated 64-char run) is still detected and kept.
+func TestGCLargeHexBlobBounded(t *testing.T) {
+	store, docs, assets := gcFixture(t)
+	ctx := context.Background()
+	now := time.Date(2026, 7, 8, 12, 0, 0, 0, time.UTC)
+
+	// ~200 KB of contiguous hex (well past maxSlideRun) plus a normal reference.
+	blob := strings.Repeat("0123456789abcdef", 12500) // 200,000 hex chars
+	html := `<html><body><span data-blob="` + blob + `"></span>` +
+		`<img src="/d/d/assets/` + sha1s + `"></body></html>`
+	if _, err := docs.Publish(ctx, service.PublishInput{Slug: "d", HTML: html}); err != nil {
+		t.Fatal(err)
+	}
+	putAged(t, store, sha1s, now.Add(-48*time.Hour))
+
+	rep, err := assets.GCAssets(ctx, 24*time.Hour, now, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rep.Deleted) != 0 {
+		t.Fatalf("referenced asset deleted despite a valid URL reference: %+v", rep.Deleted)
 	}
 }

@@ -77,13 +77,13 @@ default; access is per-doc via share codes, see `docs/AUTH.md`.)
 Two binaries:
 
 - `cmd/octo-doc` — the **server**. Subcommands: `serve` (default), `migrate`,
-  `bootstrap`, `health`. Loads full server config (DB + S3) on every command
-  except `health`.
+  `bootstrap`, `gc-assets`, `health`. Loads full server config (DB + S3) on every
+  command except `health`.
 - `cmd/octo` — the **agent client** CLI (`new`, `publish`, `share`, `pull`,
   `unpublish`, `list`, `fork`, `version-add`, `comment`, `react`, `reply`,
-  `doctor`, `update`). Links no DB/S3. **Remote-first**: `new` saves a
-  server-side draft, `publish` promotes it to an immutable version — no local
-  preview. Config: `OCTO_*` env + `~/.octo/config.json`.
+  `asset-add`, `asset-list`, `asset-rm`, `doctor`, `update`). Links no DB/S3.
+  **Remote-first**: `new` saves a server-side draft, `publish` promotes it to an
+  immutable version — no local preview. Config: `OCTO_*` env + `~/.octo/config.json`.
   Version stamped via `-ldflags "-X main.version=…"`; `make build-octo` /
   `make release-octo`.
 

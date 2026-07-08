@@ -34,6 +34,8 @@ func cmdNew(args []string) error {
 		quiet     = fs.Bool("quiet", false, "suppress informational output")
 		force     = fs.Bool("force", false, "overwrite an existing local slug")
 	)
+	var rewrite rewriteFlag
+	fs.Var(&rewrite, "rewrite-assets", "upload local media (img/video) referenced in the HTML and rewrite refs to asset URLs; =dry to preview")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -87,6 +89,17 @@ func cmdNew(args []string) error {
 	}
 	if !strings.Contains(strings.ToLower(string(htmlBytes)), "<body") {
 		return fmt.Errorf("html does not contain a <body> tag — did you pass markdown by mistake? (existing doc left untouched)")
+	}
+
+	// Optionally upload local media references and rewrite them to asset URLs. Local
+	// paths resolve from the HTML file's directory (cwd for --html-stdin).
+	baseDir := "."
+	if *htmlFile != "" {
+		baseDir = filepath.Dir(*htmlFile)
+	}
+	htmlBytes, err = applyRewrite(&rewrite, htmlBytes, baseDir, cl, *slug, info)
+	if err != nil {
+		return fmt.Errorf("rewrite-assets: %w", err)
 	}
 
 	// Save the draft on the server first — if that fails, nothing local changes.

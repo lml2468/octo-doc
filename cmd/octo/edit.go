@@ -25,6 +25,8 @@ func cmdVersionAdd(args []string) error {
 		htmlStdin = fs.Bool("html-stdin", false, "read the new draft's HTML from stdin")
 		prompt    = fs.String("prompt", "", "prompt-of-record for this iteration")
 	)
+	var rewrite rewriteFlag
+	fs.Var(&rewrite, "rewrite-assets", "upload local media referenced in the HTML and rewrite refs to asset URLs; =dry to preview")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -64,6 +66,18 @@ func cmdVersionAdd(args []string) error {
 	if meta, merr := st.readMeta(*slug); merr == nil {
 		title = meta.Title
 	}
+
+	// Optionally upload local media references and rewrite them to asset URLs.
+	baseDir := "."
+	if *htmlFile != "" {
+		baseDir = filepath.Dir(*htmlFile)
+	}
+	info := func(format string, a ...any) { fmt.Fprintf(os.Stderr, "[octo-version-add] "+format+"\n", a...) }
+	htmlBytes, err = applyRewrite(&rewrite, htmlBytes, baseDir, cl, *slug, info)
+	if err != nil {
+		return fmt.Errorf("rewrite-assets: %w", err)
+	}
+
 	if err := cl.saveDraft(context.Background(), *slug, string(htmlBytes), title); err != nil {
 		return fmt.Errorf("save draft: %w", err)
 	}

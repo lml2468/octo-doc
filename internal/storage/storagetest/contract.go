@@ -5,6 +5,7 @@
 package storagetest
 
 import (
+	"bytes"
 	"context"
 	"testing"
 
@@ -129,6 +130,40 @@ func RunMetadata(t *testing.T, ms storage.MetadataStore) {
 			t.Fatal("AnyToken should be true")
 		}
 	})
+
+	t.Run("assets", func(t *testing.T) {
+		if a, err := ms.GetAssetMeta(ctx, "d", "absent"); err != nil || a != nil {
+			t.Fatalf("GetAssetMeta absent = %v, %v; want nil, nil", a, err)
+		}
+		am := storage.AssetMeta{Slug: "d", SHA256: "abc", MIME: "image/png", Size: 12, OriginalName: "a.png", Created: "t"}
+		if err := ms.PutAssetMeta(ctx, am); err != nil {
+			t.Fatal(err)
+		}
+		got, err := ms.GetAssetMeta(ctx, "d", "abc")
+		if err != nil || got == nil || got.MIME != "image/png" || got.Size != 12 {
+			t.Fatalf("GetAssetMeta = %+v, %v", got, err)
+		}
+		// Re-put with same key is idempotent (ON CONFLICT DO UPDATE).
+		if err := ms.PutAssetMeta(ctx, am); err != nil {
+			t.Fatal(err)
+		}
+		// A second asset under the same slug + one under another slug.
+		_ = ms.PutAssetMeta(ctx, storage.AssetMeta{Slug: "d", SHA256: "def", MIME: "image/gif", Size: 3, OriginalName: "b.gif", Created: "t"})
+		_ = ms.PutAssetMeta(ctx, storage.AssetMeta{Slug: "other", SHA256: "xyz", MIME: "image/png", Size: 1, OriginalName: "c.png", Created: "t"})
+		list, err := ms.ListAssetMeta(ctx, "d")
+		if err != nil || len(list) != 2 {
+			t.Fatalf("ListAssetMeta = %v (%d), %v; want 2 for slug d", list, len(list), err)
+		}
+		if err := ms.DeleteAssetMeta(ctx, "d", "abc"); err != nil {
+			t.Fatal(err)
+		}
+		if a, _ := ms.GetAssetMeta(ctx, "d", "abc"); a != nil {
+			t.Fatal("asset meta not deleted")
+		}
+		if l, _ := ms.ListAssetMeta(ctx, "d"); len(l) != 1 {
+			t.Fatalf("ListAssetMeta after delete = %d; want 1", len(l))
+		}
+	})
 }
 
 // RunBlob exercises the BlobStore contract. The store must be empty.
@@ -199,5 +234,35 @@ func RunBlob(t *testing.T, bs storage.BlobStore) {
 	// DeleteDraft on an absent slug is not an error.
 	if err := bs.DeleteDraft(ctx, "neverexisted"); err != nil {
 		t.Fatalf("DeleteDraft absent = %v; want nil", err)
+	}
+
+	// Assets: content-addressed bytes under the doc's prefix.
+	if _, ok, err := bs.GetAsset(ctx, "assetslug", "deadbeef"); err != nil || ok {
+		t.Fatalf("GetAsset absent = ok %v, err %v; want false", ok, err)
+	}
+	raw := []byte{0x89, 'P', 'N', 'G', 1, 2, 3}
+	if err := bs.PutAsset(ctx, "assetslug", "deadbeef", raw); err != nil {
+		t.Fatal(err)
+	}
+	if err := bs.PutAsset(ctx, "assetslug", "deadbeef", raw); err != nil {
+		t.Fatal(err) // idempotent re-put must succeed
+	}
+	ab, ok, err := bs.GetAsset(ctx, "assetslug", "deadbeef")
+	if err != nil || !ok || !bytes.Equal(ab, raw) {
+		t.Fatalf("GetAsset = %v, %v, %v; want the bytes", ab, ok, err)
+	}
+	// Assets live under the doc prefix, so DeleteDoc must purge them too.
+	if _, err := bs.PutDoc(ctx, "assetslug", 1, "<html></html>"); err != nil {
+		t.Fatal(err)
+	}
+	if err := bs.DeleteDoc(ctx, "assetslug"); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok, _ := bs.GetAsset(ctx, "assetslug", "deadbeef"); ok {
+		t.Fatal("asset survived DeleteDoc; want purged with the doc prefix")
+	}
+	// DeleteAsset on an absent asset is not an error.
+	if err := bs.DeleteAsset(ctx, "assetslug", "deadbeef"); err != nil {
+		t.Fatalf("DeleteAsset absent = %v; want nil", err)
 	}
 }

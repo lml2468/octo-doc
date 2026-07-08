@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"strings"
 	"time"
@@ -232,6 +233,95 @@ func (c *client) share(ctx context.Context, slug string) (*shareResp, error) {
 // revokeShare clears the doc's share code (existing links stop working).
 func (c *client) revokeShare(ctx context.Context, slug string) error {
 	_, err := c.do(ctx, http.MethodDelete, "/v1/docs/"+slug+"/share", nil)
+	return err
+}
+
+// assetResp is the POST /v1/docs/{slug}/assets success payload.
+type assetResp struct {
+	Slug   string `json:"slug"`
+	SHA256 string `json:"sha256"`
+	MIME   string `json:"mime"`
+	Size   int64  `json:"size"`
+	URL    string `json:"url"`
+}
+
+// assetInfo is one entry in the GET /v1/docs/{slug}/assets listing.
+type assetInfo struct {
+	SHA256       string `json:"sha256"`
+	MIME         string `json:"mime"`
+	Size         int64  `json:"size"`
+	OriginalName string `json:"original_name"`
+	Created      string `json:"created"`
+	URL          string `json:"url"`
+}
+
+// uploadAsset posts a media file as multipart/form-data (field "file") and returns
+// the minted asset record, including the URL to reference in the doc's HTML.
+func (c *client) uploadAsset(ctx context.Context, slug, filename string, data []byte) (*assetResp, error) {
+	var buf bytes.Buffer
+	mw := multipart.NewWriter(&buf)
+	fw, err := mw.CreateFormFile("file", filename)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := fw.Write(data); err != nil {
+		return nil, err
+	}
+	if err := mw.Close(); err != nil {
+		return nil, err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/v1/docs/"+slug+"/assets", &buf)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", mw.FormDataContentType())
+	if c.token != "" {
+		req.Header.Set("Authorization", "Bearer "+c.token)
+	}
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = resp.Body.Close() }()
+	raw, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	if err != nil {
+		return nil, err
+	}
+	var env envelope
+	if err := json.Unmarshal(raw, &env); err != nil {
+		return nil, fmt.Errorf("HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(raw)))
+	}
+	if env.Error != nil {
+		return nil, fmt.Errorf("%s", env.Error.String())
+	}
+	if resp.StatusCode >= 400 {
+		return nil, fmt.Errorf("HTTP %d", resp.StatusCode)
+	}
+	var out assetResp
+	if err := json.Unmarshal(env.Data, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// listAssets returns a doc's asset registry.
+func (c *client) listAssets(ctx context.Context, slug string) ([]assetInfo, error) {
+	data, err := c.do(ctx, http.MethodGet, "/v1/docs/"+slug+"/assets", nil)
+	if err != nil {
+		return nil, err
+	}
+	var out struct {
+		Assets []assetInfo `json:"assets"`
+	}
+	if err := json.Unmarshal(data, &out); err != nil {
+		return nil, err
+	}
+	return out.Assets, nil
+}
+
+// deleteAsset removes one asset by its content hash.
+func (c *client) deleteAsset(ctx context.Context, slug, sha string) error {
+	_, err := c.do(ctx, http.MethodDelete, "/v1/docs/"+slug+"/assets/"+sha, nil)
 	return err
 }
 

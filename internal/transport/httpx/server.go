@@ -19,6 +19,7 @@ type Server struct {
 	logger    *slog.Logger
 	docs      *service.DocService
 	comments  *service.CommentService
+	assets    *service.AssetService
 	auth      *service.AuthService
 	overlayJS string
 	health    func(context.Context) error
@@ -30,6 +31,7 @@ type Deps struct {
 	Logger    *slog.Logger
 	Docs      *service.DocService
 	Comments  *service.CommentService
+	Assets    *service.AssetService
 	Auth      *service.AuthService
 	OverlayJS string
 	// Health verifies backing stores are reachable (readiness probe). Optional; a
@@ -44,6 +46,7 @@ func New(d Deps) *Server {
 		logger:    d.Logger,
 		docs:      d.Docs,
 		comments:  d.Comments,
+		assets:    d.Assets,
 		auth:      d.Auth,
 		overlayJS: d.OverlayJS,
 		health:    d.Health,
@@ -83,6 +86,13 @@ func (s *Server) Handler() http.Handler {
 		r.With(s.requireDocAuthor).Post("/docs/{slug}/share", s.cors(s.wrap(s.handleShare)))
 		r.With(s.requireDocAuthor).Delete("/docs/{slug}/share", s.cors(s.wrap(s.handleRevokeShare)))
 
+		// Media assets: author uploads/deletes; a reader (share code) may list.
+		// The raw bytes are served from the /d/ tree below, under the same reader
+		// gate as a version render.
+		r.With(s.requireDocAuthor).Method(http.MethodPost, "/docs/{slug}/assets", s.cors(s.limit(writeLimiter, false, s.wrap(s.handleUploadAsset))))
+		r.Get("/docs/{slug}/assets", s.cors(s.requireDocReadJSON(slugFromPath, s.wrap(s.handleListAssets))))
+		r.With(s.requireDocAuthor).Delete("/docs/{slug}/assets/{sha256}", s.cors(s.wrap(s.handleDeleteAsset)))
+
 		// Comments + reactions. Reads and writes require at least a reader
 		// capability (the doc's share code) — enforced per-handler since the slug
 		// arrives in the body on POST/PATCH.
@@ -103,6 +113,12 @@ func (s *Server) Handler() http.Handler {
 	r.Get("/d/{slug}/v/{version}", s.requireDocReadHTML(s.secHeaders(s.wrap(s.handleRender))))
 	r.Head("/d/{slug}/v/{version}", s.requireDocReadHTML(s.secHeaders(s.wrap(s.handleRender))))
 	r.Get("/d/{slug}/v/{version}/{kind}", s.requireDocReadHTML(s.secHeaders(s.wrap(s.handleForkExport))))
+
+	// Raw media assets referenced by a doc's HTML. Reader-gated like a render; the
+	// handler sets its own locked-down CSP (not docSecurityHeaders), so no
+	// secHeaders wrapper here.
+	r.Get("/d/{slug}/assets/{sha256}", s.requireDocReadHTML(s.wrap(s.handleServeAsset)))
+	r.Head("/d/{slug}/assets/{sha256}", s.requireDocReadHTML(s.wrap(s.handleServeAsset)))
 
 	// Pages (browser HTML).
 	r.Get("/", s.handleLanding)
@@ -180,14 +196,24 @@ func (s *Server) secHeaders(next http.HandlerFunc) http.HandlerFunc {
 }
 
 // docSecurityHeaders builds the CSP + framing headers for rendered documents.
+//
+// media-src / frame-src / object-src are listed explicitly rather than left to
+// fall back to default-src: prompt-native docs routinely embed <video>/<audio>,
+// third-party <iframe>s (e.g. video embeds), and self-hosted assets, and an
+// implicit fallback would silently break those the moment default-src is
+// tightened. Keeping them explicit makes the media capability intentional and
+// independently adjustable.
 func docSecurityHeaders(frameAncestors string) map[string]string {
 	csp := strings.Join([]string{
 		"default-src 'self' data: blob: https:",
 		"script-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob: https:",
 		"style-src 'self' 'unsafe-inline' https:",
 		"img-src 'self' data: blob: https:",
+		"media-src 'self' data: blob: https:",
 		"font-src 'self' data: https:",
 		"connect-src 'self' https:",
+		"frame-src 'self' https:",
+		"object-src 'self' data: blob:",
 		"base-uri 'self'",
 		"frame-ancestors " + frameAncestors,
 	}, "; ")

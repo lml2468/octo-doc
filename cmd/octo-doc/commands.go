@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"flag"
 	"fmt"
 	"io"
 	"log/slog"
@@ -43,6 +44,7 @@ func buildServices(ctx context.Context, cfg *config.Config) (deps *httpx.Deps, c
 	locker := meta.Locker()
 	comments := service.NewCommentService(meta, locker)
 	docs := service.NewDocService(blobs, meta, comments, locker, cfg.BaseURL, cfg.MaxHTMLBytes)
+	assets := service.NewAssetService(blobs, meta, locker, cfg.MaxAssetBytes, cfg.AssetMIMEAllow)
 	auth := service.NewAuthService(meta, cfg, locker)
 	health := func(hctx context.Context) error {
 		if e := meta.Health(hctx); e != nil {
@@ -51,7 +53,7 @@ func buildServices(ctx context.Context, cfg *config.Config) (deps *httpx.Deps, c
 		return blobs.Health(hctx)
 	}
 	return &httpx.Deps{
-		Config: cfg, Docs: docs, Comments: comments, Auth: auth, Health: health,
+		Config: cfg, Docs: docs, Comments: comments, Assets: assets, Auth: auth, Health: health,
 	}, meta.Close, nil
 }
 
@@ -132,5 +134,46 @@ func bootstrap(cfg *config.Config) error {
 		return err
 	}
 	_, _ = io.WriteString(os.Stdout, token+"\n")
+	return nil
+}
+
+// gcAssets runs an orphan-asset garbage-collection pass: it deletes assets that no
+// live HTML (published versions or draft) references and that are older than the
+// grace window. args carries the flags after the subcommand name.
+func gcAssets(cfg *config.Config, logger *slog.Logger, args []string) error {
+	fs := flag.NewFlagSet("gc-assets", flag.ContinueOnError)
+	grace := fs.Duration("grace", 24*time.Hour, "keep unreferenced assets newer than this")
+	dryRun := fs.Bool("dry-run", false, "report what would be deleted without deleting")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if err := cfg.Validate(); err != nil {
+		return err
+	}
+	startCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	deps, closeStore, err := buildServices(startCtx, cfg)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = closeStore() }()
+
+	ctx := context.Background()
+	rep, err := deps.Assets.GCAssets(ctx, *grace, time.Now().UTC(), *dryRun)
+	if err != nil {
+		return err
+	}
+	var freed int64
+	for _, d := range rep.Deleted {
+		freed += d.Size
+		verb := "deleted"
+		if *dryRun {
+			verb = "would delete"
+		}
+		logger.Info("gc-assets "+verb, "slug", d.Slug, "sha256", d.SHA256, "size", d.Size)
+	}
+	logger.Info("gc-assets done",
+		"docs", rep.Scanned, "assets", rep.Assets, "referenced", rep.Referenced,
+		"kept", rep.Kept, "deleted", len(rep.Deleted), "bytes_freed", freed, "dry_run", *dryRun)
 	return nil
 }

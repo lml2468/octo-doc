@@ -25,6 +25,16 @@ CREATE TABLE IF NOT EXISTS comments (slug TEXT PRIMARY KEY, json JSONB NOT NULL,
 CREATE TABLE IF NOT EXISTS sessions (sid TEXT PRIMARY KEY, json JSONB NOT NULL, expires_at BIGINT NOT NULL);
 CREATE TABLE IF NOT EXISTS tokens (token TEXT PRIMARY KEY, json JSONB NOT NULL, created_at BIGINT NOT NULL);
 CREATE INDEX IF NOT EXISTS sessions_expires_at_idx ON sessions (expires_at);
+CREATE TABLE IF NOT EXISTS assets (
+    slug          TEXT        NOT NULL,
+    sha256        TEXT        NOT NULL,
+    mime          TEXT        NOT NULL,
+    size          BIGINT      NOT NULL,
+    original_name TEXT        NOT NULL,
+    created       TEXT        NOT NULL,
+    PRIMARY KEY (slug, sha256)
+);
+CREATE INDEX IF NOT EXISTS assets_slug_idx ON assets (slug);
 `
 
 // Store is a PostgreSQL-backed MetadataStore.
@@ -287,6 +297,63 @@ func (s *Store) AnyToken(ctx context.Context) (bool, error) {
 	return n > 0, nil
 }
 
+// --- assets ---
+
+// PutAssetMeta implements storage.MetadataStore. Idempotent on (slug, sha256):
+// re-registering identical bytes refreshes the display fields without erroring.
+func (s *Store) PutAssetMeta(ctx context.Context, meta storage.AssetMeta) error {
+	_, err := s.pool.Exec(ctx,
+		`INSERT INTO assets(slug,sha256,mime,size,original_name,created) VALUES($1,$2,$3,$4,$5,$6)
+		 ON CONFLICT(slug,sha256) DO UPDATE SET mime=$3, size=$4, original_name=$5`,
+		meta.Slug, meta.SHA256, meta.MIME, meta.Size, meta.OriginalName, meta.Created)
+	if err != nil {
+		return fmt.Errorf("put asset meta %q/%q: %w", meta.Slug, meta.SHA256, err)
+	}
+	return nil
+}
+
+// GetAssetMeta implements storage.MetadataStore.
+func (s *Store) GetAssetMeta(ctx context.Context, slug, sha256 string) (*storage.AssetMeta, error) {
+	var m storage.AssetMeta
+	err := s.pool.QueryRow(ctx,
+		"SELECT slug,sha256,mime,size,original_name,created FROM assets WHERE slug=$1 AND sha256=$2", slug, sha256).
+		Scan(&m.Slug, &m.SHA256, &m.MIME, &m.Size, &m.OriginalName, &m.Created)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &m, nil
+}
+
+// ListAssetMeta implements storage.MetadataStore.
+func (s *Store) ListAssetMeta(ctx context.Context, slug string) ([]storage.AssetMeta, error) {
+	rows, err := s.pool.Query(ctx,
+		"SELECT slug,sha256,mime,size,original_name,created FROM assets WHERE slug=$1 ORDER BY sha256", slug)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := make([]storage.AssetMeta, 0)
+	for rows.Next() {
+		var m storage.AssetMeta
+		if err := rows.Scan(&m.Slug, &m.SHA256, &m.MIME, &m.Size, &m.OriginalName, &m.Created); err != nil {
+			return nil, err
+		}
+		out = append(out, m)
+	}
+	return out, rows.Err()
+}
+
+// DeleteAssetMeta implements storage.MetadataStore.
+func (s *Store) DeleteAssetMeta(ctx context.Context, slug, sha256 string) error {
+	if _, err := s.pool.Exec(ctx, "DELETE FROM assets WHERE slug=$1 AND sha256=$2", slug, sha256); err != nil {
+		return fmt.Errorf("delete asset meta %q/%q: %w", slug, sha256, err)
+	}
+	return nil
+}
+
 // Close releases the connection pools.
 func (s *Store) Close() error {
 	s.pool.Close()
@@ -314,6 +381,6 @@ func (s *Store) Health(ctx context.Context) error {
 
 // TruncateAll removes every row from all tables. Intended for tests.
 func (s *Store) TruncateAll(ctx context.Context) error {
-	_, err := s.pool.Exec(ctx, "TRUNCATE meta, comments, sessions, tokens")
+	_, err := s.pool.Exec(ctx, "TRUNCATE meta, comments, sessions, tokens, assets")
 	return err
 }

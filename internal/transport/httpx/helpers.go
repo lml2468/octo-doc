@@ -93,6 +93,22 @@ func parseVersionParam(s string) (int, bool) {
 	return n, true
 }
 
+// requireSHA256 validates a content-address path segment: exactly 64 lowercase
+// hex chars. Rejecting anything else keeps the value safe as a storage key and
+// hides malformed lookups behind a plain 400.
+func requireSHA256(value string) (string, error) {
+	if len(value) != 64 {
+		return "", apperr.Validation("invalid asset id", "invalid_sha256")
+	}
+	for i := 0; i < len(value); i++ {
+		c := value[i]
+		if (c < '0' || c > '9') && (c < 'a' || c > 'f') {
+			return "", apperr.Validation("invalid asset id", "invalid_sha256")
+		}
+	}
+	return value, nil
+}
+
 // compactDigits keeps only the digits of a string (for compact ids).
 func compactDigits(s string) string {
 	out := make([]byte, 0, len(s))

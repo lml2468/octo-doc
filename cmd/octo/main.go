@@ -13,6 +13,9 @@
 //	octo pull       merge server comments into the local comments.json
 //	octo unpublish  delete a published doc from the server
 //	octo share      mint/rotate a read+comment share link for a doc
+//	octo asset-add  upload a media file and print its doc-referenceable URL
+//	octo asset-list list a doc's uploaded media assets
+//	octo asset-rm   delete an uploaded media asset by content hash
 //	octo list       list local docs
 //	octo fork       copy a local doc under a new slug
 //	octo version-add save a new draft (the next version's HTML) for a doc
@@ -58,6 +61,12 @@ func run(args []string) error {
 		return cmdUnpublish(rest)
 	case "share":
 		return cmdShare(rest)
+	case "asset-add":
+		return cmdAssetAdd(rest)
+	case "asset-list":
+		return cmdAssetList(rest)
+	case "asset-rm":
+		return cmdAssetRm(rest)
 	case "list":
 		return cmdList(rest)
 	case "fork":
@@ -97,6 +106,9 @@ commands:
   pull         merge server comments into the local comments.json
   unpublish    delete a published doc from the server
   share        mint/rotate a read+comment share link for a doc
+  asset-add    upload a media file (image/video/…) and print its doc URL
+  asset-list   list a doc's uploaded media assets
+  asset-rm     delete an uploaded media asset by its content hash
   list         list local docs
   fork         copy a local doc under a new slug
   version-add  save a new draft (the next version's HTML) for a doc

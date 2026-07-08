@@ -1,9 +1,10 @@
 // Command octo-doc is the single entrypoint: it runs the HTTP server (default),
 // applies database migrations, or prints a bootstrap write token.
 //
-//	octo-doc [serve]   run the server
-//	octo-doc migrate   ensure/apply the database schema
-//	octo-doc bootstrap mint and print the first write token
+//	octo-doc [serve]     run the server
+//	octo-doc migrate     ensure/apply the database schema
+//	octo-doc bootstrap   mint and print the first write token
+//	octo-doc gc-assets   delete unreferenced media assets past a grace window
 package main
 
 import (
@@ -16,16 +17,18 @@ import (
 
 func main() {
 	cmd := "serve"
+	var args []string
 	if len(os.Args) > 1 {
 		cmd = os.Args[1]
+		args = os.Args[2:]
 	}
-	if err := run(cmd); err != nil {
+	if err := run(cmd, args); err != nil {
 		fmt.Fprintln(os.Stderr, "octo-doc:", err)
 		os.Exit(1)
 	}
 }
 
-func run(cmd string) error {
+func run(cmd string, args []string) error {
 	// health is a dependency-free check usable as a container healthcheck; it
 	// does not load the full config (only PORT).
 	if cmd == "health" {
@@ -45,7 +48,9 @@ func run(cmd string) error {
 		return migrate(cfg, logger)
 	case "bootstrap":
 		return bootstrap(cfg)
+	case "gc-assets":
+		return gcAssets(cfg, logger, args)
 	default:
-		return fmt.Errorf("unknown command %q\nusage: octo-doc [serve|migrate|bootstrap|health]", cmd)
+		return fmt.Errorf("unknown command %q\nusage: octo-doc [serve|migrate|bootstrap|gc-assets|health]", cmd)
 	}
 }

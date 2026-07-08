@@ -15,12 +15,14 @@ import (
 
 // Store implements both storage.MetadataStore and storage.BlobStore in memory.
 type Store struct {
-	mu       sync.RWMutex
-	meta     map[string]storage.DocMeta
-	comments map[string][]core.Comment
-	sessions map[string]sessionEntry
-	tokens   map[string]storage.TokenRecord
-	blobs    map[string]string // "slug\x00version" -> html
+	mu        sync.RWMutex
+	meta      map[string]storage.DocMeta
+	comments  map[string][]core.Comment
+	sessions  map[string]sessionEntry
+	tokens    map[string]storage.TokenRecord
+	blobs     map[string]string            // "slug\x00version" -> html
+	assets    map[string][]byte            // "slug\x00sha256" -> bytes
+	assetMeta map[string]storage.AssetMeta // "slug\x00sha256" -> meta
 }
 
 type sessionEntry struct {
@@ -31,11 +33,13 @@ type sessionEntry struct {
 // New returns an empty in-memory store.
 func New() *Store {
 	return &Store{
-		meta:     map[string]storage.DocMeta{},
-		comments: map[string][]core.Comment{},
-		sessions: map[string]sessionEntry{},
-		tokens:   map[string]storage.TokenRecord{},
-		blobs:    map[string]string{},
+		meta:      map[string]storage.DocMeta{},
+		comments:  map[string][]core.Comment{},
+		sessions:  map[string]sessionEntry{},
+		tokens:    map[string]storage.TokenRecord{},
+		blobs:     map[string]string{},
+		assets:    map[string][]byte{},
+		assetMeta: map[string]storage.AssetMeta{},
 	}
 }
 
@@ -189,6 +193,52 @@ func (s *Store) AnyToken(_ context.Context) (bool, error) {
 	return len(s.tokens) > 0, nil
 }
 
+// assetKey namespaces asset records by slug and content hash.
+func assetKey(slug, sha256 string) string { return slug + "\x00" + sha256 }
+
+// PutAssetMeta implements storage.MetadataStore.
+func (s *Store) PutAssetMeta(_ context.Context, meta storage.AssetMeta) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.assetMeta[assetKey(meta.Slug, meta.SHA256)] = cloneJSON(meta)
+	return nil
+}
+
+// GetAssetMeta implements storage.MetadataStore.
+func (s *Store) GetAssetMeta(_ context.Context, slug, sha256 string) (*storage.AssetMeta, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	m, ok := s.assetMeta[assetKey(slug, sha256)]
+	if !ok {
+		return nil, nil
+	}
+	c := cloneJSON(m)
+	return &c, nil
+}
+
+// ListAssetMeta implements storage.MetadataStore.
+func (s *Store) ListAssetMeta(_ context.Context, slug string) ([]storage.AssetMeta, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	prefix := slug + "\x00"
+	out := make([]storage.AssetMeta, 0)
+	for k, m := range s.assetMeta {
+		if len(k) > len(prefix) && k[:len(prefix)] == prefix {
+			out = append(out, cloneJSON(m))
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].SHA256 < out[j].SHA256 })
+	return out, nil
+}
+
+// DeleteAssetMeta implements storage.MetadataStore.
+func (s *Store) DeleteAssetMeta(_ context.Context, slug, sha256 string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.assetMeta, assetKey(slug, sha256))
+	return nil
+}
+
 // Close implements storage.MetadataStore.
 func (s *Store) Close() error { return nil }
 
@@ -246,7 +296,8 @@ func (s *Store) ListVersions(_ context.Context, slug string) ([]int, error) {
 	return out, nil
 }
 
-// DeleteDoc implements storage.BlobStore.
+// DeleteDoc implements storage.BlobStore. It also purges the slug's assets, since
+// the S3 backend deletes them via the shared docs/<hash>/ prefix.
 func (s *Store) DeleteDoc(_ context.Context, slug string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -254,6 +305,11 @@ func (s *Store) DeleteDoc(_ context.Context, slug string) error {
 	for k := range s.blobs {
 		if len(k) > len(prefix) && k[:len(prefix)] == prefix {
 			delete(s.blobs, k)
+		}
+	}
+	for k := range s.assets {
+		if len(k) > len(prefix) && k[:len(prefix)] == prefix {
+			delete(s.assets, k)
 		}
 	}
 	return nil
@@ -284,6 +340,38 @@ func (s *Store) DeleteDraft(_ context.Context, slug string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	delete(s.blobs, draftKey(slug))
+	return nil
+}
+
+// PutAsset implements storage.BlobStore. Content-addressed, so it copies the
+// bytes and is idempotent on identical (slug, sha256).
+func (s *Store) PutAsset(_ context.Context, slug, sha256 string, data []byte) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	cp := make([]byte, len(data))
+	copy(cp, data)
+	s.assets[assetKey(slug, sha256)] = cp
+	return nil
+}
+
+// GetAsset implements storage.BlobStore.
+func (s *Store) GetAsset(_ context.Context, slug, sha256 string) ([]byte, bool, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	b, ok := s.assets[assetKey(slug, sha256)]
+	if !ok {
+		return nil, false, nil
+	}
+	cp := make([]byte, len(b))
+	copy(cp, b)
+	return cp, true, nil
+}
+
+// DeleteAsset implements storage.BlobStore.
+func (s *Store) DeleteAsset(_ context.Context, slug, sha256 string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.assets, assetKey(slug, sha256))
 	return nil
 }
 

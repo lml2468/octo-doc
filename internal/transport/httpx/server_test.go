@@ -23,16 +23,19 @@ func newTestServer(t *testing.T, cfg *config.Config) http.Handler {
 	if cfg == nil {
 		cfg = &config.Config{
 			WriteToken: "test-token", MaxHTMLBytes: 5 << 20, RepoURL: "https://example.com/repo",
-			RateLimitMax: 0, // disable rate limiting in tests
+			RateLimitMax:   0, // disable rate limiting in tests
+			MaxAssetBytes:  25 << 20,
+			AssetMIMEAllow: []string{"image/png", "image/gif", "image/jpeg"},
 		}
 	}
 	store := memory.New()
 	locker := sluglock.NewMemory()
 	comments := service.NewCommentService(store, locker)
 	docs := service.NewDocService(store, store, comments, locker, cfg.BaseURL, cfg.MaxHTMLBytes)
+	assets := service.NewAssetService(store, store, locker, cfg.MaxAssetBytes, cfg.AssetMIMEAllow)
 	auth := service.NewAuthService(store, cfg, locker)
 	srv := httpx.New(httpx.Deps{
-		Config: cfg, Logger: log.New("silent"), Docs: docs, Comments: comments, Auth: auth,
+		Config: cfg, Logger: log.New("silent"), Docs: docs, Comments: comments, Assets: assets, Auth: auth,
 		OverlayJS: "/* overlay */",
 	})
 	return srv.Handler()
@@ -163,6 +166,14 @@ func TestPublishRenderLifecycle(t *testing.T) {
 	}
 	if !strings.Contains(rec.Header().Get("Content-Security-Policy"), "frame-ancestors") {
 		t.Error("security headers missing")
+	}
+	// Rich inline media (video/audio, iframe embeds, self-hosted objects) must be
+	// governed by explicit CSP directives, not left to default-src fallback.
+	csp := rec.Header().Get("Content-Security-Policy")
+	for _, want := range []string{"media-src ", "frame-src ", "object-src "} {
+		if !strings.Contains(csp, want) {
+			t.Errorf("CSP missing %q directive: %s", want, csp)
+		}
 	}
 
 	// Publish v2 auto-increments.

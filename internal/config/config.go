@@ -45,14 +45,25 @@ type Config struct {
 	RateLimitWindow time.Duration
 	RateLimitMax    int
 	MaxHTMLBytes    int64
-	LogLevel        string
-	CookieSecure    bool
+	// MaxAssetBytes caps a single uploaded media asset. Assets are stored whole, so
+	// this bounds per-request memory and object size. See docs/ASSETS.md.
+	MaxAssetBytes int64
+	// AssetMIMEAllow is the allowlist of MIME types accepted for asset uploads. The
+	// server sniffs the bytes and rejects anything not in this set.
+	AssetMIMEAllow []string
+	LogLevel       string
+	CookieSecure   bool
 
 	IOTimeout time.Duration
 	IORetries int
 }
 
 var slugRe = regexp.MustCompile(`^[a-zA-Z0-9_-]{1,64}$`)
+
+// defaultAssetMIMEAllow is the conservative default set of MIME types accepted for
+// media asset uploads: common images, audio/video, and PDF. See docs/ASSETS.md.
+const defaultAssetMIMEAllow = "image/png,image/jpeg,image/gif,image/webp,image/avif,image/svg+xml," +
+	"video/mp4,video/webm,audio/mpeg,audio/ogg,audio/wav,application/pdf"
 
 // Load parses and validates configuration from the process environment.
 func Load() (*Config, error) {
@@ -82,6 +93,8 @@ func Load() (*Config, error) {
 		RateLimitWindow: time.Duration(envInt("RATE_LIMIT_WINDOW_MS", 60_000)) * time.Millisecond,
 		RateLimitMax:    envInt("RATE_LIMIT_MAX", 60),
 		MaxHTMLBytes:    int64(envInt("MAX_HTML_BYTES", 5*1024*1024)),
+		MaxAssetBytes:   int64(envInt("MAX_ASSET_BYTES", 25*1024*1024)),
+		AssetMIMEAllow:  splitList(env("ASSET_MIME_ALLOW", defaultAssetMIMEAllow)),
 		LogLevel:        env("LOG_LEVEL", "info"),
 		CookieSecure:    envBool("COOKIE_SECURE", true),
 
@@ -158,6 +171,12 @@ func (c *Config) Validate() error {
 	}
 	if c.MaxHTMLBytes <= 0 {
 		problems = append(problems, fmt.Sprintf("MAX_HTML_BYTES must be positive, got %d", c.MaxHTMLBytes))
+	}
+	if c.MaxAssetBytes <= 0 {
+		problems = append(problems, fmt.Sprintf("MAX_ASSET_BYTES must be positive, got %d", c.MaxAssetBytes))
+	}
+	if len(c.AssetMIMEAllow) == 0 {
+		problems = append(problems, "ASSET_MIME_ALLOW must list at least one MIME type")
 	}
 	// A custom S3 endpoint (MinIO/R2) has no ambient credential chain, so static
 	// creds are required; on AWS the default chain may supply them, so only warn by

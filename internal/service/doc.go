@@ -354,10 +354,22 @@ func (s *DocService) Remove(ctx context.Context, slug string) error {
 		if err := s.blobs.DeleteDoc(ctx, slug); err != nil {
 			return err
 		}
+		// blobs.DeleteDoc purges asset bytes (they share the doc's key prefix), but
+		// the asset metadata rows are a separate store — purge them too, or they'd
+		// orphan and resurface if the slug is later reused.
+		assets, err := s.meta.ListAssetMeta(ctx, slug)
+		if err != nil {
+			return err
+		}
+		for _, a := range assets {
+			if derr := s.meta.DeleteAssetMeta(ctx, slug, a.SHA256); derr != nil {
+				return derr
+			}
+		}
 		if err := s.meta.DeleteMeta(ctx, slug); err != nil {
 			return err
 		}
-		_, err := s.comments.WipeLocked(ctx, slug)
+		_, err = s.comments.WipeLocked(ctx, slug)
 		return err
 	})
 }

@@ -48,6 +48,19 @@ type MetaEntry struct {
 	Meta DocMeta
 }
 
+// AssetMeta is the registry record for one content-addressed media asset owned by
+// a document. The raw bytes live in the BlobStore keyed by (slug, SHA256); this
+// is the metadata the serving path needs (MIME, size, display name). See
+// docs/ASSETS.md.
+type AssetMeta struct {
+	Slug         string `json:"slug"`
+	SHA256       string `json:"sha256"`
+	MIME         string `json:"mime"`
+	Size         int64  `json:"size"`
+	OriginalName string `json:"original_name"`
+	Created      string `json:"created"`
+}
+
 // MetadataStore persists doc metadata, comment logs, sessions, and write tokens.
 // Implementations return plain Go values, never driver row types.
 type MetadataStore interface {
@@ -68,6 +81,14 @@ type MetadataStore interface {
 	GetToken(ctx context.Context, token string) (*TokenRecord, error)
 	PutToken(ctx context.Context, token string, rec TokenRecord) error
 	AnyToken(ctx context.Context) (bool, error)
+
+	// Asset metadata registry. Assets are content-addressed by SHA-256 and scoped
+	// to a doc; (slug, sha256) is the identity, so re-registering identical bytes
+	// is idempotent. See docs/ASSETS.md.
+	PutAssetMeta(ctx context.Context, meta AssetMeta) error
+	GetAssetMeta(ctx context.Context, slug, sha256 string) (*AssetMeta, error)
+	ListAssetMeta(ctx context.Context, slug string) ([]AssetMeta, error)
+	DeleteAssetMeta(ctx context.Context, slug, sha256 string) error
 
 	// Health verifies the backend is reachable (readiness probe).
 	Health(ctx context.Context) error
@@ -91,6 +112,13 @@ type BlobStore interface {
 	PutDraft(ctx context.Context, slug string, html string) (size int64, err error)
 	GetDraft(ctx context.Context, slug string) (string, bool, error)
 	DeleteDraft(ctx context.Context, slug string) error
+
+	// Asset bytes are content-addressed at docs/<hashSlug>/assets/<sha256>. PutAsset
+	// is idempotent (same key = same bytes). Assets live under the same per-slug
+	// prefix as versions, so DeleteDoc removes them too. See docs/ASSETS.md.
+	PutAsset(ctx context.Context, slug, sha256 string, data []byte) error
+	GetAsset(ctx context.Context, slug, sha256 string) (data []byte, ok bool, err error)
+	DeleteAsset(ctx context.Context, slug, sha256 string) error
 
 	// Health verifies the backend is reachable (readiness probe).
 	Health(ctx context.Context) error

@@ -4,6 +4,7 @@
 package s3
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -88,6 +89,13 @@ func (s *Store) keyFor(slug string, version int) string {
 // "v<digits>", so ListVersions's version regex never matches it.
 func (s *Store) draftKeyFor(slug string) string {
 	return s.prefixFor(slug) + "/draft/index.html"
+}
+
+// assetKeyFor is a content-addressed asset key. It lives under the same per-slug
+// prefix as versions, so DeleteDoc's prefix sweep removes assets too, and the
+// "assets/" segment never matches versionKeyRe.
+func (s *Store) assetKeyFor(slug, sha256 string) string {
+	return s.prefixFor(slug) + "/assets/" + sha256
 }
 
 func isNotFound(err error) bool {
@@ -197,6 +205,49 @@ func (s *Store) DeleteDraft(ctx context.Context, slug string) error {
 	_, err := s.client.DeleteObject(ctx, &awss3.DeleteObjectInput{
 		Bucket: aws.String(s.bucket),
 		Key:    aws.String(s.draftKeyFor(slug)),
+	})
+	if err != nil && !isNotFound(err) {
+		return err
+	}
+	return nil
+}
+
+// PutAsset stores raw asset bytes. Content-addressed, so an overwrite of the same
+// key is a harmless no-op write of identical bytes.
+func (s *Store) PutAsset(ctx context.Context, slug, sha256 string, data []byte) error {
+	_, err := s.client.PutObject(ctx, &awss3.PutObjectInput{
+		Bucket: aws.String(s.bucket),
+		Key:    aws.String(s.assetKeyFor(slug, sha256)),
+		Body:   bytes.NewReader(data),
+	})
+	return err
+}
+
+// GetAsset fetches raw asset bytes, returning (bytes, found, error).
+func (s *Store) GetAsset(ctx context.Context, slug, sha256 string) ([]byte, bool, error) {
+	out, err := s.client.GetObject(ctx, &awss3.GetObjectInput{
+		Bucket: aws.String(s.bucket),
+		Key:    aws.String(s.assetKeyFor(slug, sha256)),
+	})
+	if err != nil {
+		if isNotFound(err) {
+			return nil, false, nil
+		}
+		return nil, false, err
+	}
+	defer func() { _ = out.Body.Close() }()
+	data, err := io.ReadAll(out.Body)
+	if err != nil {
+		return nil, false, err
+	}
+	return data, true, nil
+}
+
+// DeleteAsset removes one asset. A missing asset is not an error.
+func (s *Store) DeleteAsset(ctx context.Context, slug, sha256 string) error {
+	_, err := s.client.DeleteObject(ctx, &awss3.DeleteObjectInput{
+		Bucket: aws.String(s.bucket),
+		Key:    aws.String(s.assetKeyFor(slug, sha256)),
 	})
 	if err != nil && !isNotFound(err) {
 		return err

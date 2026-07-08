@@ -47,6 +47,7 @@ func TestValidate(t *testing.T) {
 		return &Config{
 			DatabaseURL: "x", S3Bucket: "b",
 			Port: 8080, PGPoolMax: 10, RateLimitMax: 60, MaxHTMLBytes: 1 << 20,
+			MaxAssetBytes: 1 << 20, AssetMIMEAllow: []string{"image/png"},
 		}
 	}
 	if err := valid().Validate(); err != nil {

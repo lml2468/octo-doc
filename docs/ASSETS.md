@@ -53,7 +53,7 @@ subsystem.
 ## Design principles
 
 1. **Never touch `internal/core/`.** Assets are orthogonal to aid stamping,
-   event-log fold, and overlay injection. The golden byte-equivalence tests must
+   event-log fold, and overlay injection. The `core` byte-equivalence tests must
    remain untouched and green. Everything here lives in `storage` / `service` /
    `transport` / `config`.
 2. **Content-addressed and immutable.** An asset is named by the SHA-256 of its

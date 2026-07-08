@@ -149,8 +149,8 @@ make check        # fmt + vet + lint + test — the local gate
 ```
 
 The `core` kernel (artifact stamping, the comment event-log fold, anchor
-reconciliation) is a **byte-equivalent port** verified against golden fixtures in
-`testdata/golden`; keep `go test ./internal/core/` green. To run the storage and
+reconciliation) is a **byte-equivalent port** whose observable output is pinned by
+self-contained tests; keep `go test ./internal/core/` green. To run the storage and
 e2e suites against real services, start PostgreSQL + MinIO and export the
 `OCTO_TEST_*` variables (see the `Makefile` defaults).
 

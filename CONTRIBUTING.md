@@ -23,7 +23,6 @@ internal/storage/    MetadataStore + BlobStore (postgres, s3, memory)
 internal/transport/  HTTP layer (chi router, handlers, middleware)
 internal/platform/   cross-cutting: config, logging, typed errors, sluglock
 assets/              overlay.js (embedded via go:embed)
-testdata/golden/     frozen parity fixtures (see docs/PORTING.md)
 ```
 
 Dependencies flow one way: **transport → service → storage**, with `core` as a
@@ -53,7 +52,7 @@ Without the `OCTO_TEST_*` variables, those suites skip cleanly.
 ## Guidelines
 
 - **`internal/core` is a frozen byte-equivalent port.** Changes there must keep
-  every golden test green (`go test ./internal/core/`). Read
+  `go test ./internal/core/` green (the tests pin its exact output). Read
   [docs/PORTING.md](docs/PORTING.md) before touching it.
 - Keep handlers thin — validate and shape only; logic lives in services.
 - Return typed errors from `internal/platform/apperr`; the HTTP layer maps them.

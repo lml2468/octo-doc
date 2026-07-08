@@ -1,9 +1,10 @@
 # octo-doc Architecture
 
-octo-doc is a self-hosted reimplementation of [tdoc](https://github.com/serenakeyitan/tdoc)
-that preserves the document model, URL scheme, and comment semantics
-byte-for-byte. It is written in Go 1.26 and ships as a single static binary
-backed by PostgreSQL (metadata) and an S3-compatible object store (blobs).
+octo-doc is a self-hosted, prompt-native interactive document server that
+preserves the document model, URL scheme, and comment semantics of its original
+TypeScript implementation byte-for-byte. It is written in Go 1.26 and ships as a
+single static binary backed by PostgreSQL (metadata) and an S3-compatible object
+store (blobs).
 
 ## System shape
 
@@ -63,11 +64,10 @@ The success criterion *"相同输入下渲染字节级等价于上游"* is met b
 rather than rewriting them:
 
 - `stampAids()` — stamps `data-odoc-aid="<cyrb53 hash>"` on every commentable
-  artifact. Ported character-for-character from upstream (the aid hash
-  is byte-identical; only the attribute name is octo-doc-native). Verified by
-  `go test ./internal/core/` against the golden fixtures in `testdata/golden`
-  ("byte-parity with the upstream renderer") across ordinary and
-  adversarial HTML.
+  artifact. Ported character-for-character from the original implementation (the
+  aid hash is byte-identical; only the attribute name is octo-doc-native). Pinned
+  by `go test ./internal/core/` (exact stamped HTML + aid strings) across ordinary
+  and adversarial HTML.
 - The event-log comment model (`snapshotAt`, `dedupEvents`, `reconcileAnchors`,
   `compactComments`) — ported verbatim.
 - Overlay injection (`injectOverlayCfg`) — ported verbatim; the only change is

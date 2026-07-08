@@ -11,6 +11,14 @@ adhere to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - The `octo` client CLI has been extracted to a separate `octo-cli` project; this
   repo is now API-only. Author against a running server with the `/v1` HTTP API
   (see the README Quick start and [docs/SELF_HOSTING.md](docs/SELF_HOSTING.md)).
+- The bundled agent skill's separate repository has been deprecated and archived;
+  a replacement will target the new `octo-cli`.
+
+### Added
+
+- Server release automation: pushing a `v*` tag cross-compiles `octo-doc` for
+  linux/macOS (amd64/arm64) and attaches the binaries + `SHA256SUMS` to a GitHub
+  Release. Binaries are version-stamped — `octo-doc version` prints the build.
 
 ## [0.3.0] - 2026-07-07
 

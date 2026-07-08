@@ -1,36 +1,37 @@
 # Porting notes: TypeScript → Go
 
 octo-doc's domain kernel (`internal/core`) is a verbatim-equivalent port of the
-upstream tdoc logic (originally TypeScript). The success criterion
+original TypeScript implementation. The success criterion
 is **byte-equivalence**: the same input HTML must produce the same stamped output,
 and the same event log must fold to the same snapshot. This document records how
 that equivalence is guaranteed and the subtle traps the port had to clear.
 
-## The golden-fixture safety net
+## The parity safety net
 
-Before any TypeScript was removed, a generator ran the *original* TS functions
-over a battery of inputs and recorded the outputs under `testdata/golden`:
+While the TypeScript still existed, a generator ran the *original* TS functions
+over a battery of inputs and their outputs were baked into the Go tests as the
+parity baseline. Those exact expectations now live directly in
+`internal/core/*_test.go` as pinned literals — the external `testdata/golden`
+fixtures were removed once the port was complete and the TypeScript deleted.
 
-- `stamp/` — `<name>.in.html` → `<name>.out.html` (+ `.aids.json`)
-- `cyrb53.json` — input string + seed → hash
-- `fold/`, `ops/`, `reconcile/` — input event logs → folded snapshot JSON
+The tests in `internal/core/*_test.go` assert:
 
-The Go tests in `internal/core/*_test.go` replay these fixtures and assert:
+- **Byte-equivalence** for `StampAids` and `Cyrb53` (pure, fully deterministic) —
+  exact stamped HTML, exact aid strings, exact base-36 hashes.
+- **Behavioral equivalence** for the fold/ops/reconcile paths — folded snapshot
+  fields, op status codes, anchor rebinding — driven through the public API
+  (`ApplyCommentOp` → `SnapshotList`/`HistoryList`, `ReconcileAnchors`). One-shot
+  event ids (`EventEID`) are intentionally non-deterministic but never appear in a
+  folded snapshot, so snapshots stay stable.
 
-- **Byte-equivalence** for `StampAids` and `Cyrb53` (pure, fully deterministic).
-- **Logical equivalence** (structural JSON match) for the fold/ops/reconcile
-  paths, because one-shot event ids (`EventEID`) are intentionally
-  non-deterministic — but they never appear in a folded snapshot.
-
-The fixtures are **frozen**: upstream `core` logic is considered stable, so the
-golden set is a one-time parity baseline, permanently enforced in CI. To
-regenerate them you need the archived TypeScript reference (kept outside this
-repo); the generator script was removed when the TS source was deleted.
+The pinned expectations are a one-time parity baseline: `core` logic is considered
+stable, so changing an output is a deliberate act — update the corresponding
+`_test.go` literal in lockstep.
 
 ## The four traps
 
 These are the places where a naive Go translation would silently diverge. Each
-has a dedicated golden case.
+has dedicated test coverage.
 
 ### 1. `Math.imul` — 32-bit wrap-around multiply
 
@@ -45,7 +46,7 @@ mix assembles a 53-bit value (`4294967296*(2097151&h2) + (h1>>>0)`) — computed
 `cyrb53` iterates `str.length` via `charCodeAt(i)`, i.e. **UTF-16 code units**. A
 Go `string` is UTF-8 bytes and `range` yields runes — both differ from UTF-16 for
 any non-ASCII text. The port first encodes to `[]uint16` with
-`utf16.Encode([]rune(s))` and iterates that. Golden cases include CJK, emoji, and
+`utf16.Encode([]rune(s))` and iterates that. Test vectors include CJK, emoji, and
 astral-plane characters (surrogate pairs) to lock this down.
 
 ### 3. RE2 has no backreferences
@@ -75,7 +76,7 @@ different aid — than upstream for any document containing non-ASCII whitespace
 JS-equivalent class (`jsSpace`/`wsClass` in `stamp.go`) and uses it in every
 whitespace regex; `trimJSSpace` replaces `strings.TrimSpace` (whose
 `unicode.IsSpace` set also differs: it includes U+0085 NEL, which JS `.trim()`
-does not, and historically excluded U+FEFF). Golden case: `stamp/unicode-ws`.
+does not, and historically excluded U+FEFF). Covered by the stamp Unicode-whitespace test.
 
 ## Deliberate divergences
 

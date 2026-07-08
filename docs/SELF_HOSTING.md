@@ -85,6 +85,10 @@ octo-doc compiles to a single static binary with no runtime dependencies. You
 still need a PostgreSQL instance and an S3-compatible bucket reachable from it
 (a managed Postgres + an S3/MinIO/R2-compatible bucket, or self-hosted).
 
+Grab a prebuilt binary for linux/macOS (amd64/arm64) from the
+[latest release](https://github.com/lml2468/octo-doc/releases/latest) — each is
+listed in `SHA256SUMS` — or build from source:
+
 ```bash
 make build                    # or: go build -o octo-doc ./cmd/octo-doc
 

@@ -24,6 +24,22 @@ help: ## Show this help
 build: ## Build the binary into bin/
 	$(GO) build -ldflags "$(LDFLAGS)" -o $(BUILD_DIR)/$(BINARY) ./cmd/octo-doc
 
+# Cross-compile the server for release. Emits bin/dist/octo-doc_<os>_<arch>[.exe]
+# and a SHA256SUMS, attached to the GitHub Release by .github/workflows/release.yml.
+RELEASE_PLATFORMS := linux/amd64 linux/arm64 darwin/amd64 darwin/arm64
+.PHONY: release
+release: ## Cross-compile the server for all release platforms + checksums
+	@rm -rf $(BUILD_DIR)/dist && mkdir -p $(BUILD_DIR)/dist
+	@for p in $(RELEASE_PLATFORMS); do \
+		os=$${p%/*}; arch=$${p#*/}; out=$(BINARY)_$${os}_$${arch}; \
+		if [ "$$os" = "windows" ]; then out=$$out.exe; fi; \
+		echo "  building $$out"; \
+		GOOS=$$os GOARCH=$$arch $(GO) build -ldflags "$(LDFLAGS)" \
+			-o $(BUILD_DIR)/dist/$$out ./cmd/octo-doc || exit 1; \
+	done
+	@cd $(BUILD_DIR)/dist && (command -v sha256sum >/dev/null 2>&1 && sha256sum $(BINARY)_* || shasum -a 256 $(BINARY)_*) > SHA256SUMS
+	@echo "  wrote $(BUILD_DIR)/dist/SHA256SUMS"
+
 .PHONY: run
 run: ## Run the server locally
 	$(GO) run ./cmd/octo-doc serve

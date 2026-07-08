@@ -27,7 +27,7 @@ jobs:
         id: ver
         run: echo "version=${GITHUB_REF_NAME:-${{ github.event.inputs.tag }}}" >> "$GITHUB_OUTPUT"
       - name: Cross-compile + checksums
-        run: make release
+        run: make release VERSION=${{ steps.ver.outputs.version }}
       - name: Publish release
         uses: softprops/action-gh-release@v2
         with:

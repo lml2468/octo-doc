@@ -4,7 +4,10 @@ GO        ?= go
 BINARY    ?= octo-doc
 PKG       := ./...
 BUILD_DIR := bin
-LDFLAGS   := -s -w
+# VERSION defaults to `git describe` (tag + commits-since + short sha), falling
+# back to "dev" outside a git checkout. Release CI overrides it with the tag.
+VERSION   ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
+LDFLAGS   := -s -w -X main.version=$(VERSION)
 
 # Storage backends for integration/e2e tests (override as needed).
 export OCTO_TEST_DATABASE_URL ?= postgres://octo:octo@localhost:55432/octodoc

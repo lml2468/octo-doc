@@ -77,8 +77,10 @@ default; access is per-doc via share codes, see `docs/AUTH.md`.)
 One binary:
 
 - `cmd/octo-doc` — the **server**. Subcommands: `serve` (default), `migrate`,
-  `bootstrap`, `gc-assets`, `health`. Loads full server config (DB + S3) on every
-  command except `health`.
+  `bootstrap`, `gc-assets`, `health`, `version`. Loads full server config (DB + S3)
+  on every command except `health` and `version` (dependency-free). Version is
+  stamped via `-ldflags "-X main.version=…"` (`make build`/`make release` derive it
+  from `git describe`).
 
 The repo is **API-only**: all authoring happens over the versioned `/v1` API. The
 agent client CLI lives in a separate `octo-cli` project (it wraps `/v1`); it is not

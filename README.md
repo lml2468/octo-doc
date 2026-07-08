@@ -126,13 +126,15 @@ the full `/v1` surface (docs, drafts, comments, reactions, assets, share).
 | `FRAME_ANCESTORS` | `'none'` | CSP embedding policy for rendered docs |
 | `MAX_HTML_BYTES` | `5242880` | per-document size cap (5 MiB) |
 
-The server binary `cmd/octo-doc` exposes four subcommands:
+The server binary `cmd/octo-doc` exposes these subcommands:
 
 ```bash
 octo-doc serve       # run the HTTP server (default)
 octo-doc migrate     # apply the database schema (idempotent)
 octo-doc bootstrap   # mint and print the first write token
+octo-doc gc-assets   # delete unreferenced media assets past a grace window
 octo-doc health      # local healthcheck (used by the container)
+octo-doc version     # print the build version
 ```
 
 ## Development

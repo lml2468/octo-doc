@@ -354,6 +354,24 @@ func (s *Store) DeleteAssetMeta(ctx context.Context, slug, sha256 string) error 
 	return nil
 }
 
+// ListAssetSlugs implements storage.MetadataStore.
+func (s *Store) ListAssetSlugs(ctx context.Context) ([]string, error) {
+	rows, err := s.pool.Query(ctx, "SELECT DISTINCT slug FROM assets ORDER BY slug")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := make([]string, 0)
+	for rows.Next() {
+		var slug string
+		if err := rows.Scan(&slug); err != nil {
+			return nil, err
+		}
+		out = append(out, slug)
+	}
+	return out, rows.Err()
+}
+
 // Close releases the connection pools.
 func (s *Store) Close() error {
 	s.pool.Close()

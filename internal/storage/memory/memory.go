@@ -246,6 +246,22 @@ func (s *Store) DeleteAssetMeta(_ context.Context, slug, sha256 string) error {
 	return nil
 }
 
+// ListAssetSlugs implements storage.MetadataStore.
+func (s *Store) ListAssetSlugs(_ context.Context) ([]string, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	seen := map[string]struct{}{}
+	for _, m := range s.assetMeta {
+		seen[m.Slug] = struct{}{}
+	}
+	out := make([]string, 0, len(seen))
+	for slug := range seen {
+		out = append(out, slug)
+	}
+	sort.Strings(out)
+	return out, nil
+}
+
 // Close implements storage.MetadataStore.
 func (s *Store) Close() error { return nil }
 

@@ -113,11 +113,18 @@ func (s *AssetService) List(ctx context.Context, slug string) ([]storage.AssetMe
 // missing asset is not an error (idempotent delete).
 func (s *AssetService) Delete(ctx context.Context, slug, sha string) error {
 	return s.lock.With(ctx, slug, func() error {
-		if err := s.blobs.DeleteAsset(ctx, slug, sha); err != nil {
-			return apperr.Upstream("asset blob delete failed", "asset_delete_failed", err)
-		}
-		return s.meta.DeleteAssetMeta(ctx, slug, sha)
+		return s.deleteLocked(ctx, slug, sha)
 	})
+}
+
+// deleteLocked removes an asset's blob + registry entry WITHOUT taking the lock.
+// The caller must already hold the per-slug lock (GC serializes its whole
+// scan→decide→delete sequence under it — see GCAssets).
+func (s *AssetService) deleteLocked(ctx context.Context, slug, sha string) error {
+	if err := s.blobs.DeleteAsset(ctx, slug, sha); err != nil {
+		return apperr.Upstream("asset blob delete failed", "asset_delete_failed", err)
+	}
+	return s.meta.DeleteAssetMeta(ctx, slug, sha)
 }
 
 // sniffMIME determines the content type from the bytes. It never trusts a

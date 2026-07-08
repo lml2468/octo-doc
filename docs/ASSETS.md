@@ -354,10 +354,10 @@ rewritten via the `src` match — usually what you want; unrelated attributes li
 
 Content-addressed assets can outlive the HTML that referenced them (author
 uploads, never references, or edits the reference away). The `octo-doc gc-assets`
-maintenance subcommand scans every doc's published versions **and** current draft
-for referenced `sha256`s, then deletes assets that are BOTH unreferenced AND older
-than a grace window (default 24h; keeps a just-uploaded asset that hasn't been
-wired into a draft yet).
+maintenance subcommand builds a **global** set of referenced content addresses by
+scanning every doc's published versions **and** current draft, then deletes assets
+that are BOTH unreferenced AND older than a grace window (default 24h; keeps a
+just-uploaded asset that hasn't been wired into a draft yet).
 
 ```bash
 octo-doc gc-assets                    # delete unreferenced assets older than 24h
@@ -367,11 +367,30 @@ octo-doc gc-assets --dry-run          # report what would be deleted, delete not
 
 Logic lives in `AssetService.GCAssets(ctx, grace, now, dryRun) → GCReport`
 (`internal/service/gc.go`), with `now` injected for testability; the command
-(`cmd/octo-doc`) wires flags and logs the per-asset and summary results. Deletion
-reuses `AssetService.Delete` (per-slug lock, drops blob + metadata row). Grace is
-measured from each asset's `Created` timestamp; an unparseable timestamp is
-treated as past-grace. Run it from cron/a maintenance job — it is never automatic,
-since immutability is safer than aggressive deletion.
+(`cmd/octo-doc`) wires flags and logs the per-asset and summary results. Grace is
+measured from each asset's `Created` timestamp; an **unparseable timestamp fails
+safe — the asset is kept, not deleted**. Run it from cron/a maintenance job — it is
+never automatic, since immutability is safer than aggressive deletion.
+
+Reference detection is deliberately robust against the ways an asset URL can be
+expressed (see #44/#45/#46):
+
+- **Global, cross-doc references.** The referenced-sha set is the union across
+  *every* doc, so an asset kept alive by a fork or any other doc that copied its
+  URL is not reaped when the owning doc drops the reference.
+- **Bare content addresses.** Detection matches the bare 64-hex sha anywhere in
+  the HTML (not just a literal `assets/<sha>` URL), so a doc whose JS builds the
+  URL at runtime from a sha string still counts as a reference. Over-matching is
+  the safe direction — GC never deletes a referenced asset, at worst it keeps an
+  unreferenced one.
+- **Asset-bearing slugs, not just docs.** Slugs are enumerated via
+  `ListAssetSlugs` (a `DISTINCT slug` over the asset registry), so an asset
+  uploaded to a slug that was never published (no `DocMeta` row) is still
+  collected rather than leaking forever.
+- **No mid-authoring races.** Each slug's delete decision runs under that slug's
+  lock, and the slug's own current HTML is re-scanned inside the lock, so a
+  concurrent same-slug publish/`version-add` that re-references an asset cannot be
+  clobbered by a GC pass that started earlier.
 
 ---
 

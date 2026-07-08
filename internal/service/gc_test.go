@@ -190,3 +190,97 @@ func TestGCMixedReferenceAndDraftBytesRoundTrip(t *testing.T) {
 		t.Fatalf("referenced upload deleted: %+v", rep.Deleted)
 	}
 }
+
+// putAgedSlug is putAged for an arbitrary slug (used by orphan/cross-doc tests).
+func putAgedSlug(t *testing.T, store *memory.Store, slug, sha string, created time.Time) {
+	t.Helper()
+	ctx := context.Background()
+	if err := store.PutAsset(ctx, slug, sha, []byte("bytes-for-"+sha)); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.PutAssetMeta(ctx, storage.AssetMeta{
+		Slug: slug, SHA256: sha, MIME: "image/png", Size: 10, OriginalName: "x.png",
+		Created: created.UTC().Format("2006-01-02T15:04:05.000Z"),
+	}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// TestGCCollectsOrphanSlugWithoutDocMeta covers #45: an asset uploaded to a slug
+// that has no DocMeta row (never published) must still be reachable by GC. The old
+// implementation only scanned ListMeta slugs, so such assets leaked forever.
+func TestGCCollectsOrphanSlugWithoutDocMeta(t *testing.T) {
+	store, _, assets := gcFixture(t)
+	ctx := context.Background()
+	now := time.Date(2026, 7, 8, 12, 0, 0, 0, time.UTC)
+
+	// Asset under "ghost" — no Publish/SaveDraft, so no DocMeta row exists.
+	putAgedSlug(t, store, "ghost", sha1s, now.Add(-48*time.Hour))
+
+	rep, err := assets.GCAssets(ctx, 24*time.Hour, now, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rep.Deleted) != 1 || rep.Deleted[0].Slug != "ghost" || rep.Deleted[0].SHA256 != sha1s {
+		t.Fatalf("orphan-slug asset not collected: %+v", rep.Deleted)
+	}
+	if _, _, err := assets.Get(ctx, "ghost", sha1s); err == nil {
+		t.Error("orphan asset still present after GC")
+	}
+}
+
+// TestGCKeepsCrossDocReference covers #44: an asset owned by doc A but referenced
+// only by doc B's HTML (e.g. a fork that kept A's asset URL) must not be reaped
+// when A's own HTML no longer references it.
+func TestGCKeepsCrossDocReference(t *testing.T) {
+	store, docs, assets := gcFixture(t)
+	ctx := context.Background()
+	now := time.Date(2026, 7, 8, 12, 0, 0, 0, time.UTC)
+
+	// Doc A owns the asset (old, and A's own HTML does NOT reference it).
+	if _, err := docs.Publish(ctx, service.PublishInput{Slug: "a", HTML: "<html><body><p>a</p></body></html>"}); err != nil {
+		t.Fatal(err)
+	}
+	putAgedSlug(t, store, "a", sha1s, now.Add(-48*time.Hour))
+
+	// Doc B (a fork) references A's asset URL.
+	bHTML := `<html><body><img src="/d/a/assets/` + sha1s + `"></body></html>`
+	if _, err := docs.Publish(ctx, service.PublishInput{Slug: "b", HTML: bHTML}); err != nil {
+		t.Fatal(err)
+	}
+
+	rep, err := assets.GCAssets(ctx, 24*time.Hour, now, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rep.Deleted) != 0 {
+		t.Fatalf("cross-doc-referenced asset deleted: %+v", rep.Deleted)
+	}
+	if _, _, err := assets.Get(ctx, "a", sha1s); err != nil {
+		t.Errorf("cross-doc-referenced asset removed: %v", err)
+	}
+}
+
+// TestGCKeepsBareShaReference covers #44: a reference that appears only as a bare
+// content-address string (e.g. a sha held in JS/JSON that builds the URL at
+// runtime), not as a literal assets/<sha> URL, must still keep the asset.
+func TestGCKeepsBareShaReference(t *testing.T) {
+	store, docs, assets := gcFixture(t)
+	ctx := context.Background()
+	now := time.Date(2026, 7, 8, 12, 0, 0, 0, time.UTC)
+
+	// The sha appears only inside a script as a bare token, no "assets/" prefix.
+	html := `<html><body><script>const a="` + sha1s + `";</script></body></html>`
+	if _, err := docs.Publish(ctx, service.PublishInput{Slug: "d", HTML: html}); err != nil {
+		t.Fatal(err)
+	}
+	putAged(t, store, sha1s, now.Add(-48*time.Hour))
+
+	rep, err := assets.GCAssets(ctx, 24*time.Hour, now, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rep.Deleted) != 0 {
+		t.Fatalf("bare-sha-referenced asset deleted: %+v", rep.Deleted)
+	}
+}

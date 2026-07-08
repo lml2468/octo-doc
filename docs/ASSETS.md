@@ -2,7 +2,7 @@
 
 > Status: **P0 + P1 implemented; P2 designed.** P0 (explicit CSP `media-src` /
 > `frame-src` / `object-src`) and P1 (the asset subsystem: storage, service,
-> HTTP surface, CLI) have shipped. P2 (ergonomics) is design-only. Section
+> HTTP surface) have shipped. P2 (ergonomics) is design-only. Section
 > headings note per-item status.
 
 ## Problem
@@ -55,7 +55,7 @@ subsystem.
 1. **Never touch `internal/core/`.** Assets are orthogonal to aid stamping,
    event-log fold, and overlay injection. The golden byte-equivalence tests must
    remain untouched and green. Everything here lives in `storage` / `service` /
-   `transport` / `config` / `cmd/octo`.
+   `transport` / `config`.
 2. **Content-addressed and immutable.** An asset is named by the SHA-256 of its
    bytes. Identical bytes dedupe automatically; a URL, once minted, never changes
    meaning — the same immutability guarantee versions already have.
@@ -214,21 +214,6 @@ you can't "replace" an asset in place — is a feature here, matching immutable
 versions. To change an image you upload new bytes (new URL) and edit the HTML,
 which is a new draft anyway.
 
-## CLI (`cmd/octo`)
-
-Three flat subcommands (matching `main.go`'s flat dispatch):
-
-```
-octo asset-add    --slug <s> <file>     # upload, print the referenceable URL
-octo asset-list   --slug <s>            # list a doc's assets
-octo asset-rm     --slug <s> <sha256>   # delete one asset
-```
-
-`asset-add` prints the absolute URL (`<OCTO_BASE_URL>/d/<slug>/assets/<sha>`) so
-the author can paste it straight into `<img src=…>` / `<video>` before the next
-`octo publish` (`--quiet` prints only the URL, for scripting). Upload and delete
-are author ops → require `OCTO_TOKEN`; list needs only reader capability.
-
 ## Config additions
 
 `internal/config` (parsed once, as always — no other package reads env):
@@ -281,28 +266,6 @@ none orphan when a slug is removed or reused.
 
 Layered on P1; each item is independent.
 
-## P2.1 — local reference rewriting *(implemented)*
-
-`octo new` / `octo version-add` accept `--rewrite-assets`: before the draft is
-saved, scan the HTML for local references (`src=`/`poster=` attributes, `srcset=`
-candidate lists, and CSS `url(...)`), upload each referenced local file as an
-asset, and rewrite the reference to the minted asset URL. Turns "author with
-local files, publish self-contained" into one step. (The flag lives on the
-HTML-bearing commands; `octo publish` only promotes an existing draft and carries
-no HTML.)
-
-Implementation (`cmd/octo/rewrite.go`):
-- Paths resolve relative to the HTML file's directory (cwd for `--html-stdin`);
-  a traversal guard refuses references that escape it. Remote (`http`/`https`/
-  protocol-relative), `data:`/`blob:`, site-absolute (`/…`), and anchor (`#…`)
-  references are left untouched.
-- Identical files (by resolved path) upload once and share one URL (dedupe).
-- Purely a CLI-side transform on the bytes *before* they reach `/v1/docs`; the
-  server still receives final HTML and stamps it in `core` unchanged — **golden
-  parity untouched.**
-- Dry-run mode (`--rewrite-assets=dry`) prints the planned uploads and leaves the
-  HTML unchanged.
-
 ## P2.2 — HTTP range requests for media *(implemented)*
 
 `GET/HEAD /d/{slug}/assets/{sha256}` serves through `http.ServeContent`, which
@@ -334,7 +297,9 @@ Inline PDF works with no new mechanism, and is now covered by an end-to-end test
 Authoring pattern:
 
 ```bash
-octo asset-add --slug spec report.pdf   # → https://host/d/spec/assets/<sha>
+BASE=https://host
+curl -sX POST -H "Authorization: Bearer $TOKEN" \
+  -F file=@report.pdf "$BASE/v1/docs/spec/assets"   # → { sha256, url: "/d/spec/assets/<sha>", ... }
 ```
 
 ```html
@@ -342,13 +307,6 @@ octo asset-add --slug spec report.pdf   # → https://host/d/spec/assets/<sha>
   <p>Your browser can't display PDFs. <a href="/d/spec/assets/<sha>">Download it.</a></p>
 </object>
 ```
-
-`--rewrite-assets` (P2.1) also rewrites `<object data="./report.pdf">` when
-authoring with a local file: `data` is one of the scanned attributes (alongside
-`src`/`poster`/`srcset`/CSS `url()`). Because matching is by attribute name with a
-word boundary, `data-src="./x.png"` (a common lazy-load attribute) is also
-rewritten via the `src` match — usually what you want; unrelated attributes like
-`href` are left alone.
 
 ## P2.4 — orphan GC *(implemented)*
 
@@ -407,6 +365,5 @@ expressed (see #44/#45/#46):
 | `internal/service` | `AssetService` | `GCAssets` (P2.4) |
 | `internal/transport/httpx` | 3 `/v1` handlers + 1 `/d` serve route | range serving via `http.ServeContent` (P2.2) |
 | `internal/config` | `MAX_ASSET_BYTES`, `ASSET_MIME_ALLOW` | — |
-| `cmd/octo` | `asset-add/list/rm` | `--rewrite-assets` (P2.1) |
 | `cmd/octo-doc` | `assets` schema; `DocService.Remove` purges asset rows | `gc-assets` (P2.4) |
 | `docs/` | this file | — |

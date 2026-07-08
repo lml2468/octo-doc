@@ -10,7 +10,7 @@ backed by PostgreSQL (metadata) and an S3-compatible object store (blobs).
 ```
 ┌──────────────────────── octo-doc (self-hosted) ─────────────────────┐
 │                                                                       │
-│   octo publish ──HTTP──▶  Go 1.26 app (chi router, static binary)     │
+│   API client ──POST /v1/docs──▶  Go 1.26 app (chi router, static binary)     │
 │   (Bearer token)             │                                         │
 │                              │  transport/ ─▶ service/ ─▶ storage/     │
 │                              │  (thin httpx) (logic)     (interfaces)  │
@@ -194,15 +194,14 @@ advisory-lock implementation, documented in [DESIGN.md](./DESIGN.md).
 ## Request lifecycle (publish)
 
 ```
-octo publish <slug>
-  └─ POST /v1/docs  (Authorization: Bearer <token>, multipart or JSON)
-       ├─ requireWriteAuth         constant-time token check
-       ├─ size cap check           (MAX_HTML_BYTES, default 5 MiB)
-       ├─ next version = max(blobStore.listVersions)+1   (if not explicit)
-       ├─ stampAids(html)          identity-stamp artifacts (verbatim port)
-       ├─ blobStore.putDoc         immutable write + head-verify
-       ├─ metaStore.putMeta        monotonic versions[]
-       └─ commentStore.publish_merge   reconcile anchors + merge local comments
+POST /v1/docs  (Authorization: Bearer <token>, multipart or JSON)
+  ├─ requireWriteAuth         constant-time token check
+  ├─ size cap check           (MAX_HTML_BYTES, default 5 MiB)
+  ├─ next version = max(blobStore.listVersions)+1   (if not explicit)
+  ├─ stampAids(html)          identity-stamp artifacts (verbatim port)
+  ├─ blobStore.putDoc         immutable write + head-verify
+  ├─ metaStore.putMeta        monotonic versions[]
+  └─ commentStore.publish_merge   reconcile anchors + merge local comments
      → { ok, slug, version, url: "/d/<slug>/v/<n>", size, aids, mergedComments }
 ```
 

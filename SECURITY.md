@@ -36,8 +36,8 @@ Please include, where possible:
 
 ## Scope
 
-In scope: the server (`cmd/octo-doc`), the client CLI (`cmd/octo`), and the
-overlay served to browsers. Out of scope: vulnerabilities in third-party
+In scope: the server (`cmd/octo-doc`) and the overlay served to browsers. Out of
+scope: vulnerabilities in third-party
 dependencies (report those upstream), and issues that require a
 misconfigured deployment contrary to [docs/SELF_HOSTING.md](docs/SELF_HOSTING.md)
 (e.g. `COOKIE_SECURE=false` in production, an exposed `WRITE_TOKEN`).

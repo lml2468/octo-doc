@@ -6,6 +6,12 @@ adhere to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Removed
+
+- The `octo` client CLI has been extracted to a separate `octo-cli` project; this
+  repo is now API-only. Author against a running server with the `/v1` HTTP API
+  (see the README Quick start and [docs/SELF_HOSTING.md](docs/SELF_HOSTING.md)).
+
 ## [0.3.0] - 2026-07-07
 
 ### Changed
@@ -19,8 +25,10 @@ adhere to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   described on its own terms (self-hosted, PostgreSQL + S3).
 - Repository home is `github.com/lml2468/octo-doc`: the Go module path, imports,
   `octo update` release repo, `REPO_URL` default, and the ghcr image
-  (`ghcr.io/lml2468/octo-doc`) all point there. `go install
-  github.com/lml2468/octo-doc/cmd/octo@latest` now resolves.
+  (`ghcr.io/lml2468/octo-doc`) all point there. (Historical: `go install
+  github.com/lml2468/octo-doc/cmd/octo@latest` installed the client CLI at the
+  time of this release; the `octo` CLI has since been removed from this repo —
+  see the Unreleased section.)
 
 ### Fixed
 

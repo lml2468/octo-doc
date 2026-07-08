@@ -24,8 +24,13 @@ Every document can have one share code (128-bit, stored **hashed** — a leaked
 metadata dump can't reveal it). Mint or rotate it:
 
 ```bash
-octo share <slug>            # print a read+comment link:  .../d/<slug>/v/N?code=<code>
-octo share <slug> --revoke   # clear the code — existing links stop working
+# mint/rotate a read+comment code → { code, url: ".../d/<slug>/v/N?code=<code>" }
+curl -sX POST -H "Authorization: Bearer $TOKEN" \
+  https://docs.example.com/v1/docs/<slug>/share
+
+# revoke the code — existing links stop working
+curl -sX DELETE -H "Authorization: Bearer $TOKEN" \
+  https://docs.example.com/v1/docs/<slug>/share
 ```
 
 or click **Share** in the doc's toolbar. Rotating mints a new code and
@@ -41,10 +46,10 @@ with no special-casing on the server:
   **302-redirects to the same URL without the query string** — so the secret never
   lingers in browser history, server/proxy logs, or the `Referer` header. Later
   reads and comments ride the cookie automatically.
-- **Agents / the CLI** send the credential as `Authorization: Bearer <cred>` —
-  the write token for author operations, or a share code (via `OCTO_CODE`) for
-  reader operations like `octo pull` on a private doc. The CLI never touches
-  cookies.
+- **API clients** send the credential as `Authorization: Bearer <cred>` —
+  the write token for author operations, or a share code for reader operations
+  (e.g. reading comments on a private doc via `GET /v1/comments`). API clients
+  never touch cookies.
 
 This is the same split GitHub uses (web session cookie vs. API/CLI token): the
 authorization layer is one credential model; only the *transport* differs.
@@ -53,11 +58,12 @@ authorization layer is one credential model; only the *transport* differs.
 
 Authoring iterates on a **mutable draft slot** that lives outside the immutable
 version numbering. The draft is **author-only** — a share code does not grant
-access to it. A browser author opens the draft via `octo new --open`, which uses
-`?code=<write-token>` → cookie exchange (the write token is the author credential;
-it appears in the URL only for the one redirect that strips it). Publishing
-(`octo publish`, or the Publish button) promotes the draft to an immutable
-version; that version is then readable by anyone with the doc's share code.
+access to it. An author saves the draft with `PUT /v1/docs/<slug>/draft`; a
+browser opens it with `?code=<write-token>` → cookie exchange (the write token is
+the author credential; it appears in the URL only for the one redirect that
+strips it). Promoting the draft (`POST /v1/docs/<slug>/draft/promote`, or the
+Publish button) creates an immutable version; that version is then readable by
+anyone with the doc's share code.
 
 ## Operational notes
 

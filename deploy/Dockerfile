@@ -11,8 +11,10 @@ COPY go.mod go.sum ./
 RUN go mod download
 
 # Build a fully static binary (CGO disabled — pure-Go pgx + aws-sdk).
+# Pass --build-arg VERSION=<tag> to stamp `octo-doc version`; defaults to "dev".
+ARG VERSION=dev
 COPY . .
-RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags "-s -w" \
+RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags "-s -w -X main.version=${VERSION}" \
     -o /out/octo-doc ./cmd/octo-doc
 
 # ── runtime stage ────────────────────────────────────────────────────────────

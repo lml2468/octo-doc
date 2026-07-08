@@ -92,8 +92,8 @@ func (s *Server) requireDocReadHTML(next http.HandlerFunc) http.HandlerFunc {
 
 // requireDocAuthorHTML is the author-only HTML gate (draft view). It uses the same
 // ?code= → cookie → 302 exchange, so the write token can arrive as ?code= in a
-// browser (opened by `octo new --open`) and then ride as a cookie — the only way
-// a browser can present the author credential.
+// browser (e.g. opening the draft with ?code=<write-token>) and then ride as a
+// cookie — the only way a browser can present the author credential.
 func (s *Server) requireDocAuthorHTML(next http.HandlerFunc) http.HandlerFunc {
 	return s.docHTMLGate(service.CapAuthor, next)
 }

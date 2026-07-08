@@ -5,6 +5,7 @@
 //	octo-doc migrate     ensure/apply the database schema
 //	octo-doc bootstrap   mint and print the first write token
 //	octo-doc gc-assets   delete unreferenced media assets past a grace window
+//	octo-doc version     print the build version
 package main
 
 import (
@@ -14,6 +15,10 @@ import (
 	"github.com/lml2468/octo-doc/internal/config"
 	"github.com/lml2468/octo-doc/internal/platform/log"
 )
+
+// version is the build version, stamped at release time via
+// -ldflags "-X main.version=<tag>". Defaults to "dev" for local builds.
+var version = "dev"
 
 func main() {
 	cmd := "serve"
@@ -29,9 +34,13 @@ func main() {
 }
 
 func run(cmd string, args []string) error {
-	// health is a dependency-free check usable as a container healthcheck; it
-	// does not load the full config (only PORT).
-	if cmd == "health" {
+	switch cmd {
+	// version + health are dependency-free: they must work without DB/S3 config
+	// (version for `--version` checks, health as a container healthcheck).
+	case "version", "--version", "-v":
+		fmt.Println("octo-doc", version)
+		return nil
+	case "health":
 		return healthCheck()
 	}
 
@@ -51,6 +60,6 @@ func run(cmd string, args []string) error {
 	case "gc-assets":
 		return gcAssets(cfg, logger, args)
 	default:
-		return fmt.Errorf("unknown command %q\nusage: octo-doc [serve|migrate|bootstrap|gc-assets|health]", cmd)
+		return fmt.Errorf("unknown command %q\nusage: octo-doc [serve|migrate|bootstrap|gc-assets|health|version]", cmd)
 	}
 }

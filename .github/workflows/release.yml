@@ -1,8 +1,7 @@
-name: release-octo
+name: release
 
-# Build the octo client CLI for all supported platforms and attach the binaries
-# + SHA256SUMS to a GitHub Release when a tag is pushed. `octo update` fetches
-# from these releases and verifies against the checksums.
+# Cross-compile the octo-doc server for the supported platforms and attach the
+# binaries + SHA256SUMS to a GitHub Release when a version tag is pushed.
 on:
   push:
     tags: ["v*"]
@@ -28,12 +27,12 @@ jobs:
         id: ver
         run: echo "version=${GITHUB_REF_NAME:-${{ github.event.inputs.tag }}}" >> "$GITHUB_OUTPUT"
       - name: Cross-compile + checksums
-        run: make release-octo OCTO_VERSION=${{ steps.ver.outputs.version }}
+        run: make release VERSION=${{ steps.ver.outputs.version }}
       - name: Publish release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.ver.outputs.version }}
           files: |
-            bin/dist/octo_*
+            bin/dist/octo-doc_*
             bin/dist/SHA256SUMS
           generate_release_notes: true

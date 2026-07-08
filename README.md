@@ -13,7 +13,6 @@
 
 [Quick start](#quick-start) ·
 [How it works](#how-it-works) ·
-[The `octo` CLI](#the-octo-cli) ·
 [Configuration](#configuration) ·
 [Self-hosting](docs/SELF_HOSTING.md) ·
 [Architecture](docs/ARCHITECTURE.md) ·
@@ -90,50 +89,28 @@ backup/upgrade in **[docs/DESIGN.md](docs/DESIGN.md)**.
 
 ## Agent workflow
 
-The companion **[octo-doc-skill](https://github.com/lml2468/octo-doc-skill)**
-(Claude Code / Codex) turns a prompt into a document and publishes it here. It is a
-thin authoring layer over the [`octo` CLI](#the-octo-cli): the agent writes the
-HTML, the CLI does the rest.
+octo-doc is **API-first**: an agent turns a prompt into a self-contained HTML
+document and drives the doc lifecycle over the versioned `/v1` API. Authoring is
+**remote-first** — a doc lives on the server from creation as a mutable draft, and
+promoting the draft mints an immutable version. A dedicated client
+(`octo-cli`, packaged separately) wraps these calls, but the API is the contract:
 
 ```bash
-export OCTO_BASE_URL="https://docs.example.com"
-export OCTO_TOKEN="$(octo-doc bootstrap)"    # or: POST /v1/admin/bootstrap
+export BASE=https://docs.example.com
+export TOKEN=<write-token>   # from: octo-doc bootstrap  (or POST /v1/admin/bootstrap)
 
-/octo new "an interactive explainer of compound interest"   # → a private draft
-/octo publish my-explainer                    # → https://docs.example.com/d/my-explainer/v/1
-/octo share my-explainer                      # → a read + comment ?code= link
+# Save HTML as a private draft, then promote it to an immutable version:
+curl -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"slug":"explainer","html":"<html><body><h1>Hi</h1></body></html>"}' \
+  "$BASE/v1/docs"                                    # → /d/explainer/v/1
+
+# Mint a per-doc read + comment share code:
+curl -H "Authorization: Bearer $TOKEN" -X POST "$BASE/v1/docs/explainer/share"
+#   → { "data": { "code": "…", "url": ".../d/explainer/v/1?code=…" } }
 ```
 
-## The `octo` CLI
-
-`cmd/octo` is a second, self-contained binary — the agent-side client. Authoring is
-**remote-first**: a doc lives on the server from creation as a mutable draft, and
-`octo publish` promotes that draft to an immutable version. It links no database or
-blob store (only the pure `core` kernel + embedded `overlay.js`), so there is no
-local preview server — you author against a running octo-doc server (the local
-Docker stack counts).
-
-```bash
-export OCTO_BASE_URL=https://docs.example.com OCTO_TOKEN=<write-token>
-
-octo new --slug demo --title "Demo" --html-file demo.html --open  # save + open the draft
-octo version-add --slug demo --html-file demo2.html               # iterate the draft
-octo publish demo                                                 # promote draft → immutable v1
-octo share demo                                                  # mint a read + comment ?code= link
-octo pull demo                                                   # merge server comments to disk
-octo doctor                                                     # check the CLI + server
-```
-
-**Install.** Grab a prebuilt binary for macOS/Linux/Windows from the
-[latest release](https://github.com/lml2468/octo-doc/releases/latest), or:
-
-```bash
-go install github.com/lml2468/octo-doc/cmd/octo@latest
-```
-
-`octo update` self-updates from GitHub Releases with SHA-256 verification. Config
-resolves from `OCTO_BASE_URL` / `OCTO_TOKEN` / `OCTO_CODE` / `OCTO_DIR`, then
-`~/.octo/config.json`.
+See **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** for the request lifecycle and
+the full `/v1` surface (docs, drafts, comments, reactions, assets, share).
 
 ## Configuration
 
@@ -165,7 +142,6 @@ Go 1.26 · [chi](https://github.com/go-chi/chi) router ·
 
 ```bash
 make build        # build bin/octo-doc (server)
-make build-octo   # build bin/octo (agent client)
 make test         # all tests (pg/s3 suites skip without OCTO_TEST_* env)
 make check        # fmt + vet + lint + test — the local gate
 ```

@@ -215,7 +215,7 @@ func TestFreshCodeBeatsStaleCookie(t *testing.T) {
 	}
 
 	// (b) An author's ?code=<write-token> must win over a stale reader cookie so
-	// `octo new --open` reaches the draft even in a browser that read the doc first.
+	// a browser opening the draft with ?code= reaches it even after reading the doc first.
 	readerCookie := capCookie("rot", newCode)
 	rec = do(t, h, http.MethodGet, "/d/rot/draft?code=test-token", map[string]string{"Cookie": readerCookie}, "")
 	if rec.Code != http.StatusFound {

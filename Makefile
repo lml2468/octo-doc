@@ -24,27 +24,6 @@ help: ## Show this help
 build: ## Build the binary into bin/
 	$(GO) build -ldflags "$(LDFLAGS)" -o $(BUILD_DIR)/$(BINARY) ./cmd/octo-doc
 
-.PHONY: build-octo
-build-octo: ## Build the octo client CLI into bin/
-	$(GO) build -ldflags "$(LDFLAGS) -X main.version=$(OCTO_VERSION)" -o $(BUILD_DIR)/octo ./cmd/octo
-
-# Cross-compile the octo client for release. Emits bin/dist/octo_<os>_<arch>[.exe]
-# and a SHA256SUMS the CLI's self-update verifies against.
-OCTO_VERSION ?= dev
-OCTO_PLATFORMS := darwin/amd64 darwin/arm64 linux/amd64 linux/arm64 windows/amd64
-.PHONY: release-octo
-release-octo: ## Cross-compile octo for all release platforms + checksums
-	@rm -rf $(BUILD_DIR)/dist && mkdir -p $(BUILD_DIR)/dist
-	@for p in $(OCTO_PLATFORMS); do \
-		os=$${p%/*}; arch=$${p#*/}; out=octo_$${os}_$${arch}; \
-		if [ "$$os" = "windows" ]; then out=$$out.exe; fi; \
-		echo "  building $$out"; \
-		GOOS=$$os GOARCH=$$arch $(GO) build -ldflags "$(LDFLAGS) -X main.version=$(OCTO_VERSION)" \
-			-o $(BUILD_DIR)/dist/$$out ./cmd/octo || exit 1; \
-	done
-	@cd $(BUILD_DIR)/dist && (command -v sha256sum >/dev/null 2>&1 && sha256sum * || shasum -a 256 *) > SHA256SUMS
-	@echo "  wrote $(BUILD_DIR)/dist/SHA256SUMS"
-
 .PHONY: run
 run: ## Run the server locally
 	$(GO) run ./cmd/octo-doc serve

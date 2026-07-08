@@ -8,7 +8,10 @@ From nothing to a live, TLS-secured doc server in ~15 minutes on a $5 VPS.
 git clone https://github.com/lml2468/octo-doc && cd octo-doc
 DOMAIN=docs.example.com docker compose -f deploy/docker-compose.yml up -d --wait
 TOKEN=$(curl -sX POST http://localhost:8080/v1/admin/bootstrap | jq -r .data.token)
-echo "Publish with:  export OCTO_BASE_URL=https://docs.example.com OCTO_TOKEN=$TOKEN"
+# Publish a doc:
+curl -sX POST -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"slug":"my-doc","title":"My doc","html":"<h1>hi</h1>"}' \
+  https://docs.example.com/v1/docs
 ```
 
 ---
@@ -59,10 +62,12 @@ the compose file before `up` (bootstrap is then disabled).
 ### 5. Publish from your machine
 
 ```bash
-export OCTO_BASE_URL="https://docs.example.com"
-export OCTO_TOKEN="<the token>"
-octo publish my-doc
-# → Published: https://docs.example.com/d/my-doc/v/1
+BASE=https://docs.example.com
+TOKEN="<the token>"
+curl -sX POST -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"slug":"my-doc","title":"My doc","html":"<h1>hi</h1>"}' \
+  "$BASE/v1/docs"
+# → { "data": { "slug": "my-doc", "version": 1, "url": "/d/my-doc/v/1", ... } }
 ```
 
 ### Verify
@@ -151,7 +156,8 @@ start) is safe to re-run.
 - [ ] **`FRAME_ANCESTORS`** — keep `'none'` unless you intentionally embed docs.
 - [ ] **Set `WRITE_TOKEN`** explicitly and `ALLOW_BOOTSTRAP=false` once set up.
 - [ ] **Docs are private by default** — access is per-document via share codes
-      (`octo share`), not a global flag. See [AUTH.md](./AUTH.md).
+      (mint one with `POST /v1/docs/<slug>/share`, or the Share button), not a
+      global flag. See [AUTH.md](./AUTH.md).
 - [ ] **Backups** — `pg_dump` the metadata + S3 versioning/lifecycle (or
       `aws s3 sync`) for the blobs. See [DESIGN.md](./DESIGN.md#backup--restore).
 - [ ] **Rate limits** — tune `RATE_LIMIT_MAX` / `RATE_LIMIT_WINDOW_MS` for your

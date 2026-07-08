@@ -89,6 +89,10 @@ type MetadataStore interface {
 	GetAssetMeta(ctx context.Context, slug, sha256 string) (*AssetMeta, error)
 	ListAssetMeta(ctx context.Context, slug string) ([]AssetMeta, error)
 	DeleteAssetMeta(ctx context.Context, slug, sha256 string) error
+	// ListAssetSlugs returns every slug that has at least one asset row, ascending
+	// and deduped. Used by asset GC to enumerate asset-bearing slugs independently
+	// of DocMeta, so assets uploaded under a slug with no doc row are still reached.
+	ListAssetSlugs(ctx context.Context) ([]string, error)
 
 	// Health verifies the backend is reachable (readiness probe).
 	Health(ctx context.Context) error

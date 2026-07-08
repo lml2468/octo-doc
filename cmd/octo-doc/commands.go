@@ -173,7 +173,7 @@ func gcAssets(cfg *config.Config, logger *slog.Logger, args []string) error {
 		logger.Info("gc-assets "+verb, "slug", d.Slug, "sha256", d.SHA256, "size", d.Size)
 	}
 	logger.Info("gc-assets done",
-		"docs", rep.Scanned, "assets", rep.Assets, "referenced", rep.Referenced,
+		"slugs", rep.Scanned, "assets", rep.Assets, "referenced", rep.Referenced,
 		"kept", rep.Kept, "deleted", len(rep.Deleted), "bytes_freed", freed, "dry_run", *dryRun)
 	return nil
 }

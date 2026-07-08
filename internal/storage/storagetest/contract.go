@@ -163,6 +163,14 @@ func RunMetadata(t *testing.T, ms storage.MetadataStore) {
 		if l, _ := ms.ListAssetMeta(ctx, "d"); len(l) != 1 {
 			t.Fatalf("ListAssetMeta after delete = %d; want 1", len(l))
 		}
+		// ListAssetSlugs returns every slug with assets, deduped and sorted.
+		slugs, err := ms.ListAssetSlugs(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(slugs) != 2 || slugs[0] != "d" || slugs[1] != "other" {
+			t.Fatalf("ListAssetSlugs = %v; want [d other]", slugs)
+		}
 	})
 }
 

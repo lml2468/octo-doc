@@ -5,6 +5,8 @@ package memory
 import (
 	"context"
 	"encoding/json"
+	"maps"
+	"slices"
 	"sort"
 	"sync"
 	"time"
@@ -244,6 +246,17 @@ func (s *Store) DeleteAssetMeta(_ context.Context, slug, sha256 string) error {
 	defer s.mu.Unlock()
 	delete(s.assetMeta, assetKey(slug, sha256))
 	return nil
+}
+
+// ListAssetSlugs implements storage.MetadataStore.
+func (s *Store) ListAssetSlugs(_ context.Context) ([]string, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	seen := map[string]struct{}{}
+	for _, m := range s.assetMeta {
+		seen[m.Slug] = struct{}{}
+	}
+	return slices.Sorted(maps.Keys(seen)), nil
 }
 
 // Close implements storage.MetadataStore.

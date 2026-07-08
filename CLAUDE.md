@@ -47,12 +47,12 @@ dependency-free leaf and `platform` as cross-cutting support.
   stamped output, aid strings, fold snapshots, and op status codes. See
   `docs/PORTING.md` for the three porting traps (Math.imul 32-bit wrap,
   charCodeAt UTF-16 code units, RE2's lack of backreferences).
-- **The `tdoc` prefix was rebranded to `odoc`** (aid attribute `data-odoc-aid`,
-  overlay `odoc-*` classes, the `window.__ODOC__` boot global, agent login
-  `odoc-agent`). The aid **hash** is still computed byte-identically to the
-  original (Cyrb53 over stripped content — the attribute name is removed before
-  hashing), so parity holds; only the emitted identifier strings differ from the
-  original source.
+- **The `odoc` identifier namespace is reserved.** Stamped artifacts carry
+  `data-odoc-aid`, the overlay uses `odoc-*` classes and the `window.__ODOC__`
+  boot global, and the agent identity is `odoc-agent` — don't collide with these
+  in doc HTML. The aid **hash** is Cyrb53 over stripped content with the attribute
+  name removed before hashing, so the emitted identifier string is independent of
+  the hash.
 - **`internal/core/` tests are behavioral, self-contained Go tests** — no external
   fixtures. The original golden `testdata/` (generated from the now-deleted
   TypeScript) was removed once the port was complete; the tests now assert the

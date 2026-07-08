@@ -1,9 +1,10 @@
 # octo-doc Architecture
 
-octo-doc is a self-hosted reimplementation of [tdoc](https://github.com/serenakeyitan/tdoc)
-that preserves the document model, URL scheme, and comment semantics
-byte-for-byte. It is written in Go 1.26 and ships as a single static binary
-backed by PostgreSQL (metadata) and an S3-compatible object store (blobs).
+octo-doc is a self-hosted, prompt-native interactive document server that
+preserves the document model, URL scheme, and comment semantics of its original
+TypeScript implementation byte-for-byte. It is written in Go 1.26 and ships as a
+single static binary backed by PostgreSQL (metadata) and an S3-compatible object
+store (blobs).
 
 ## System shape
 

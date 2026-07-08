@@ -1,9 +1,9 @@
 # octo-doc — agent guide
 
-Self-hosted reimplementation of tdoc: prompt-native interactive
-HTML docs with versioning + anchored comments. **Go 1.26**, chi router, PostgreSQL
-+ S3-compatible storage. Full design in `docs/ARCHITECTURE.md` / `docs/DESIGN.md`;
-the TS→Go port strategy is in `docs/PORTING.md`.
+Self-hosted, prompt-native interactive HTML docs with versioning + anchored
+comments. **Go 1.26**, chi router, PostgreSQL + S3-compatible storage. Full design
+in `docs/ARCHITECTURE.md` / `docs/DESIGN.md`; the TS→Go port strategy is in
+`docs/PORTING.md`.
 
 ## Commands
 
@@ -27,7 +27,8 @@ Dependencies flow one way: **transport → service → storage**, with `core` a
 dependency-free leaf and `platform` as cross-cutting support.
 
 - `internal/core/` — pure domain kernel (no I/O): aid stamping, event-log fold,
-  ops, reconcile, overlay injection. **Byte-equivalent port of upstream tdoc.**
+  ops, reconcile, overlay injection. **Byte-equivalent port of the original
+  TypeScript implementation.**
 - `internal/service/` — DocService, CommentService (per-slug lock), AuthService.
 - `internal/transport/httpx/` — chi router, thin handlers, middleware.
 - `internal/storage/` — `MetadataStore` (postgres) + `BlobStore` (s3) interfaces;
@@ -48,11 +49,11 @@ dependency-free leaf and `platform` as cross-cutting support.
   RE2's lack of backreferences).
 - **The `tdoc` prefix was rebranded to `odoc`** (aid attribute `data-odoc-aid`,
   overlay `odoc-*` classes, the `window.__ODOC__` boot global, agent login
-  `odoc-agent`). The aid **hash** is still computed byte-identically to upstream
-  (Cyrb53 over stripped content — the attribute name is removed before hashing),
-  so golden parity holds; only the emitted identifier strings differ from
-  upstream tdoc. When updating fixtures, keep source and `testdata/golden` on the
-  same `odoc` spelling.
+  `odoc-agent`). The aid **hash** is still computed byte-identically to the
+  original (Cyrb53 over stripped content — the attribute name is removed before
+  hashing), so golden parity holds; only the emitted identifier strings differ
+  from the original source. When updating fixtures, keep source and
+  `testdata/golden` on the same `odoc` spelling.
 - **`testdata/golden` is frozen.** It was generated from the original TypeScript
   before that source was removed. Don't hand-edit fixtures (the one exception was
   the `tdoc`→`odoc` identifier rebrand, applied to source + fixtures in lockstep).

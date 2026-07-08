@@ -1,7 +1,7 @@
 # Porting notes: TypeScript → Go
 
 octo-doc's domain kernel (`internal/core`) is a verbatim-equivalent port of the
-upstream tdoc logic (originally TypeScript). The success criterion
+original TypeScript implementation. The success criterion
 is **byte-equivalence**: the same input HTML must produce the same stamped output,
 and the same event log must fold to the same snapshot. This document records how
 that equivalence is guaranteed and the subtle traps the port had to clear.

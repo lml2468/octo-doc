@@ -43,20 +43,21 @@ dependency-free leaf and `platform` as cross-cutting support.
 ## Gotchas (these are enforced — don't fight them)
 
 - **`internal/core/` is a byte-equivalent port and must stay that way.** Every
-  change must keep the golden tests green (`go test ./internal/core/`), which
-  assert parity against fixtures in `testdata/golden`. See `docs/PORTING.md` for
-  the three porting traps (Math.imul 32-bit wrap, charCodeAt UTF-16 code units,
-  RE2's lack of backreferences).
+  change must keep `go test ./internal/core/` green — the tests pin the exact
+  stamped output, aid strings, fold snapshots, and op status codes. See
+  `docs/PORTING.md` for the three porting traps (Math.imul 32-bit wrap,
+  charCodeAt UTF-16 code units, RE2's lack of backreferences).
 - **The `tdoc` prefix was rebranded to `odoc`** (aid attribute `data-odoc-aid`,
   overlay `odoc-*` classes, the `window.__ODOC__` boot global, agent login
   `odoc-agent`). The aid **hash** is still computed byte-identically to the
   original (Cyrb53 over stripped content — the attribute name is removed before
-  hashing), so golden parity holds; only the emitted identifier strings differ
-  from the original source. When updating fixtures, keep source and
-  `testdata/golden` on the same `odoc` spelling.
-- **`testdata/golden` is frozen.** It was generated from the original TypeScript
-  before that source was removed. Don't hand-edit fixtures (the one exception was
-  the `tdoc`→`odoc` identifier rebrand, applied to source + fixtures in lockstep).
+  hashing), so parity holds; only the emitted identifier strings differ from the
+  original source.
+- **`internal/core/` tests are behavioral, self-contained Go tests** — no external
+  fixtures. The original golden `testdata/` (generated from the now-deleted
+  TypeScript) was removed once the port was complete; the tests now assert the
+  observable contract directly. When you change a `core` output on purpose, update
+  the pinned expectations in the corresponding `_test.go`.
 - **`overlay.js` is the single source of truth**, embedded with `go:embed` in
   `assets/`. It is browser code — never reformat or transpile it.
 - **Storage is PostgreSQL + S3 only.** There is no embedded/sqlite fallback. The

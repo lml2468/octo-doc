@@ -3,8 +3,8 @@
 //
 // It is a verbatim-equivalent port of the original TypeScript logic.
 // The same input MUST produce byte-identical output (for stamping) or
-// logically-identical snapshots (for the fold), verified against golden
-// fixtures generated from the original TypeScript in testdata/golden.
+// logically-identical snapshots (for the fold), pinned by the tests in
+// internal/core/*_test.go.
 package core
 
 import (

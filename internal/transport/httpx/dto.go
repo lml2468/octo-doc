@@ -8,8 +8,8 @@ import (
 // Transport DTOs for comment snapshots.
 //
 // core.CommentSnapshot uses the field name "created" and is byte-equivalence
-// locked (its JSON shape is asserted by golden fixtures ported from upstream
-// odoc — see CLAUDE.md / docs/PORTING.md). The OCTO API contract (R3) requires
+// locked (its JSON shape is pinned by the internal/core tests — see CLAUDE.md /
+// docs/PORTING.md). The OCTO API contract (R3) requires
 // timestamp fields to carry the "_at" suffix. We satisfy R3 at the wire boundary
 // by mapping the core snapshot into these DTOs, leaving core untouched.
 
@@ -92,7 +92,7 @@ func toVersionListDTO(vl *service.VersionList) versionListDTO {
 }
 
 // mutationDTO normalizes a service mutation Body to the wire contract. Body is
-// always one of two core-defined (golden-locked) shapes: a *core.CommentSnapshot
+// always one of two core-defined (byte-equivalence-locked) shapes: a *core.CommentSnapshot
 // for create/reply/reanchor, which we remap (created → created_at per R3), or a
 // map[string]any for react/delete/wipe, whose keys are already compliant.
 func mutationDTO(body any) any {
